@@ -1,0 +1,463 @@
+{
+	"stage": "A-02 review fixes",
+	"task_id": "BACK-794",
+	"result": "passed",
+	"recorded_at_utc": "2026-10-21T14:12:26.084958+00:00",
+	"source": {
+		"base_commit": "8440e7b7475d404ff7cc15eb10f01616ef66ada3",
+		"work_branch": "tasks/server-a02-accounts-authorization",
+		"source_manifest": [
+			{
+				"path": "README.md",
+				"bytes": 27912,
+				"sha256": "a72867b0e7c245f8db8ee885d0d92dd4c2dd7f8e512ac112fad358569d7a4d91"
+			},
+			{
+				"path": "src/server/auth-store.ts",
+				"bytes": 18210,
+				"sha256": "721b7229642c5115c853cf21d448dd9aaaf50cbf2bd06cbb0ce8f104ab19693a"
+			},
+			{
+				"path": "src/test/central-auth.test.ts",
+				"bytes": 17069,
+				"sha256": "8e978c81977252e6b0cb9f8d52f5f2390ab3ccd7c0d51f62d437cf1a91339766"
+			},
+			{
+				"path": "src/test/central-server.test.ts",
+				"bytes": 14138,
+				"sha256": "d3e4422b40a50150a1c129d55d06e0fd988b0fc8cb266c5f9825832f3bfbfdbb"
+			},
+			{
+				"path": "src/test/server-auth-store.test.ts",
+				"bytes": 16542,
+				"sha256": "bf141e78f29744d9a5dfddadef65f6a4f68905720d1f9e6fd523339b4012e29f"
+			},
+			{
+				"path": "src/test/web-auth.test.tsx",
+				"bytes": 33059,
+				"sha256": "e2ccbd526ebc53c33f6c00a6ec7ebc163bd3167bcb3938e1216e66d4d1f4b128"
+			},
+			{
+				"path": "src/web/App.tsx",
+				"bytes": 48028,
+				"sha256": "18d3f556d1728b959257f37487161c24a3771e0008dacec105abcfbdf807be23"
+			},
+			{
+				"path": "src/web/components/AccountNavigation.tsx",
+				"bytes": 731,
+				"sha256": "a84f0b80866275256e6e881d714f886b19bb2a477c0782a23a03f9ab7d00dd38"
+			},
+			{
+				"path": "src/web/contexts/AuthContext.tsx",
+				"bytes": 9161,
+				"sha256": "ffb164b0758f252af0ba4d55e83636855daf2f862c8221243f032a95408b7af0"
+			},
+			{
+				"path": "src/web/contexts/UnsavedChangesContext.tsx",
+				"bytes": 2690,
+				"sha256": "cc19f2e48ad4d9a216a1ecef9e8ea8b0e1e078e2c501fea58e79d82f4ef21a2e"
+			},
+			{
+				"path": "src/web/main.tsx",
+				"bytes": 715,
+				"sha256": "dc8430433ee56d35aa8ae39676ad5b4f5ffa8b20ef5e6b99cd12aeec2b39cca5"
+			}
+		],
+		"identity": "Manifest identifies the verified source and tests; delivery commit identity is recorded after push."
+	},
+	"decisions": {
+		"self_service_password_change": "Always reject the current password with HTTP400 before writes or session changes; admin reset is unchanged.",
+		"logout": "Use the existing shared dirty-editor confirmation for all logout calls. Cancel preserves state without HTTP; confirmed logout is single flight;401 completes logout; other failures preserve editor and session.",
+		"session_refresh": "Only an owned, non-aborted response from the current identity generation can apply; old finally cannot clear a newer refresh."
+	},
+	"implementation": {
+		"shared_guard": "One router-independent dirty registry above AuthProvider; router-only blocker and logout share its confirmation.",
+		"simplicity_review": "Reused existing identity generation, request client, Argon2 verification, editor hooks and native confirmation. No database migration, extra auth service or duplicate dirty state was added."
+	},
+	"checks": {
+		"dom_tests": {
+			"result": "passed",
+			"exit_code": 0,
+			"files": 43,
+			"tests": 437,
+			"passed": 437,
+			"failed": 0,
+			"skipped": 0,
+			"assertions": 2627,
+			"seconds": 39.347105644,
+			"junit": "/tmp/backlog-a02-review-fixes-69vcph7x/dom-tests.xml",
+			"log": "/tmp/backlog-a02-review-fixes-69vcph7x/dom-tests.log",
+			"command": [
+				"bun",
+				"test",
+				"--timeout=10000",
+				"--isolate",
+				"--reporter=junit",
+				"--reporter-outfile=/tmp/backlog-a02-review-fixes-69vcph7x/dom-tests.xml",
+				"src/test/mermaid-markdown.test.tsx",
+				"src/test/mermaid.test.ts",
+				"src/test/react-dom-preload.test.ts",
+				"src/test/readiness.test.tsx",
+				"src/test/web-ambiguous-id.test.tsx",
+				"src/test/web-app-open-detail-refresh.test.tsx",
+				"src/test/web-archive-page.test.tsx",
+				"src/test/web-auth.test.tsx",
+				"src/test/web-board-batch-move.test.tsx",
+				"src/test/web-board-drag-hidden-columns.test.tsx",
+				"src/test/web-board-filters.test.tsx",
+				"src/test/web-board-loading-skeleton.test.tsx",
+				"src/test/web-branch-indexing-indicator.test.tsx",
+				"src/test/web-dependency-cleanup-notice.test.tsx",
+				"src/test/web-dependency-graph-section.test.tsx",
+				"src/test/web-dependency-input-links.test.tsx",
+				"src/test/web-dependency-picker-local-only.test.tsx",
+				"src/test/web-draft-editing.test.tsx",
+				"src/test/web-duplicate-id-repair.test.tsx",
+				"src/test/web-in-place-refresh.test.tsx",
+				"src/test/web-initialization-cursor.test.tsx",
+				"src/test/web-milestones-page-search.test.tsx",
+				"src/test/web-project-members.test.tsx",
+				"src/test/web-project-selector.test.tsx",
+				"src/test/web-record-archive.test.tsx",
+				"src/test/web-task-acceptance-progress.test.tsx",
+				"src/test/web-task-card-dates.test.tsx",
+				"src/test/web-task-column-sort.test.tsx",
+				"src/test/web-task-detail-deeplink.test.tsx",
+				"src/test/web-task-details-modal-acceptance-criteria.test.tsx",
+				"src/test/web-task-details-modal-default-assignee.test.tsx",
+				"src/test/web-task-details-modal-demote.test.tsx",
+				"src/test/web-task-details-modal-documentation.test.tsx",
+				"src/test/web-task-details-modal-final-summary.test.tsx",
+				"src/test/web-task-details-modal-keyboard-shortcuts.test.tsx",
+				"src/test/web-task-details-modal-modified-files.test.tsx",
+				"src/test/web-task-details-modal-subtasks.test.tsx",
+				"src/test/web-task-details-modal-unsaved-navigation.test.tsx",
+				"src/test/web-task-list-labels-menu.test.tsx",
+				"src/test/web-task-list-table-width.test.tsx",
+				"src/test/web-task-project.test.tsx",
+				"src/test/web-task-readiness-badge.test.tsx",
+				"src/test/web-task-types.test.tsx"
+			]
+		},
+		"server_tests": {
+			"result": "passed",
+			"exit_code": 0,
+			"files": 7,
+			"tests": 129,
+			"passed": 129,
+			"failed": 0,
+			"skipped": 0,
+			"assertions": 787,
+			"seconds": 60.688661332,
+			"junit": "/tmp/backlog-a02-review-fixes-69vcph7x/server-tests.xml",
+			"log": "/tmp/backlog-a02-review-fixes-69vcph7x/server-tests.log",
+			"command": "BACKLOG_TEST_SKIP_DOM_PRELOAD=1 bun test --timeout=10000 --reporter=junit --reporter-outfile=/tmp/backlog-a02-review-fixes-69vcph7x/server-tests.xml src/test/server-auth-store.test.ts src/test/central-auth.test.ts src/test/central-server.test.ts src/test/server-project-permissions.test.ts src/test/cli-server-user.test.ts src/test/server-project-store.test.ts src/test/cli-server-project.test.ts"
+		},
+		"types": {
+			"command": "bun run check:types",
+			"result": "passed",
+			"exit_code": 0,
+			"files": 567,
+			"log": "/tmp/backlog-a02-review-fixes-69vcph7x/types.log"
+		},
+		"biome": {
+			"command": "bun run check",
+			"result": "passed",
+			"exit_code": 0,
+			"files": 484,
+			"writes": false,
+			"log": "/tmp/backlog-a02-review-fixes-69vcph7x/biome-final.log"
+		},
+		"build": {
+			"command": "bun run build",
+			"result": "passed",
+			"exit_code": 0,
+			"log": "/tmp/backlog-a02-review-fixes-69vcph7x/build.log"
+		},
+		"compiled_smoke": {
+			"command": "bun scripts/smoke-compiled-build.ts ./dist/backlog 1.53.0",
+			"result": "passed",
+			"exit_code": 0,
+			"scope": ["CLI", "local web", "MCP"],
+			"log": "/tmp/backlog-a02-review-fixes-69vcph7x/compiled-smoke.log"
+		},
+		"browser": {
+			"result": "passed",
+			"exit_code": 0,
+			"browser": "HeadlessChrome/153.0.8010.12",
+			"count": 19,
+			"assertions": [
+				"required same-password UI change returns400 and retains required session",
+				"distinct required password succeeds and rotates session",
+				"isolated real browser contexts preserve different accounts",
+				"temporary project document created through public API",
+				"cancelled dirty logout prompts once and sends no logout request",
+				"cancelled dirty logout retains editor text and real login",
+				"existing router dirty-navigation cancel still protects document",
+				"logout server failure preserves visible editor and session",
+				"logout network failure preserves visible editor and session",
+				"real idle-session expiry keeps unsaved document state mounted behind login",
+				"same-account login after idle expiry restores exact unsaved text",
+				"repeated confirmed logout remains one request and one prompt while pending",
+				"pending logout retains editor until server completion",
+				"successful confirmed logout clears editor and invalidates real session",
+				"logout401 for expired session completes local logout",
+				"delayed old-account session response cannot replace new-account browser state",
+				"new-account login clears old editor content",
+				"optional same-password UI rejects400 and preserves valid session",
+				"browser recorded no unhandled runtime exceptions"
+			],
+			"script": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/cdp-review-fixes.mjs",
+			"run_directory": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z",
+			"limitation": "Controlled logout failures and stale-response delivery use a page-level fetch wrapper; normal auth, CSRF, document edits, idle expiry, and password responses use the compiled server."
+		},
+		"diff_check": {
+			"command": "git diff --check",
+			"result": "passed",
+			"exit_code": 0
+		}
+	},
+	"independent_review": {
+		"result": "passed",
+		"blockers": [],
+		"recorded_at_utc": "2026-10-21T14:09:47.637941+00:00",
+		"source_files_reviewed": [
+			"src/web/contexts/AuthContext.tsx",
+			"src/web/contexts/UnsavedChangesContext.tsx",
+			"src/web/components/AccountNavigation.tsx",
+			"src/web/main.tsx",
+			"src/web/App.tsx",
+			"src/web/lib/request.ts",
+			"src/server/auth-store.ts",
+			"README.md"
+		],
+		"review_report": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/independent-review.json",
+		"final_artifacts": {
+			"script": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/cdp-review-fixes.mjs",
+			"log": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/browser-probe-escalated-retry2.log",
+			"result": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/browser-result.json",
+			"screenshots": [
+				"/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/required-same-password-error.png",
+				"/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/cancelled-dirty-logout.png",
+				"/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/logout-network-failure.png",
+				"/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/stale-refresh-after-account-switch.png",
+				"/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/optional-same-password-error.png"
+			]
+		},
+		"browser": "HeadlessChrome/153.0.8010.12",
+		"passed_browser_assertions": 19,
+		"runtime_exceptions": [],
+		"test_limitations": [
+			"Only Linux desktop Chromium1440x1000 was exercised, not mobile, macOS, Windows, or production TLS.",
+			"Controlled logout failures and stale-response delivery use a page-level fetch wrapper; normal auth, CSRF, document edits, idle expiry, and password responses use the compiled server.",
+			"Idle expiry is triggered by modifying only the temporary fixture SQLite last_activity_at; normal polling observes actual server401.",
+			"Default sandbox fixture CLI failures were environment-only and passed after authorized escalation. Earlier fixture CLI flag and navigation/expiry assertion mismatches were corrected in the probe; failed run folders/logs are retained.",
+			"All spawned compiled-server and Chromium processes were killed and awaited in script finally; no production project or Finbee was accessed."
+		],
+		"conclusion": "No blocking findings remain in the three scoped fixes. Source review and visual screenshot checks agree with19 passing Chromium assertions. Root owns final task records, source tests, commit and push."
+	},
+	"verification_limits": [
+		"The relevant 50 test files passed 566 tests with 3414 assertions and no failures/skips; the entire 329-file A-02 suite was not rerun for this scoped fix.",
+		"Original A-02 full-run evidence remains unchanged in a02-verification.json and describes 8440e7b7, not this modified source.",
+		"Groma command is unavailable; no Groma scan or owned-file mutation was claimed.",
+		"Localhost/child-process/Git allocator operations needed reviewed sandbox escalation. Default-sandbox HTTP binds and compiled fixture-init attempts failed as environment constraints; successful escalated runs are identified separately.",
+		"Browser automation selector/assertion corrections and failed attempts are retained. Final passing run is explicitly selected; no product defect was inferred from probe-only mismatches.",
+		"Linux desktop Chromium with temporary example projects only. Controlled network failure and stale response delivery use a page-level fetch wrapper; actual auth, CSRF, document, expiry and password responses come from the compiled server.",
+		"Default SSH invocation rejects the system SSH proxy config permissions. The user-specific SSH config works via a command-local core.sshCommand override; no SSH config file was modified.",
+		"Raw evidence resides under /tmp; tracked regression tests and this SHA-256 manifest preserve reproducibility and evidence identity."
+	],
+	"raw_evidence_directory": "/tmp/backlog-a02-review-fixes-69vcph7x",
+	"evidence_manifest": [
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/backlog-a02-review.test.ts",
+			"bytes": 6511,
+			"sha256": "6b63cd45849ec6b0da80021892dc9e24227baf7448a8d7b0386cbef7472decf9"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/biome.log",
+			"bytes": 63,
+			"sha256": "05ef5eb8ef5bef680a65041daac15b118fe7285f9a89bc98a8a8cf6167dea222"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/browser-probe-escalated-retry1.log",
+			"bytes": 1075,
+			"sha256": "cfac411bffcd0229835852010439d94989d545d4d9b39d3adf604aad3c2ec477"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/browser-probe-escalated-retry2.log",
+			"bytes": 1356,
+			"sha256": "1fb7b3fb39d6a36175acd7f712411f852b1253d89286e9180d3b88d8ec2b70c4"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/browser-probe-escalated.log",
+			"bytes": 893,
+			"sha256": "452004a69f3a09ebb3bdad375f381fa504fb2da799859ac03caa80aef901e5f6"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/browser-probe-retry1.log",
+			"bytes": 5700,
+			"sha256": "dc7285b57a113ddc549c75782bd8a86aff1835ac99059d3a823acb5b950924c0"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/browser-probe-retry2.log",
+			"bytes": 5703,
+			"sha256": "1212413029145710b4890044a5b46af8a90568886e3fa075267cbad81a7eea76"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/browser-probe-retry3.log",
+			"bytes": 5663,
+			"sha256": "f8f71105e80528dd8f4aa8f94a736219a838797923367a8db96a638b0cdab643"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/browser-probe.log",
+			"bytes": 966,
+			"sha256": "ead0539e6f0cbfc24dc9178078a1cf3ef29c68896e134ef0ac94233e783acfc8"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/cdp-review-fixes.mjs",
+			"bytes": 20893,
+			"sha256": "3ca2f802a379080b8e4b798c3a3597df7b9b98eae94184d3475c90932d263df0"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/latest-result.json",
+			"bytes": 16685,
+			"sha256": "f7952f901df6c727e26ae8e630fadec9c88eec136dc8ac7d531a1452be79db6e"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/review-summary.json",
+			"bytes": 2601,
+			"sha256": "ec7f70910ef9b755994bc78bdd6a0544cc26acd4b8b5400b426145108e32071a"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/browser-result.json",
+			"bytes": 16594,
+			"sha256": "d0396cf3ebf10a3c0ce4a7c8471471967fc49d98ac31486d20b555c58ebb972c"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/cancelled-dirty-logout.png",
+			"bytes": 71434,
+			"sha256": "bbfd100f94a822dd901eb3f9007f195237c7910403068e81b6ad59d1ade06a65"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/logout-network-failure.png",
+			"bytes": 73869,
+			"sha256": "1101d4f2431e961883e206161a07146315fa442f3d77694cd219b692a8b82d34"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/optional-same-password-error.png",
+			"bytes": 25832,
+			"sha256": "688c5cf5c04dc7e0d2d944f74f88f6199e1b13c24875be2897a33f6d995d7fed"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/required-same-password-error.png",
+			"bytes": 28085,
+			"sha256": "233082dc6f57367984ac1e9eb24f0a9742073f11b06c92e538f29522540e8dd5"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/browser/run-2026-10-21T14-08-02-123Z/stale-refresh-after-account-switch.png",
+			"bytes": 68461,
+			"sha256": "172d94bac729994b1bc2939ba9e5ec90bea1a1d6c720b018edb10d368a088bc4"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/build.log",
+			"bytes": 23,
+			"sha256": "a20e7a648db258ad689394e88df95db8b5e00f446c7b9e47b6e9878838cf4db6"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/compiled-smoke.log",
+			"bytes": 84,
+			"sha256": "ab6cb6de71650a7ba106e06d9b35a721b2a0161859ab25746ecc2c6cf73cc95f"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/dom-command.json",
+			"bytes": 2234,
+			"sha256": "973eb92ee5a86a4f7c4af13cb83b1e08252b69110be1dc7864edf5bd58a1a778"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/dom-tests.log",
+			"bytes": 56077,
+			"sha256": "663377099893c7c82e777be79530aaf671eeeb84aa5a870d0f222a84f986294a"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/dom-tests.xml",
+			"bytes": 118629,
+			"sha256": "b5d52b5183ce8dfdb82c02cb2a2b4e5cc4d74f44e2f3a51f78d790eb588aca00"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/make-report.py",
+			"bytes": 6694,
+			"sha256": "6cd898207862f6c3211cdb2b6ddff01f72abda8cd2a64800de9e20db69924474"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/password-biome-final.log",
+			"bytes": 43,
+			"sha256": "2717d81803c3dac8489bc6d69738003c6272ef507b5fb46012a0b88b911decfc"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/password-biome.log",
+			"bytes": 1449,
+			"sha256": "2f1c4f3d6bb63c353b85320b8013782d7efb85b18d0f9d4398f50425957de0cb"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/password-central-server-tests.log",
+			"bytes": 1726,
+			"sha256": "20bcf921ad7c5750a493aad1e9bfa203093a03d000c1fca738f6432d5400bdec"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/password-red.log",
+			"bytes": 2834,
+			"sha256": "6a702e6369d61e7c9d313fb3b8fee2079ba7b3ce584e06ff9a3e9b7d26bb64e6"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/password-summary.json",
+			"bytes": 2370,
+			"sha256": "c4c3378e231494ea862d135bbc6a90126805dbeaf2f4b65d49f0fc95b269987a"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/password-tests-localhost.log",
+			"bytes": 5644,
+			"sha256": "77b41e28bc520a2f69b1d3791823864b89f2aa047dd7e0b913e79ab0a6c45a5d"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/password-tests.log",
+			"bytes": 10872,
+			"sha256": "0aa3a616d536d25b031d0983f25dd40d4f110f4aed6685c642607b64bc461264"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/server-tests.log",
+			"bytes": 17130,
+			"sha256": "9010f26924a2056dc2f2d06b230e8c72d98b4fd0e9075ee63010d5086b805111"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/server-tests.xml",
+			"bytes": 32509,
+			"sha256": "fb8b3b4a1b0cf9a81ce20521b23cbd0db08238fdc12f73f351c2595e12b6060d"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/start.tar.gz",
+			"bytes": 8183056,
+			"sha256": "5c69565f884af2d51a47cb912486e7cab5cce4fa0c794f928ffc4ab4563d6459"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/types.log",
+			"bytes": 55,
+			"sha256": "8dbde190c2b998210cc98f2df0054e5ca00a66075f98fd9df9319c1761bf8887"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/web-auth-first.log",
+			"bytes": 3422,
+			"sha256": "b48516d0fd544103006d9559c5e8012612e993079e9924257167138d6fa7c35b"
+		},
+		{
+			"path": "/tmp/backlog-a02-review-fixes-69vcph7x/biome-final.log",
+			"bytes": 62,
+			"sha256": "6fe09dc86e1a273f75319655ba9633700170357d391c2e1420010a96729438c5"
+		}
+	],
+	"git_delivery": {
+		"branch": "tasks/server-a02-accounts-authorization",
+		"implementation_commit": null,
+		"remote_verified_commit": null,
+		"status": "verified_source_ready_for_commit_and_push"
+	}
+}

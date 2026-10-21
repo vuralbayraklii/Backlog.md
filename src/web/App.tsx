@@ -47,7 +47,7 @@ import { filterKanbanTasks } from './utils/kanban-tasks';
 import { reconcileById } from './utils/reconcile';
 import { parseBrowserLoadingState } from '../utils/browser-loading-state';
 import { projectScope, projectWebSocketUrl } from './lib/project-scope';
-import { UnsavedChangesProvider } from './contexts/UnsavedChangesContext';
+import { UnsavedChangesNavigationGuard } from './contexts/UnsavedChangesContext';
 
 type TaskRouteNavigationState = {
   taskModalFrom?: string;
@@ -1132,7 +1132,7 @@ function App() {
 	const [appRouter] = useState(() => typeof window === 'undefined' || globalPage
 		? null
 		: createBrowserRouter([
-			{ path: '*', element: <UnsavedChangesProvider><AppContent /></UnsavedChangesProvider> },
+			{ path: '*', element: <><UnsavedChangesNavigationGuard /><AppContent /></> },
 		], { basename: projectScope.routeBase || '/' }));
 	if (typeof window !== 'undefined') {
     if (window.location.pathname === '/password') return <PasswordForm onSession={acceptSession} />;

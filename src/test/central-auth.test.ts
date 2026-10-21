@@ -175,6 +175,50 @@ describe("central authentication and authorization", () => {
 		expect((await request("/api/projects", rotated)).status).toBe(200);
 	});
 
+	it.each(["initial", "after reset", "voluntary"])(
+		"rejects current-password reuse over HTTP during %s changes and preserves every session",
+		async (stage) => {
+			const username = stage === "initial" ? "new-member" : "member";
+			const password = stage === "voluntary" ? NEW_PASSWORD : PASSWORD;
+			if (stage === "initial") await auth.createUser({ username, password });
+			if (stage === "after reset")
+				expect((await request(`/api/admin/users/${userId}/reset-password`, admin, "POST", { password })).status).toBe(
+					200,
+				);
+			const first = await login(username, password);
+			const other = await login(username, password);
+			expect(first.session.user.mustChangePassword).toBe(stage !== "voluntary");
+			const before = await Bun.file(auth.databasePath).arrayBuffer();
+			const rejected = await request("/api/auth/password", first, "POST", {
+				currentPassword: password,
+				newPassword: password,
+			});
+			expect(rejected.status).toBe(400);
+			expect(await rejected.json()).toEqual({ error: "New password must be different from the current password." });
+			expect(rejected.headers.get("set-cookie")).toBeNull();
+			expect(await Bun.file(auth.databasePath).arrayBuffer()).toEqual(before);
+			for (const actor of [first, other, admin]) {
+				const preserved = await request("/api/auth/session", actor);
+				expect(preserved.status).toBe(200);
+				expect(await preserved.json()).toEqual(actor.session);
+			}
+			const accepted = await request("/api/auth/password", first, "POST", {
+				currentPassword: password,
+				newPassword: `${password} new`,
+			});
+			expect(accepted.status).toBe(200);
+			const rotated = {
+				cookie: accepted.headers.get("set-cookie")?.split(";")[0] ?? "",
+				session: (await accepted.json()) as AuthSession,
+			};
+			expect(rotated.session.user.mustChangePassword).toBe(false);
+			expect(rotated.cookie).not.toBe(first.cookie);
+			for (const actor of [first, other]) expect((await request("/api/auth/session", actor)).status).toBe(401);
+			expect((await request("/api/auth/session", rotated)).status).toBe(200);
+			expect((await request("/api/auth/session", admin)).status).toBe(200);
+		},
+	);
+
 	it("requires CSRF on all authenticated mutations and never trusts an external return URL", async () => {
 		for (const headers of [
 			{ "X-CSRF-Token": "" },

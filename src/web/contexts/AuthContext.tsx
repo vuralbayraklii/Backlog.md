@@ -1,14 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ADMIN_PERMISSIONS, type AuthSession, type ProjectPermissions } from "../../server/auth-types";
 import { projectScope, setProjectStorageAccount } from "../lib/project-scope";
-import { onSessionExpired, requestJson, setRequestSession } from "../lib/request";
+import { HttpError, onSessionExpired, requestJson, setRequestSession } from "../lib/request";
 import { LoginForm, PasswordForm } from "../components/AccountForms";
+import { useConfirmDiscardChanges } from "./UnsavedChangesContext";
 
 interface AuthState {
 	central: boolean;
 	session: AuthSession | null;
 	permissions: ProjectPermissions;
 	ready: boolean;
+	logoutPending: boolean;
+	logoutError: string | null;
 	refresh: () => Promise<void>;
 	logout: () => Promise<void>;
 	acceptSession: (session: AuthSession) => Promise<void>;
@@ -26,6 +29,8 @@ const AuthContext = createContext<AuthState>({
 	session: null,
 	permissions: ADMIN_PERMISSIONS,
 	ready: true,
+	logoutPending: false,
+	logoutError: null,
 	refresh: async () => {},
 	logout: async () => {},
 	acceptSession: async () => {},
@@ -45,14 +50,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	const [mounted, setMounted] = useState(!central);
 	const [accountKey, setAccountKey] = useState("local");
 	const [error, setError] = useState<string | null>(null);
+	const [logoutPending, setLogoutPending] = useState(false);
+	const [logoutError, setLogoutError] = useState<string | null>(null);
+	const confirmDiscard = useConfirmDiscardChanges();
 	const lastUser = useRef<string | null>(null);
-	const requestRunning = useRef(false);
+	const refreshRequest = useRef<AbortController | null>(null);
+	const logoutRequest = useRef<AbortController | null>(null);
+	const active = useRef(false);
 	const latestSession = useRef<AuthSession | null>(null);
 	const lastActivity = useRef(0);
 	const generation = useRef(0);
 
-	const acceptSession = useCallback(async (next: AuthSession) => {
+	const cancelRefresh = useCallback(() => {
+		const request = refreshRequest.current;
+		refreshRequest.current = null;
+		request?.abort();
+	}, []);
+
+	const applySession = useCallback(async (next: AuthSession) => {
 		const owner = ++generation.current;
+		if (latestSession.current?.csrfToken !== next.csrfToken) lastActivity.current = 0;
 		if (!latestSession.current || lastUser.current !== next.user.id) setChecked(false);
 		if (lastUser.current !== next.user.id) setMounted(false);
 		setRequestSession(next);
@@ -85,23 +102,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		setChecked(true);
 	}, []);
 
+	const acceptSession = useCallback(
+		async (next: AuthSession) => {
+			cancelRefresh();
+			setLogoutError(null);
+			await applySession(next);
+		},
+		[applySession, cancelRefresh],
+	);
+
 	const refresh = useCallback(async () => {
-		if (!central || requestRunning.current) return;
-		requestRunning.current = true;
+		if (!central || refreshRequest.current || logoutRequest.current) return;
+		const request = new AbortController();
+		refreshRequest.current = request;
+		const owner = generation.current;
 		try {
-			await acceptSession(await requestJson<AuthSession>("/api/auth/session"));
+			const next = await requestJson<AuthSession>("/api/auth/session", { signal: request.signal });
+			if (request.signal.aborted || owner !== generation.current || refreshRequest.current !== request) return;
+			await applySession(next);
 		} catch (reason) {
+			if (request.signal.aborted || owner !== generation.current) return;
 			if (latestSession.current) setError(reason instanceof Error ? reason.message : String(reason));
 			setChecked(true);
 		} finally {
-			requestRunning.current = false;
+			if (refreshRequest.current === request) refreshRequest.current = null;
 		}
-	}, [central, acceptSession]);
+	}, [central, applySession]);
 
 	useEffect(() => {
 		if (!central) return;
+		active.current = true;
 		const unsubscribe = onSessionExpired(() => {
 			generation.current++;
+			cancelRefresh();
 			latestSession.current = null;
 			setSession(null);
 			setPermissions(NO_PERMISSIONS);
@@ -113,16 +146,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			if (latestSession.current && document.visibilityState === "visible") void refresh();
 		}, 1000);
 		return () => {
+			active.current = false;
+			generation.current++;
 			unsubscribe();
 			clearInterval(timer);
+			cancelRefresh();
+			logoutRequest.current?.abort();
 		};
-	}, [central, refresh]);
+	}, [central, refresh, cancelRefresh]);
 
 	useEffect(() => {
 		if (!central) return;
 		const activity = (event: Event) => {
 			if (
 				!event.isTrusted ||
+				logoutRequest.current ||
 				document.visibilityState !== "visible" ||
 				!latestSession.current ||
 				latestSession.current.user.mustChangePassword
@@ -141,16 +179,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	}, [central]);
 
 	const logout = async () => {
-		await requestJson("/api/auth/logout", { method: "POST" });
-		generation.current++;
-		setRequestSession(null);
-		latestSession.current = null;
-		setSession(null);
-		setMounted(false);
-		lastUser.current = null;
-		setProjectStorageAccount(null);
+		if (logoutRequest.current || !confirmDiscard()) return;
+		const request = new AbortController();
+		logoutRequest.current = request;
+		const owner = ++generation.current;
+		const userId = lastUser.current;
+		cancelRefresh();
+		setLogoutPending(true);
+		setLogoutError(null);
+		const timeout = setTimeout(() => request.abort(), 10000);
+		const ownsSession = () =>
+			active.current && (owner === generation.current || (!latestSession.current && lastUser.current === userId));
+		try {
+			try {
+				await requestJson("/api/auth/logout", { method: "POST", signal: request.signal });
+			} catch (reason) {
+				if (!(reason instanceof HttpError && reason.status === 401)) throw reason;
+			}
+			if (!ownsSession()) return;
+			generation.current++;
+			setRequestSession(null);
+			latestSession.current = null;
+			setSession(null);
+			setPermissions(NO_PERMISSIONS);
+			setError(null);
+			setMounted(false);
+			lastUser.current = null;
+			setProjectStorageAccount(null);
+		} catch (reason) {
+			if (ownsSession()) setLogoutError(reason instanceof Error ? reason.message : String(reason));
+		} finally {
+			clearTimeout(timeout);
+			if (logoutRequest.current === request) logoutRequest.current = null;
+			if (active.current) setLogoutPending(false);
+		}
 	};
-	const ready = !central || (checked && session !== null && !session.user.mustChangePassword && !error);
+	const ready =
+		!central || (checked && session !== null && !session.user.mustChangePassword && !error && !logoutPending);
 	return (
 		<AuthContext.Provider
 			value={{
@@ -158,6 +223,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				session,
 				permissions: central ? permissions : ADMIN_PERMISSIONS,
 				ready,
+				logoutPending,
+				logoutError,
 				refresh,
 				logout,
 				acceptSession,
@@ -170,7 +237,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			)}
 			{central && !ready && (
 				<div className="fixed inset-0 z-[200] overflow-auto bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-					{!checked ? (
+					{logoutPending ? (
+						<p role="status" className="p-8">
+							Logging out...
+						</p>
+					) : !checked ? (
 						<p role="status" className="p-8">
 							Loading session...
 						</p>
@@ -181,13 +252,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					) : (
 						<main className="p-8">
 							<p role="alert">{error}</p>
+							{logoutError && <p role="alert">{logoutError}</p>}
 							<a href="/projects" className="underline">
 								Projects
 							</a>{" "}
 							<button type="button" onClick={() => void refresh()}>
 								Refresh
 							</button>{" "}
-							<button type="button" onClick={() => void logout()}>
+							<button type="button" disabled={logoutPending} onClick={() => void logout()}>
 								Log out
 							</button>
 						</main>

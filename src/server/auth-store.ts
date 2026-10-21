@@ -279,6 +279,9 @@ export class AuthStore {
 		);
 		if (!originalHash || !(await Bun.password.verify(currentPassword, originalHash)))
 			throw new AuthStoreError("Current password is incorrect.", 400);
+		validatePassword(newPassword);
+		if (await Bun.password.verify(newPassword, originalHash))
+			throw new AuthStoreError("New password must be different from the current password.", 400);
 		const passwordHash = await hashPassword(newPassword);
 		return this.database.write((database) => {
 			const currentSession = this.session(database, token);

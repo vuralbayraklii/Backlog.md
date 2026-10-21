@@ -295,7 +295,9 @@ behavior. Browser-based project registration is planned for A-03.
 
 Create the first administrator locally with `user init-admin <username>`. Passwords come from a hidden terminal prompt,
 or from `--password-stdin` for automation; never pass a password in a command argument. Initial and reset passwords require
-replacement on the next login. Usernames are immutable, normalized to lowercase, and accept 3–64 characters from
+replacement on the next login. Every self-service password change requires a different password; reusing the current
+password returns HTTP 400 without changing the account or its sessions. Usernames are immutable, normalized to lowercase,
+and accept 3–64 characters from
 `a-z`, `0-9`, `.`, `_`, and `-`. Passwords accept 15–128 characters, preserving spaces, and use Bun Argon2id
 with 19456 KiB memory and two iterations. See [Bun hashing](https://bun.sh/docs/runtime/hashing) and the
 [OWASP password storage guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
@@ -334,7 +336,8 @@ Sessions live in SQLite with hashed identifiers and a 12-hour absolute / 2-hour 
 only in an HttpOnly, SameSite=Lax cookie, with Secure on HTTPS, Path=/, and no Domain. Only visible user interactions send
 idle activity, at most once a minute; polling and WebSocket traffic do not extend the idle limit. Resetting a password or
 deactivating an account invalidates its sessions. Changing your own password invalidates old sessions and rotates the current
-browser's cookie. Login accepts JSON from the exact configured Origin; authenticated mutations require the session's
+browser's cookie. Logging out asks before discarding unsaved edits; canceling or a failed logout preserves the editor.
+Login accepts JSON from the exact configured Origin; authenticated mutations require the session's
 in-memory `X-CSRF-Token`. Login is limited to five failures per username in 15 minutes and 60 service-wide attempts per minute,
 persisted across restarts; limited requests return 429 and Retry-After. See the
 [OWASP session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) and

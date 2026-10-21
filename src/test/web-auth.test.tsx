@@ -1,14 +1,20 @@
-import { afterEach, describe, expect, it } from "bun:test";
+import { afterEach, describe, expect, it, mock } from "bun:test";
 import { JSDOM } from "jsdom";
-import { act, useEffect, useState } from "react";
+import { act, StrictMode, useEffect, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes } from "react-router-dom";
+import AccountNavigation from "../web/components/AccountNavigation";
 import DocumentationDetail from "../web/components/DocumentationDetail";
 import DecisionDetail from "../web/components/DecisionDetail";
 import { ThemeProvider } from "../web/contexts/ThemeContext";
 import type { Document as BacklogDocument, Decision } from "../types";
 import { ADMIN_PERMISSIONS, type AuthSession } from "../server/auth-types";
 import { AuthProvider, useAuth } from "../web/contexts/AuthContext";
+import {
+	UnsavedChangesNavigationGuard,
+	UnsavedChangesProvider,
+	useUnsavedChanges,
+} from "../web/contexts/UnsavedChangesContext";
 import {
 	projectScope,
 	projectStorageKey,
@@ -21,6 +27,9 @@ import { setNativeInputValue } from "./react-dom-input";
 
 const originalFetch = globalThis.fetch;
 const originalBrowserGlobals = {
+	window: globalThis.window,
+	document: globalThis.document,
+	navigator: globalThis.navigator,
 	HTMLElement: globalThis.HTMLElement,
 	HTMLTextAreaElement: globalThis.HTMLTextAreaElement,
 	HTMLInputElement: globalThis.HTMLInputElement,
@@ -32,6 +41,7 @@ const originalBrowserGlobals = {
 const originalScope = { ...projectScope };
 let root: Root | null = null;
 let dom: JSDOM | null = null;
+let currentAuth: ReturnType<typeof useAuth> | null = null;
 const userSession = (id = "user-1", mustChangePassword = false): AuthSession => ({
 	user: { id, username: id, displayName: id, role: "user", active: true, mustChangePassword },
 	csrfToken: `csrf-${id}`,
@@ -77,6 +87,94 @@ async function submitLogin() {
 	});
 	await flush();
 }
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	let reject!: (reason: Error) => void;
+	const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+		resolve = resolvePromise;
+		reject = rejectPromise;
+	});
+	return { promise, resolve, reject };
+}
+
+function AuthProbe() {
+	currentAuth = useAuth();
+	return <output aria-label="Current account">{currentAuth.session?.user.id}</output>;
+}
+
+function auth() {
+	if (!currentAuth) throw new Error("Auth probe has not mounted");
+	return currentAuth;
+}
+
+async function renderAuth(children: ReactNode = <AuthProbe />, strict = false) {
+	const content = (
+		<UnsavedChangesProvider>
+			<AuthProvider>{children}</AuthProvider>
+		</UnsavedChangesProvider>
+	);
+	await act(async () => {
+		root?.render(strict ? <StrictMode>{content}</StrictMode> : content);
+	});
+	await flush();
+}
+
+function visibleButton(label: string) {
+	const button = [...document.querySelectorAll("button")].find(
+		(candidate) => candidate.textContent?.trim() === label && !candidate.closest("[hidden]"),
+	);
+	if (!button) throw new Error(`Visible button not found: ${label}`);
+	return button;
+}
+
+async function assertRequestCsrf(expected: string | null) {
+	let sent: RequestInit | undefined;
+	const previousFetch = globalThis.fetch;
+	globalThis.fetch = (async (_input, options) => {
+		sent = options;
+		return Response.json({});
+	}) as typeof fetch;
+	try {
+		await sessionFetch("/write", { method: "POST" });
+		expect(new Headers(sent?.headers).get("X-CSRF-Token")).toBe(expected);
+	} finally {
+		globalThis.fetch = previousFetch;
+	}
+}
+
+async function renderGuardedEditor() {
+	function Editor() {
+		const [text, setText] = useState("Saved text");
+		useUnsavedChanges(text !== "Saved text");
+		return <textarea aria-label="Draft text" value={text} onChange={(event) => setText(event.target.value)} />;
+	}
+	const router = createMemoryRouter(
+		[
+			{
+				path: "*",
+				element: (
+					<>
+						<UnsavedChangesNavigationGuard />
+						<AccountNavigation />
+						<AuthProbe />
+						<Editor />
+					</>
+				),
+			},
+		],
+		{ initialEntries: ["/board"] },
+	);
+	await renderAuth(<RouterProvider router={router} />);
+	return router;
+}
+
+async function editDraft() {
+	await act(async () => {
+		setNativeInputValue(document.querySelector("textarea")!, "Unsaved document text");
+	});
+}
+
 afterEach(async () => {
 	if (root) await act(async () => root?.unmount());
 	root = null;
@@ -87,6 +185,7 @@ afterEach(async () => {
 	Object.assign(projectScope, originalScope);
 	setRequestSession(null);
 	setProjectStorageAccount(null);
+	currentAuth = null;
 });
 
 describe("central browser session", () => {
@@ -348,6 +447,448 @@ describe("central browser session", () => {
 		}) as typeof fetch;
 		await sessionFetch("/write", { method: "POST" });
 		expect(new Headers(sent?.headers).get("X-CSRF-Token")).toBe("csrf-user-1");
+	});
+});
+
+describe("session response ownership", () => {
+	for (const responseKind of ["success", "unauthorized", "server error", "network error"] as const) {
+		it(`ignores an old account's delayed ${responseKind} after a different account logs in`, async () => {
+			setup();
+			const oldResponse = deferred<Response>();
+			const newPermissions = { ...ADMIN_PERMISSIONS, docsWrite: false, archive: false };
+			let reads = 0;
+			let projectReads = 0;
+			let loggedIn = false;
+			globalThis.fetch = (async (input) => {
+				const path = String(input);
+				if (path === "/api/auth/session") return ++reads === 1 ? Response.json(userSession("account-a")) : oldResponse.promise;
+				if (path === "/api/auth/login") {
+					loggedIn = true;
+					return Response.json(userSession("account-b"));
+				}
+				if (path === "/api/projects/1") {
+					projectReads++;
+					return Response.json({ permissions: loggedIn ? newPermissions : ADMIN_PERMISSIONS });
+				}
+				if (path === "/expire") return Response.json({ error: "Login required" }, { status: 401 });
+				throw new Error(path);
+			}) as typeof fetch;
+			await renderAuth();
+			expect(auth().session?.user.id).toBe("account-a");
+			let pending!: Promise<void>;
+			await act(async () => {
+				pending = auth().refresh();
+			});
+			await act(async () => {
+				await sessionFetch("/expire");
+			});
+			await submitLogin();
+			expect(auth().session?.user.id).toBe("account-b");
+			expect(auth().permissions).toEqual(newPermissions);
+			await act(async () => {
+				if (responseKind === "network error") oldResponse.reject(new Error("Old account response"));
+				else
+					oldResponse.resolve(
+						responseKind === "success"
+							? Response.json(userSession("account-a"))
+							: Response.json({ error: "Old account response" }, { status: responseKind === "unauthorized" ? 401 : 500 }),
+					);
+				await pending;
+			});
+			expect(auth().session?.user.id).toBe("account-b");
+			expect(auth().permissions).toEqual(newPermissions);
+			expect(auth().ready).toBe(true);
+			expect(projectReads).toBe(2);
+			expect(document.body.textContent).not.toContain("Old account response");
+			await assertRequestCsrf("csrf-account-b");
+		});
+	}
+
+	it("does not expose project content while a new account is still loading permissions", async () => {
+		setup();
+		const oldResponse = deferred<Response>();
+		const newPermissions = deferred<Response>();
+		let reads = 0;
+		let loggedIn = false;
+		globalThis.fetch = (async (input) => {
+			const path = String(input);
+			if (path === "/api/auth/session") return ++reads === 1 ? Response.json(userSession("account-a")) : oldResponse.promise;
+			if (path === "/api/projects/1") return loggedIn ? newPermissions.promise : Response.json({ permissions: ADMIN_PERMISSIONS });
+			if (path === "/api/auth/login") {
+				loggedIn = true;
+				return Response.json(userSession("account-b"));
+			}
+			if (path === "/expire") return Response.json({ error: "Login required" }, { status: 401 });
+			throw new Error(path);
+		}) as typeof fetch;
+		await renderAuth();
+		let pending!: Promise<void>;
+		await act(async () => {
+			pending = auth().refresh();
+		});
+		await act(async () => {
+			await sessionFetch("/expire");
+		});
+		await submitLogin();
+		expect(document.querySelector('output[aria-label="Current account"]')).toBeNull();
+		expect(document.body.textContent).toContain("Loading session...");
+		await act(async () => {
+			oldResponse.resolve(Response.json(userSession("account-a")));
+			await pending;
+		});
+		expect(document.querySelector('output[aria-label="Current account"]')).toBeNull();
+		expect(document.body.textContent).toContain("Loading session...");
+		await assertRequestCsrf("csrf-account-b");
+		await act(async () => newPermissions.resolve(Response.json({ permissions: ADMIN_PERMISSIONS })));
+		await flush();
+		expect(auth().session?.user.id).toBe("account-b");
+		expect(auth().ready).toBe(true);
+	});
+
+	it("keeps a newer refresh in flight when an invalidated request finishes", async () => {
+		setup();
+		const requests: ReturnType<typeof deferred<Response>>[] = [];
+		let initial = true;
+		globalThis.fetch = (async (input) => {
+			const path = String(input);
+			if (path === "/api/auth/session") {
+				if (initial) {
+					initial = false;
+					return Response.json(userSession("account-a"));
+				}
+				const request = deferred<Response>();
+				requests.push(request);
+				return request.promise;
+			}
+			if (path === "/api/projects/1") return Response.json({ permissions: ADMIN_PERMISSIONS });
+			if (path === "/expire") return Response.json({ error: "Login required" }, { status: 401 });
+			if (path === "/api/auth/login") return Response.json(userSession("account-b"));
+			throw new Error(path);
+		}) as typeof fetch;
+		await renderAuth();
+		let oldRequest!: Promise<void>;
+		await act(async () => {
+			oldRequest = auth().refresh();
+		});
+		await act(async () => {
+			await sessionFetch("/expire");
+		});
+		await submitLogin();
+		let newRequest!: Promise<void>;
+		await act(async () => {
+			newRequest = auth().refresh();
+		});
+		expect(requests).toHaveLength(2);
+		await act(async () => {
+			requests[0]!.resolve(Response.json(userSession("account-a")));
+			await oldRequest;
+		});
+		let duplicateRequest!: Promise<void>;
+		await act(async () => {
+			duplicateRequest = auth().refresh();
+		});
+		expect(requests).toHaveLength(2);
+		const refreshed = { ...userSession("account-b"), csrfToken: "refreshed-account-b" };
+		await act(async () => {
+			requests[1]!.resolve(Response.json(refreshed));
+			await Promise.all([newRequest, duplicateRequest]);
+		});
+		expect(auth().session).toEqual(refreshed);
+		await assertRequestCsrf("refreshed-account-b");
+	});
+
+	it("preserves a replacement session when an earlier same-account refresh finishes", async () => {
+		setup();
+		const pendingResponse = deferred<Response>();
+		let reads = 0;
+		globalThis.fetch = (async (input) => {
+			if (String(input) === "/api/auth/session") return ++reads === 1 ? Response.json(userSession()) : pendingResponse.promise;
+			if (String(input) === "/api/projects/1") return Response.json({ permissions: ADMIN_PERMISSIONS });
+			throw new Error(String(input));
+		}) as typeof fetch;
+		await renderAuth();
+		let pending!: Promise<void>;
+		await act(async () => {
+			pending = auth().refresh();
+		});
+		const replacement = { ...userSession(), csrfToken: "replacement-session" };
+		await act(async () => {
+			await auth().acceptSession(replacement);
+		});
+		await act(async () => {
+			pendingResponse.resolve(Response.json(userSession()));
+			await pending;
+		});
+		expect(auth().session).toEqual(replacement);
+		await assertRequestCsrf("replacement-session");
+	});
+
+	for (const releaseBeforeLogout of [true, false]) {
+		it(`ignores a refresh completed ${releaseBeforeLogout ? "during" : "after"} logout`, async () => {
+			setup();
+			const refreshResponse = deferred<Response>();
+			const logoutResponse = deferred<Response>();
+			let reads = 0;
+			let projectReads = 0;
+			globalThis.fetch = (async (input) => {
+				const path = String(input);
+				if (path === "/api/auth/session") return ++reads === 1 ? Response.json(userSession()) : refreshResponse.promise;
+				if (path === "/api/projects/1") {
+					projectReads++;
+					return Response.json({ permissions: ADMIN_PERMISSIONS });
+				}
+				if (path === "/api/auth/logout") return logoutResponse.promise;
+				throw new Error(path);
+			}) as typeof fetch;
+			await renderAuth();
+			let refreshRequest!: Promise<void>;
+			let logoutRequest!: Promise<void>;
+			await act(async () => {
+				refreshRequest = auth().refresh();
+				logoutRequest = auth().logout();
+			});
+			if (releaseBeforeLogout)
+				await act(async () => {
+					refreshResponse.resolve(Response.json(userSession()));
+					await refreshRequest;
+				});
+			await act(async () => {
+				logoutResponse.resolve(Response.json({ success: true }));
+				await logoutRequest;
+			});
+			if (!releaseBeforeLogout)
+				await act(async () => {
+					refreshResponse.resolve(Response.json(userSession()));
+					await refreshRequest;
+				});
+			expect(projectReads).toBe(1);
+			expect(document.querySelector('output[aria-label="Current account"]')).toBeNull();
+			expect(document.querySelector("h1")?.textContent).toBe("Log in");
+			await assertRequestCsrf(null);
+		});
+	}
+
+	it("aborts an unmounted provider's session request and ignores a late response", async () => {
+		setup();
+		const response = deferred<Response>();
+		let signal: AbortSignal | null | undefined;
+		let projectReads = 0;
+		globalThis.fetch = (async (input, options) => {
+			if (String(input) === "/api/auth/session") {
+				signal = options?.signal;
+				return response.promise;
+			}
+			if (String(input) === "/api/projects/1") {
+				projectReads++;
+				return Response.json({ permissions: ADMIN_PERMISSIONS });
+			}
+			throw new Error(String(input));
+		}) as typeof fetch;
+		await renderAuth();
+		await act(async () => {
+			root?.unmount();
+		});
+		root = null;
+		expect(signal?.aborted).toBe(true);
+		await act(async () => {
+			response.resolve(Response.json(userSession()));
+		});
+		await flush();
+		expect(projectReads).toBe(0);
+		await assertRequestCsrf(null);
+	});
+
+	it("restarts initial session loading after StrictMode effect cleanup", async () => {
+		setup();
+		const requests: Array<{ response: ReturnType<typeof deferred<Response>>; signal?: AbortSignal | null }> = [];
+		globalThis.fetch = (async (input, options) => {
+			if (String(input) === "/api/auth/session") {
+				const response = deferred<Response>();
+				requests.push({ response, signal: options?.signal });
+				return response.promise;
+			}
+			if (String(input) === "/api/projects/1") return Response.json({ permissions: ADMIN_PERMISSIONS });
+			throw new Error(String(input));
+		}) as typeof fetch;
+		await renderAuth(<AuthProbe />, true);
+		expect(requests).toHaveLength(2);
+		expect(requests[0]!.signal?.aborted).toBe(true);
+		await act(async () => {
+			requests[1]!.response.resolve(Response.json(userSession("current-account")));
+		});
+		await flush();
+		expect(auth().session?.user.id).toBe("current-account");
+		expect(auth().ready).toBe(true);
+		await act(async () => {
+			requests[0]!.response.resolve(Response.json(userSession("discarded-account")));
+		});
+		await flush();
+		expect(auth().session?.user.id).toBe("current-account");
+		await assertRequestCsrf("csrf-current-account");
+	});
+});
+
+describe("logout with unsaved changes", () => {
+	function installFetch(logout: () => Promise<Response> | Response) {
+		let logoutCalls = 0;
+		let permissionFailure = false;
+		globalThis.fetch = (async (input) => {
+			const path = String(input);
+			if (path === "/api/auth/session") return Response.json(userSession());
+			if (path === "/api/projects/1")
+				return permissionFailure
+					? Response.json({ error: "Project temporarily unavailable" }, { status: 503 })
+					: Response.json({ permissions: ADMIN_PERMISSIONS });
+			if (path === "/api/auth/logout") {
+				logoutCalls++;
+				return logout();
+			}
+			throw new Error(path);
+		}) as typeof fetch;
+		return {
+			get logoutCalls() {
+				return logoutCalls;
+			},
+			failPermissions() {
+				permissionFailure = true;
+			},
+		};
+	}
+
+	it("shares the dirty editor registry with router navigation", async () => {
+		setup();
+		installFetch(() => Response.json({ success: true }));
+		const confirm = mock(() => false);
+		window.confirm = confirm;
+		const router = await renderGuardedEditor();
+		await editDraft();
+		await act(async () => router.navigate("/documentation"));
+		expect(confirm).toHaveBeenCalledTimes(1);
+		expect(router.state.location.pathname).toBe("/board");
+		expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Unsaved document text");
+		confirm.mockImplementation(() => true);
+		await act(async () => router.navigate("/documentation"));
+		expect(confirm).toHaveBeenCalledTimes(2);
+		expect(router.state.location.pathname).toBe("/documentation");
+	});
+
+	it("guards browser unload only while an editor has unsaved changes", async () => {
+		setup();
+		installFetch(() => Response.json({ success: true }));
+		await renderGuardedEditor();
+		const cleanEvent = new window.Event("beforeunload", { cancelable: true });
+		window.dispatchEvent(cleanEvent);
+		expect(cleanEvent.defaultPrevented).toBe(false);
+		await editDraft();
+		const dirtyEvent = new window.Event("beforeunload", { cancelable: true });
+		window.dispatchEvent(dirtyEvent);
+		expect(dirtyEvent.defaultPrevented).toBe(true);
+		await act(async () => {
+			setNativeInputValue(document.querySelector("textarea")!, "Saved text");
+		});
+		const savedEvent = new window.Event("beforeunload", { cancelable: true });
+		window.dispatchEvent(savedEvent);
+		expect(savedEvent.defaultPrevented).toBe(false);
+	});
+
+	it("keeps the account and editor when AccountNavigation logout is canceled", async () => {
+		setup();
+		const calls = installFetch(() => Response.json({ success: true }));
+		const confirm = mock(() => false);
+		window.confirm = confirm;
+		await renderGuardedEditor();
+		await editDraft();
+		await act(async () => visibleButton("Log out").click());
+		expect(confirm).toHaveBeenCalledTimes(1);
+		expect(calls.logoutCalls).toBe(0);
+		expect(auth().session?.user.id).toBe("user-1");
+		expect(auth().ready).toBe(true);
+		expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Unsaved document text");
+		await assertRequestCsrf("csrf-user-1");
+	});
+
+	it("sends one approved logout while repeated clicks are pending", async () => {
+		setup();
+		const response = deferred<Response>();
+		const calls = installFetch(() => response.promise);
+		const confirm = mock(() => true);
+		window.confirm = confirm;
+		await renderGuardedEditor();
+		await editDraft();
+		await act(async () => {
+			const button = visibleButton("Log out");
+			button.click();
+			button.click();
+		});
+		expect(confirm).toHaveBeenCalledTimes(1);
+		expect(calls.logoutCalls).toBe(1);
+		expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Unsaved document text");
+		await act(async () => response.resolve(Response.json({ success: true })));
+		await flush();
+		expect(document.querySelector("textarea")).toBeNull();
+		expect(document.querySelector("h1")?.textContent).toBe("Log in");
+		await assertRequestCsrf(null);
+	});
+
+	for (const failure of ["network", "server"] as const) {
+		it(`preserves the editor and account when logout has a ${failure} failure`, async () => {
+			setup();
+			const calls = installFetch(() =>
+				failure === "network"
+					? Promise.reject(new Error("Logout could not reach server"))
+					: Response.json({ error: "Logout could not reach server" }, { status: 500 }),
+			);
+			window.confirm = mock(() => true);
+			await renderGuardedEditor();
+			await editDraft();
+			await act(async () => visibleButton("Log out").click());
+			await flush();
+			expect(calls.logoutCalls).toBe(1);
+			expect(auth().session?.user.id).toBe("user-1");
+			expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Unsaved document text");
+			expect(document.body.textContent).toContain("Logout could not reach server");
+			await assertRequestCsrf("csrf-user-1");
+		});
+	}
+
+	for (const status of [200, 401]) {
+		it(`logs out a clean editor without confirmation when the server returns ${status}`, async () => {
+			setup();
+			const calls = installFetch(() => Response.json(status === 200 ? { success: true } : { error: "Login required" }, { status }));
+			const confirm = mock(() => false);
+			window.confirm = confirm;
+			await renderGuardedEditor();
+			await act(async () => visibleButton("Log out").click());
+			await flush();
+			expect(confirm).not.toHaveBeenCalled();
+			expect(calls.logoutCalls).toBe(1);
+			expect(document.querySelector("textarea")).toBeNull();
+			expect(document.querySelector("h1")?.textContent).toBe("Log in");
+			await assertRequestCsrf(null);
+		});
+	}
+
+	it("uses the same dirty editor confirmation from the AuthProvider error screen", async () => {
+		setup();
+		const calls = installFetch(() => Response.json({ success: true }));
+		const confirm = mock(() => false);
+		window.confirm = confirm;
+		await renderGuardedEditor();
+		await editDraft();
+		calls.failPermissions();
+		await act(async () => auth().refresh());
+		expect(document.body.textContent).toContain("Project temporarily unavailable");
+		expect(document.querySelector("textarea")?.closest("[hidden]")).not.toBeNull();
+		await act(async () => visibleButton("Log out").click());
+		expect(confirm).toHaveBeenCalledTimes(1);
+		expect(calls.logoutCalls).toBe(0);
+		expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Unsaved document text");
+		confirm.mockImplementation(() => true);
+		await act(async () => visibleButton("Log out").click());
+		await flush();
+		expect(calls.logoutCalls).toBe(1);
+		expect(document.querySelector("textarea")).toBeNull();
+		expect(document.querySelector("h1")?.textContent).toBe("Log in");
 	});
 });
 

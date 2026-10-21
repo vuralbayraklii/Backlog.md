@@ -3,13 +3,36 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-21 12:56'
+updated_date: '2026-10-21 14:13'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not, Backlog.md fork’unda çoklu proje takip sistemi geliştirmesine yeni bir sohbetten devam etmek içindir. 21 Ekim 2026 güncellemesinde A-00, A-01 ve A-02 hesap/yetki teslimi tamamlandı. Güncel A-02 kaynak ve kanıtları tasks/server-a02-accounts-authorization dalındadır; görevler BACK-790–BACK-793 Done. Sonraki aşama A-03 proje kayıt ekranı ve izinli klasörlerdir; bu teslimde başlatılmadı. Güncel HEAD ve temizliği Git ile doğrula. Aşağıdaki A-00–A-01 bölümleri tarihsel teslim kayıtlarıdır; güncel davranışta bu A-02 bölümü esas alınır.
+Bu not Backlog.md çoklu proje sunucusu geliştirmesine yeni bir sohbetten devam etmek içindir. A-00, A-01 ve A-02 ana uygulaması tamamlandı. 8440e7b7 incelemesindeki üç hata BACK-794 kapsamında düzeltildi ve doğrulandı; görev Git teslimi kapanışını bekliyor. Güncel dal tasks/server-a02-accounts-authorization; HEAD ve temizliği Git ile doğrula. Sonraki ürün aşaması A-03 proje kayıt ekranı ve izinli klasörlerdir; bu teslimde başlatılmadı. Aşağıdaki eski aşama kayıtları tarihsel kanıtlardır.
+
+## A-02 inceleme düzeltmeleri — BACK-794 (21 Ekim 2026)
+
+Kullanıcı inceleme bulguları için sunulan planın uygulanmasını ve uygun düzeltmenin mevcut özellik dalına gönderilmesini onayladı. Ana ajan `@codex`, `codex-password`, `codex-web-tests` ve `codex-review` ile çalıştı. Başlangıç HEAD'i `8440e7b7475d404ff7cc15eb10f01616ef66ada3`; kaynak yedeği `/tmp/backlog-a02-review-fixes-69vcph7x/start.tar.gz`.
+
+- Gecikmiş oturum success/error yanıtları, kimlik nesli ve iptal edilebilir istek sahipliğiyle denetleniyor; eski finally daha yeni isteği temizlemiyor. Logout, unmount ve StrictMode yarışları doğrulandı.
+- Tek kirli editör kaydı AuthProvider dışında, router engeli router içinde. Bütün logout çağrıları aynı onayı kullanır; iptalde HTTP isteği yok, onayda tek istek var. Başarısız logout metni korur, zaten kapanmış oturumun 401 yanıtı yerel çıkışı tamamlar.
+- Kesin kullanıcı kararı: kendi parola değiştirme işlemlerinin tamamında mevcut parola yeniden seçilemez. HTTP 400 ret sırasında parola/bayrak/oturumlar değişmez. Admin reset işlemi aynı davranışı korur.
+
+| Kontrol | Sonuç |
+|---|---|
+| İlgili hesap/API/CLI grubu | 7 dosyada 129 başarılı, 0 başarısız, 0 atlanan; 787 beklenti |
+| Tüm web/DOM grubu | 43 dosyada 437 başarılı, 0 başarısız, 0 atlanan; 2627 beklenti |
+| Tip | 567 dosyada hata yok |
+| Yazmasız Biome | Başarılı |
+| Build ve derlenmiş CLI/web/MCP smoke | Başarılı |
+| Gerçek Chromium | 19 başarılı kontrol; 0 işlenmemiş tarayıcı hatası |
+
+[Son kaynak doğrulama raporu](../../../verification/server/a02-review-fixes.json) kaynak/kanıt SHA-256 değerlerini korur. Ham kanıtlar `/tmp/backlog-a02-review-fixes-69vcph7x/`. Asıl A-02 tam koşusu önceki commit'e aittir ve `a02-verification.json` içinde korunur; bu dar düzeltmede 329 dosyalık tam koşu tekrar yapılmadı. Browser hata/gecikme senaryoları sayfa fetch denetimiyle üretildi; gerçek giriş, CSRF, belge, süre dolması ve parola işlemleri derlenmiş sunucuda çalıştı.
+
+Bağımsız inceleme engelleyici bulgu bırakmadı. Groma yoktu; tarama veya yönettiği dosyalarda değişiklik yapılmadı. Standart CLI görev oluşturma kilidi ve localhost/alt süreç testleri gereken sandbox izinleriyle çalıştırıldı. Varsayılan SSH, sistem proxy yapılandırmasının sahiplik/izin denetiminde reddedildi; sistem dosyasına dokunmadan `git -c core.sshCommand='ssh -F /home/vuralbayrakli/.ssh/config' ...` ile origin okuması başarılı oldu.
+
+Git teslimi: kod doğrulandı; düzeltme commit/push ve uzak HEAD doğrulaması kapanışta kaydedilecek. BACK-794 henüz In Progress; kabul ölçütü 4 gönderim sonucunu bekliyor.
 
 ## Tamamlanan A-02 — Hesap ve yetki (21 Ekim 2026)
 
@@ -172,8 +195,8 @@ A-00, A-01 ve A-02 tamamlandı. Sıradaki aşama A-03: proje kayıt ekranı, izi
 
 Devam sırası:
 
-1. MANIFESTO.md, AGENTS.md, doc-4, doc-5 ve A-00–A-02 doğrulama raporlarını oku; BACK-785–BACK-793 görevlerini CLI ile doğrula.
-2. Git durumunu ve A-02 özellik dalının HEAD’ini doğrula, yerel kayıtları koru. A-02’nin son kaynak özetleri a02-verification.json içindedir; origin/server kendiliğinden değiştirilmez.
+1. MANIFESTO.md, AGENTS.md, doc-4, doc-5 ve A-00–A-02 ve a02-review-fixes.json doğrulama raporlarını oku; BACK-785–BACK-794 görevlerini CLI ile doğrula.
+2. Git durumunu ve A-02 özellik dalının HEAD’ini doğrula, yerel kayıtları koru. A-02 inceleme düzeltmesinin son kaynak özetleri a02-review-fixes.json içindedir; origin/server kendiliğinden değiştirilmez.
 3. A-03 kapsamını mevcut kullanıcı vuralbayraklii ile ele al. A-02’nin yukarıdaki kesin kararlarını yeniden belirsiz sayma; diğer açık önerileri onaylanmış karar sayma.
 4. Yeni görevi yalnız kullanıcı yetkilendirdiğinde CLI allocator ile aç; Groma varsa yönergelerini, yoksa sınırlamayı kaydet. Kabul kanıtlarını ve bu devri güncelle.
 
@@ -193,8 +216,8 @@ Aşağıdakiler önceki plan incelemesinde önerildi; kullanıcı bunları ayrı
 
 ```text
 /home/vuralbayrakli/Backlog.md projesindeki çalışmaya devam ediyoruz.
-Önce MANIFESTO.md, AGENTS.md Server fork continuity, doc-4, doc-5, A-00–A-02 verification/server raporları ve BACK-785–BACK-793 görevlerini CLI ile oku.
+Önce MANIFESTO.md, AGENTS.md Server fork continuity, doc-4, doc-5, A-00–A-02 verification/server raporları, a02-review-fixes.json ve BACK-785–BACK-794 görevlerini CLI ile oku.
 A-00, A-01 ve A-02 tamamlandı. A-02 dalı tasks/server-a02-accounts-authorization; HEAD/temizliği Git ile doğrula. Hesap, oturum, proje işlem izinleri, admin CLI/UI ve üç kayıt türünde arşiv yaşam döngüsü entegre; tarihçe ve agent server modu sonraki aşamalardır.
-Son tam test: 3689 başarılı, 13 atlanan, 0 başarısız; çıkış0. Tip, yazmasız Biome, build, compiled CLI/web/MCP smoke ve 31 masaüstü Chromium iddiası başarılı. Kanıt a02-verification.json, ham kayıtlar /tmp/backlog-a02-verification/.
+8440e7b7 ana uygulamasının son tam testi: 3689 başarılı, 13 atlanan, 0 başarısız. Sonraki BACK-794 düzeltmesinde ilgili 566 test ve 19 Chromium kontrolü başarılı; tip, yazmasız Biome, build ve compiled smoke de geçti. Son kaynak kanıtı a02-review-fixes.json, ham kayıtlar /tmp/backlog-a02-review-fixes-69vcph7x/. Tam test bu dar düzeltmede yeniden çalıştırılmadı.
 Git ve yerel kayıtları koru. Sıradaki A-03 proje kayıt ekranı/izinli klasörlerdir; kullanıcı yetkilendirmeden başlatma. A-02 kesin kararlarını ve kapsam dışı A-04/A-05 ayrımını koru; Groma bu ortamda bulunamadı.
 ```

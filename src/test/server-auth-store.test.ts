@@ -154,6 +154,91 @@ describe("central account store", () => {
 		expect(store.loadSession(rotated.token)).toBeNull();
 	});
 
+	it.each(["initial", "after reset", "voluntary"])(
+		"rejects the current password during %s changes without altering accounts or sessions",
+		async (stage) => {
+			const admin = await store.initializeAdmin("admin", PASSWORD);
+			let currentPassword = PASSWORD;
+			if (stage !== "initial") {
+				const initial = await store.login("admin", PASSWORD);
+				await store.changePassword(initial.token, PASSWORD, REPLACEMENT);
+				currentPassword = REPLACEMENT;
+				if (stage === "after reset") {
+					await store.resetPassword(admin.id, PASSWORD);
+					currentPassword = PASSWORD;
+				}
+			}
+			const first = await store.login("admin", currentPassword);
+			const other = await store.login("admin", currentPassword);
+			expect(first.session.user.mustChangePassword).toBe(stage !== "voluntary");
+			const before = await Bun.file(store.databasePath).arrayBuffer();
+			await expect(store.changePassword(first.token, currentPassword, currentPassword)).rejects.toMatchObject({
+				name: "AuthStoreError",
+				status: 400,
+				message: "New password must be different from the current password.",
+			});
+			expect(await Bun.file(store.databasePath).arrayBuffer()).toEqual(before);
+			expect(store.loadSession(first.token)).toEqual(first.session);
+			expect(store.loadSession(other.token)).toEqual(other.session);
+			const rotated = await store.changePassword(first.token, currentPassword, `${currentPassword} new`);
+			expect(rotated.session.user.mustChangePassword).toBe(false);
+			expect(store.loadSession(first.token)).toBeNull();
+			expect(store.loadSession(other.token)).toBeNull();
+			expect(store.loadSession(rotated.token)).toEqual(rotated.session);
+		},
+	);
+
+	it("validates new password length without mutating state and preserves significant whitespace", async () => {
+		await store.initializeAdmin("admin", PASSWORD);
+		const first = await store.login("admin", PASSWORD);
+		const before = await Bun.file(store.databasePath).arrayBuffer();
+		for (const invalid of ["a".repeat(14), "a".repeat(129)]) {
+			await expect(store.changePassword(first.token, PASSWORD, invalid)).rejects.toMatchObject({
+				status: 400,
+				message: "Password must contain 15–128 characters.",
+			});
+			expect(await Bun.file(store.databasePath).arrayBuffer()).toEqual(before);
+			expect(store.loadSession(first.token)).toEqual(first.session);
+		}
+		const trimmed = PASSWORD.trim();
+		const rotated = await store.changePassword(first.token, PASSWORD, trimmed);
+		expect(rotated.session.user.mustChangePassword).toBe(false);
+		expect(store.loadSession(first.token)).toBeNull();
+		await expect(store.login("admin", PASSWORD)).rejects.toMatchObject({ status: 401 });
+		expect((await store.login("admin", trimmed)).session.user.username).toBe("admin");
+	});
+
+	it("allows an admin reset to the existing password while requiring replacement and revoking sessions", async () => {
+		const admin = await store.initializeAdmin("admin", PASSWORD);
+		const first = await store.login("admin", PASSWORD);
+		const changed = await store.changePassword(first.token, PASSWORD, REPLACEMENT);
+		const other = await store.login("admin", REPLACEMENT);
+		expect((await store.resetPassword(admin.id, REPLACEMENT)).mustChangePassword).toBe(true);
+		expect(store.loadSession(changed.token)).toBeNull();
+		expect(store.loadSession(other.token)).toBeNull();
+		expect((await store.login("admin", REPLACEMENT)).session.user.mustChangePassword).toBe(true);
+	});
+
+	it("allows only one concurrent password replacement and retains the winning session", async () => {
+		await store.initializeAdmin("admin", PASSWORD);
+		const first = await store.login("admin", PASSWORD);
+		const other = await store.login("admin", PASSWORD);
+		const results = await Promise.allSettled([
+			store.changePassword(first.token, PASSWORD, REPLACEMENT),
+			store.changePassword(other.token, PASSWORD, `${REPLACEMENT} other`),
+		]);
+		const succeeded = results.filter((result) => result.status === "fulfilled");
+		const rejected = results.filter((result) => result.status === "rejected");
+		expect(succeeded).toHaveLength(1);
+		expect(rejected).toHaveLength(1);
+		expect(rejected[0]?.reason).toMatchObject({ status: 401 });
+		expect(store.loadSession(first.token)).toBeNull();
+		expect(store.loadSession(other.token)).toBeNull();
+		const winner = succeeded[0]?.value;
+		expect(winner).toBeDefined();
+		if (winner) expect(store.loadSession(winner.token)).toEqual(winner.session);
+	});
+
 	it("expires idle sessions without extending on reads and never extends beyond twelve hours", async () => {
 		await store.initializeAdmin("admin", PASSWORD);
 		const idle = await store.login("admin", PASSWORD);

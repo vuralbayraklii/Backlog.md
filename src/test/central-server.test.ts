@@ -21,7 +21,7 @@ describe("central project server", () => {
 		if (cookie) return;
 		const auth = new AuthStore(dataDir);
 		const login = await auth.login("admin", password);
-		const result = await auth.changePassword(login.token, password, password);
+		const result = await auth.changePassword(login.token, password, `${password} replacement`);
 		cookie = `backlog_session=${result.token}`;
 		csrf = result.session.csrfToken;
 	}
