@@ -3,13 +3,13 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-21 14:13'
+updated_date: '2026-10-21 14:16'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje sunucusu geliştirmesine yeni bir sohbetten devam etmek içindir. A-00, A-01 ve A-02 ana uygulaması tamamlandı. 8440e7b7 incelemesindeki üç hata BACK-794 kapsamında düzeltildi ve doğrulandı; görev Git teslimi kapanışını bekliyor. Güncel dal tasks/server-a02-accounts-authorization; HEAD ve temizliği Git ile doğrula. Sonraki ürün aşaması A-03 proje kayıt ekranı ve izinli klasörlerdir; bu teslimde başlatılmadı. Aşağıdaki eski aşama kayıtları tarihsel kanıtlardır.
+Bu not Backlog.md çoklu proje sunucusu geliştirmesine yeni bir sohbetten devam etmek içindir. A-00, A-01 ve A-02 ana uygulaması tamamlandı. 8440e7b7 incelemesindeki üç hata BACK-794 kapsamında düzeltildi ve doğrulandı; BACK-794 Done olarak kapandı ve düzeltme origin özellik dalına gönderildi. Güncel dal tasks/server-a02-accounts-authorization; HEAD ve temizliği Git ile doğrula. Sonraki ürün aşaması A-03 proje kayıt ekranı ve izinli klasörlerdir; bu teslimde başlatılmadı. Aşağıdaki eski aşama kayıtları tarihsel kanıtlardır.
 
 ## A-02 inceleme düzeltmeleri — BACK-794 (21 Ekim 2026)
 
@@ -32,7 +32,7 @@ Kullanıcı inceleme bulguları için sunulan planın uygulanmasını ve uygun d
 
 Bağımsız inceleme engelleyici bulgu bırakmadı. Groma yoktu; tarama veya yönettiği dosyalarda değişiklik yapılmadı. Standart CLI görev oluşturma kilidi ve localhost/alt süreç testleri gereken sandbox izinleriyle çalıştırıldı. Varsayılan SSH, sistem proxy yapılandırmasının sahiplik/izin denetiminde reddedildi; sistem dosyasına dokunmadan `git -c core.sshCommand='ssh -F /home/vuralbayrakli/.ssh/config' ...` ile origin okuması başarılı oldu.
 
-Git teslimi: kod doğrulandı; düzeltme commit/push ve uzak HEAD doğrulaması kapanışta kaydedilecek. BACK-794 henüz In Progress; kabul ölçütü 4 gönderim sonucunu bekliyor.
+Git teslimi: uygulama düzeltmesi `28c9cd5c86ca529733fc880bf4c462160e6f8f44` commit’iyle `origin/tasks/server-a02-accounts-authorization` dalına gönderildi; `git ls-remote` ile uzak HEAD eşitliği doğrulandı. BACK-794 Done; dört kabul ölçütü ve üç DoD kanıtla kapandı. Kapanış kayıtları ayrı bir BACK-794 takip commit’iyle aynı dala gönderilir; son HEAD’i Git’ten doğrula. `origin/server` değiştirilmedi.
 
 ## Tamamlanan A-02 — Hesap ve yetki (21 Ekim 2026)
 
