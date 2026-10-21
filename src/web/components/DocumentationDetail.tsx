@@ -1,5 +1,6 @@
 import {useState, useEffect, memo, useCallback} from 'react';
 import {useParams, useNavigate, useSearchParams} from 'react-router-dom';
+import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
 import {apiClient, isAmbiguousIdConflict} from '../lib/api';
 import MDEditor from '@uiw/react-md-editor';
 import MermaidMarkdown from './MermaidMarkdown';
@@ -101,6 +102,8 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
     // The editor opens on request (the Edit button, `?edit=true` in the URL, the new page), but never
     // for an archived document: the request can come before or after the record has loaded.
     const isEditing = editRequested && !isArchived;
+    const hasChanges = content !== originalContent || docTitle !== originalDocTitle || docPath !== originalDocPath;
+    const clearUnsaved = useUnsavedChanges(isEditing && hasChanges);
     const {archive, isArchiving, archiveError, dismissArchiveError} = useRecordArchive(
         'document',
         currentDocument && !isLoading && !isNewDocument ? {id: currentDocument.id, title: currentDocument.title} : null,
@@ -236,6 +239,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
                 setOriginalDocPath(getDocumentDirectory(result.path) || normalizedPath);
                 // Use the returned document ID for navigation
                 const documentId = result.id.replace('doc-', ''); // Remove prefix for URL
+                clearUnsaved();
                 navigate(`/documentation/${documentId}/${sanitizeUrlTitle(normalizedTitle)}`);
             } else {
                 // Update existing document
@@ -271,6 +275,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
                 setTimeout(() => setShowSaveSuccess(false), 4000);
                 // Exit edit mode and navigate to document detail page (this will load in preview mode)
                 setEditRequested(false);
+                clearUnsaved();
                 navigate(`/documentation/${id}/${sanitizeUrlTitle(normalizedTitle)}`);
             }
         } catch (err) {
@@ -280,7 +285,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
         } finally {
             setIsSaving(false);
         }
-    }, [id, docTitle, docPath, originalDocPath, content, isNewDocument, onRefreshData, navigate, loadDocContent]);
+    }, [id, docTitle, docPath, originalDocPath, content, isNewDocument, onRefreshData, navigate, loadDocContent, clearUnsaved]);
 
     const handleEdit = () => {
         setEditRequested(true);
@@ -298,8 +303,6 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
             setEditRequested(false);
         }
     };
-
-    const hasChanges = content !== originalContent || docTitle !== originalDocTitle || docPath !== originalDocPath;
 
     if (!id || (id !== 'new' && !routeIdentity)) {
         return (

@@ -11,6 +11,21 @@ principle in it, surface the conflict and ask Alex rather than silently proceedi
 not edit the manifesto as a side effect of implementation; changes to it require an
 explicit product decision.
 
+## Server fork continuity
+
+For this fork's multi-project server work, read these repository records before planning:
+
+- [Server handoff](<backlog/docs/server/doc-5 - Sunucu-geliştirmesi-devir-notu.md>) — current state, evidence, next task, Git status, and unresolved decisions.
+- [User's original plan](<backlog/docs/server/doc-4 - Backlog.md-çoklu-proje-takip-sistemi-planı.md>) — scope and acceptance requirements for stages A-00 through A-08.
+- [Pinned baseline evidence](verification/server/a00-baseline.json).
+
+Read the referenced tasks through the Backlog CLI. Confirm the current Git state and
+preserve local records before changing branches or starting work. Review suggestions
+listed as unresolved in the handoff are not accepted product decisions. Product questions
+for this fork go to the current user, vuralbayraklii; the upstream references to Alex
+apply to upstream maintenance. Update the handoff after completing a scoped task so
+another conversation can continue from the repository records.
+
 When you're working on a task, you should assign it yourself: -a @{your-name}
 
 In addition to the rules above, please consider the following:

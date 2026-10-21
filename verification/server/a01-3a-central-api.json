@@ -1,0 +1,33 @@
+{
+	"stage": "A-01.3a",
+	"taskId": "BACK-788",
+	"date": "2026-10-21",
+	"branch": "tasks/server-a013-open-project-board",
+	"checks": {
+		"centralApi": "9 passed, 0 failed; 62 assertions",
+		"relatedRegression": "66 passed, 0 failed across six files",
+		"types": "546 files, no errors",
+		"biome": "471 files, no fixes applied",
+		"build": "passed",
+		"compiledHelp": "server start exposes required --data-dir, default port 6420 and optional --open"
+	},
+	"behavior": [
+		"Two registered projects with identical task, document, decision, and asset IDs resolve separately",
+		"Drafts, milestones, and search results also resolve within the selected project",
+		"A project task update leaves the other project unchanged and only its WebSocket group receives a task update",
+		"Missing database returns an empty selector; damaged database and occupied port fail startup",
+		"Browser launch happens only when explicitly requested",
+		"Unknown project returns 404; missing registered project returns 503 while healthy project remains usable",
+		"A missing custom Backlog directory returns 503 without being recreated",
+		"Central settings reject forbidden fields and preserve the source project name",
+		"Configured status command did not run during a central task status change",
+		"Task creation, document editing, decision and task archiving leave the other project files unchanged",
+		"Project contexts drain on stop and reopen after concurrent stop calls",
+		"Shared HTML bundle serves JavaScript and CSS assets"
+	],
+	"nextTask": "BACK-789",
+	"limits": [
+		"This report covers the central API and server runtime; project selector and browser integration belong to BACK-789.",
+		"Browser interaction, full CI test profile, and compiled HTTP smoke will be verified with BACK-789."
+	]
+}

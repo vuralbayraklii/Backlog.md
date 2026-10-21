@@ -218,7 +218,7 @@ export function markHtmlBundleNoStore(bundle: Bun.HTMLBundle): Bun.HTMLBundle {
 	return bundle;
 }
 
-const spaIndexHtml = markHtmlBundleNoStore(indexHtml);
+export const spaIndexHtml = markHtmlBundleNoStore(indexHtml);
 const BUNDLE_ASSET_DIR_ENV = "BACKLOG_BUNDLE_ASSET_DIR";
 const BROWSER_HOST = "127.0.0.1";
 const MIN_PORT = 1;
@@ -248,6 +248,7 @@ export async function findNextAvailablePort(startPort: number, maxPort = MAX_POR
 
 export class BacklogServer {
 	private core: Core;
+	private readonly centralMode: boolean;
 	private server: Server<unknown> | null = null;
 	private runtimeWorkingDirectory: string | null = null;
 	private projectName = "Untitled Project";
@@ -262,8 +263,10 @@ export class BacklogServer {
 	private pendingDataBroadcastScope: "tasks" | "milestones" = "tasks";
 	private storeReadyBroadcasted = false;
 
-	constructor(projectPath: string) {
-		this.core = new Core(projectPath, { enableWatchers: true });
+	constructor(projectPath: string, options?: { centralMode?: boolean; projectName?: string }) {
+		this.centralMode = options?.centralMode ?? false;
+		this.core = new Core(projectPath, { enableWatchers: true, serverMode: this.centralMode });
+		if (options?.projectName) this.projectName = options.projectName;
 	}
 
 	private async resolveMilestoneInput(milestone: string): Promise<string> {
@@ -302,7 +305,7 @@ export class BacklogServer {
 			this.unsubscribeContentStore = store.subscribe((event) => {
 				if (event.type === "config") {
 					this.storeReadyBroadcasted = true;
-					this.projectName = event.config.projectName;
+					if (!this.centralMode) this.projectName = event.config.projectName;
 					this.broadcastConfigUpdated();
 					return;
 				}
@@ -382,6 +385,154 @@ export class BacklogServer {
 		}
 	}
 
+	private apiRoutes() {
+		return {
+			// API Routes using Bun's native route syntax
+			"/api/tasks": {
+				GET: async (req: Request) => await this.handleListTasks(req),
+				POST: async (req: Request) => await this.handleCreateTask(req),
+			},
+			"/api/task/:id": {
+				GET: async (req: Request & { params: { id: string } }) => await this.handleGetTask(req.params.id),
+			},
+			"/api/tasks/:id": {
+				GET: async (req: Request & { params: { id: string } }) => await this.handleGetTask(req.params.id),
+				PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateTask(req, req.params.id),
+			},
+			"/api/tasks/:id/archive": {
+				POST: async (req: Request & { params: { id: string } }) => await this.handleArchiveTask(req.params.id),
+			},
+			"/api/tasks/:id/demote": {
+				POST: async (req: Request & { params: { id: string } }) => await this.handleDemoteTask(req.params.id),
+			},
+			"/api/statuses": {
+				GET: async () => await this.handleGetStatuses(),
+			},
+			"/api/config": {
+				GET: async () => await this.handleGetConfig(),
+				PUT: async (req: Request) => await this.handleUpdateConfig(req),
+			},
+			"/api/docs": {
+				GET: async () => await this.handleListDocs(),
+				POST: async (req: Request) => await this.handleCreateDoc(req),
+			},
+			"/api/doc/:id": {
+				GET: async (req: Request & { params: { id: string } }) => await this.handleGetDoc(req.params.id),
+			},
+			"/api/docs/:id": {
+				GET: async (req: Request & { params: { id: string } }) => await this.handleGetDoc(req.params.id),
+				PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateDoc(req, req.params.id),
+			},
+			"/api/docs/:id/archive": {
+				POST: async (req: Request & { params: { id: string } }) =>
+					await this.handleArchiveContentRecord("document", req.params.id),
+			},
+			"/api/decisions": {
+				GET: async () => await this.handleListDecisions(),
+				POST: async (req: Request) => await this.handleCreateDecision(req),
+			},
+			"/api/decision/:id": {
+				GET: async (req: Request & { params: { id: string } }) => await this.handleGetDecision(req.params.id),
+			},
+			"/api/decisions/:id": {
+				GET: async (req: Request & { params: { id: string } }) => await this.handleGetDecision(req.params.id),
+				PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateDecision(req, req.params.id),
+			},
+			"/api/decisions/:id/archive": {
+				POST: async (req: Request & { params: { id: string } }) =>
+					await this.handleArchiveContentRecord("decision", req.params.id),
+			},
+			"/api/drafts": {
+				GET: async () => await this.handleListDrafts(),
+			},
+			"/api/drafts/:id/promote": {
+				POST: async (req: Request & { params: { id: string } }) => await this.handlePromoteDraft(req.params.id),
+			},
+			"/api/milestones": {
+				GET: async () => await this.handleListMilestones(),
+				POST: async (req: Request) => await this.handleCreateMilestone(req),
+			},
+			"/api/milestones/archived": {
+				GET: async () => await this.handleListArchivedMilestones(),
+			},
+			"/api/milestones/:id": {
+				GET: async (req: Request & { params: { id: string } }) => await this.handleGetMilestone(req.params.id),
+				PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateMilestone(req, req.params.id),
+				DELETE: async (req: Request & { params: { id: string } }) =>
+					await this.handleRemoveMilestone(req, req.params.id),
+			},
+			"/api/milestones/:id/archive": {
+				POST: async (req: Request & { params: { id: string } }) => await this.handleArchiveMilestone(req.params.id),
+			},
+			"/api/tasks/reorder": {
+				POST: async (req: Request) => await this.handleReorderTask(req),
+			},
+			"/api/tasks/move": {
+				POST: async (req: Request) => await this.handleMoveTasks(req),
+			},
+			"/api/tasks/cleanup": {
+				GET: async (req: Request) => await this.handleCleanupPreview(req),
+			},
+			"/api/tasks/duplicates": {
+				GET: async () => await this.handleGetDuplicateTasks(),
+				POST: async (req: Request) => await this.handleRepairDuplicateTasks(req),
+			},
+			"/api/tasks/cleanup/execute": {
+				POST: async (req: Request) => await this.handleCleanupExecute(req),
+			},
+			"/api/version": {
+				GET: async () => await this.handleGetVersion(),
+			},
+			"/api/statistics": {
+				GET: async () => await this.handleGetStatistics(),
+			},
+			"/api/status": {
+				GET: async () => await this.handleGetStatus(),
+			},
+			"/api/init": {
+				POST: async (req: Request) => await this.handleInit(req),
+			},
+			"/api/search": {
+				GET: async (req: Request) => await this.handleSearch(req),
+			},
+			// Serve files placed under backlog/assets at /assets/<relative-path>
+			"/assets/*": {
+				GET: async (req: Request) => await this.handleAssetRequest(req),
+			},
+		};
+	}
+
+	async dispatchApi(req: Request, localPath: string): Promise<Response> {
+		if (this.centralMode && localPath === "/api/init") return new Response("Not Found", { status: 404 });
+		const url = new URL(req.url);
+		url.pathname = localPath;
+		const routes = this.apiRoutes() as unknown as Record<string, Record<string, (req: Request) => Promise<Response>>>;
+		const patterns = Object.keys(routes).sort((left, right) => {
+			const dynamicCount = (path: string) => (path.match(/[:*]/g) ?? []).length;
+			return dynamicCount(left) - dynamicCount(right) || right.length - left.length;
+		});
+		for (const path of patterns) {
+			const match = new URLPattern({ pathname: path }).exec(url);
+			if (!match) continue;
+			const handler = routes[path]?.[req.method];
+			if (!handler) return new Response("Not Found", { status: 404 });
+			const localRequest = new Request(url, req);
+			Object.defineProperty(localRequest, "params", { value: match.pathname.groups });
+			return await handler(localRequest);
+		}
+		return new Response("Not Found", { status: 404 });
+	}
+
+	acceptSocket(ws: ServerWebSocket<unknown>): void {
+		this.sockets.add(ws);
+		ws.send(JSON.stringify(this.browserLoadingState));
+		if (this.browserLoadingState.type === "loading") void this.ensureServicesReady().catch(() => {});
+	}
+
+	removeSocket(ws: ServerWebSocket<unknown>): void {
+		this.sockets.delete(ws);
+	}
+
 	async start(port?: number, openBrowser = true): Promise<void> {
 		// Prevent duplicate starts (e.g., accidental re-entry)
 		if (this.server) {
@@ -420,120 +571,7 @@ export class BacklogServer {
 					"/statistics": spaIndexHtml,
 					"/settings": spaIndexHtml,
 
-					// API Routes using Bun's native route syntax
-					"/api/tasks": {
-						GET: async (req: Request) => await this.handleListTasks(req),
-						POST: async (req: Request) => await this.handleCreateTask(req),
-					},
-					"/api/task/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetTask(req.params.id),
-					},
-					"/api/tasks/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetTask(req.params.id),
-						PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateTask(req, req.params.id),
-					},
-					"/api/tasks/:id/archive": {
-						POST: async (req: Request & { params: { id: string } }) => await this.handleArchiveTask(req.params.id),
-					},
-					"/api/tasks/:id/demote": {
-						POST: async (req: Request & { params: { id: string } }) => await this.handleDemoteTask(req.params.id),
-					},
-					"/api/statuses": {
-						GET: async () => await this.handleGetStatuses(),
-					},
-					"/api/config": {
-						GET: async () => await this.handleGetConfig(),
-						PUT: async (req: Request) => await this.handleUpdateConfig(req),
-					},
-					"/api/docs": {
-						GET: async () => await this.handleListDocs(),
-						POST: async (req: Request) => await this.handleCreateDoc(req),
-					},
-					"/api/doc/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetDoc(req.params.id),
-					},
-					"/api/docs/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetDoc(req.params.id),
-						PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateDoc(req, req.params.id),
-					},
-					"/api/docs/:id/archive": {
-						POST: async (req: Request & { params: { id: string } }) =>
-							await this.handleArchiveContentRecord("document", req.params.id),
-					},
-					"/api/decisions": {
-						GET: async () => await this.handleListDecisions(),
-						POST: async (req: Request) => await this.handleCreateDecision(req),
-					},
-					"/api/decision/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetDecision(req.params.id),
-					},
-					"/api/decisions/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetDecision(req.params.id),
-						PUT: async (req: Request & { params: { id: string } }) =>
-							await this.handleUpdateDecision(req, req.params.id),
-					},
-					"/api/decisions/:id/archive": {
-						POST: async (req: Request & { params: { id: string } }) =>
-							await this.handleArchiveContentRecord("decision", req.params.id),
-					},
-					"/api/drafts": {
-						GET: async () => await this.handleListDrafts(),
-					},
-					"/api/drafts/:id/promote": {
-						POST: async (req: Request & { params: { id: string } }) => await this.handlePromoteDraft(req.params.id),
-					},
-					"/api/milestones": {
-						GET: async () => await this.handleListMilestones(),
-						POST: async (req: Request) => await this.handleCreateMilestone(req),
-					},
-					"/api/milestones/archived": {
-						GET: async () => await this.handleListArchivedMilestones(),
-					},
-					"/api/milestones/:id": {
-						GET: async (req: Request & { params: { id: string } }) => await this.handleGetMilestone(req.params.id),
-						PUT: async (req: Request & { params: { id: string } }) =>
-							await this.handleUpdateMilestone(req, req.params.id),
-						DELETE: async (req: Request & { params: { id: string } }) =>
-							await this.handleRemoveMilestone(req, req.params.id),
-					},
-					"/api/milestones/:id/archive": {
-						POST: async (req: Request & { params: { id: string } }) => await this.handleArchiveMilestone(req.params.id),
-					},
-					"/api/tasks/reorder": {
-						POST: async (req: Request) => await this.handleReorderTask(req),
-					},
-					"/api/tasks/move": {
-						POST: async (req: Request) => await this.handleMoveTasks(req),
-					},
-					"/api/tasks/cleanup": {
-						GET: async (req: Request) => await this.handleCleanupPreview(req),
-					},
-					"/api/tasks/duplicates": {
-						GET: async () => await this.handleGetDuplicateTasks(),
-						POST: async (req: Request) => await this.handleRepairDuplicateTasks(req),
-					},
-					"/api/tasks/cleanup/execute": {
-						POST: async (req: Request) => await this.handleCleanupExecute(req),
-					},
-					"/api/version": {
-						GET: async () => await this.handleGetVersion(),
-					},
-					"/api/statistics": {
-						GET: async () => await this.handleGetStatistics(),
-					},
-					"/api/status": {
-						GET: async () => await this.handleGetStatus(),
-					},
-					"/api/init": {
-						POST: async (req: Request) => await this.handleInit(req),
-					},
-					"/api/search": {
-						GET: async (req: Request) => await this.handleSearch(req),
-					},
-					// Serve files placed under backlog/assets at /assets/<relative-path>
-					"/assets/*": {
-						GET: async (req: Request) => await this.handleAssetRequest(req),
-					},
+					...this.apiRoutes(),
 				},
 				fetch: async (req: Request, server: Server<unknown>) => {
 					const res = await this.handleRequest(req, server);
@@ -548,17 +586,13 @@ export class BacklogServer {
 				error: this.handleError.bind(this),
 				websocket: {
 					open: (ws: ServerWebSocket) => {
-						this.sockets.add(ws);
-						ws.send(JSON.stringify(this.browserLoadingState));
-						if (this.browserLoadingState.type === "loading") {
-							void this.ensureServicesReady().catch(() => {});
-						}
+						this.acceptSocket(ws);
 					},
 					message(ws: ServerWebSocket) {
 						ws.send("pong");
 					},
 					close: (ws: ServerWebSocket) => {
-						this.sockets.delete(ws);
+						this.removeSocket(ws);
 					},
 				},
 				/* biome-ignore format: keep cast on single line below for type narrowing */
@@ -614,6 +648,7 @@ export class BacklogServer {
 		if (this.taskBroadcastTimer) clearTimeout(this.taskBroadcastTimer);
 		if (this._stopping) return;
 		this._stopping = true;
+		await this.servicesReadyPromise?.catch(() => {});
 
 		// Stop filesystem watcher first to reduce churn
 		try {
@@ -728,7 +763,7 @@ export class BacklogServer {
 
 	// Task handlers
 	private async handleListTasks(req: Request): Promise<Response> {
-		let refreshCrossBranch = this.servicesInitialized;
+		let refreshCrossBranch = !this.centralMode && this.servicesInitialized;
 		await this.ensureServicesReady();
 		const url = new URL(req.url);
 		const status = url.searchParams.get("status") || undefined;
@@ -737,7 +772,7 @@ export class BacklogServer {
 		const priorityParam = url.searchParams.get("priority") || undefined;
 		// The browser reads the cross-branch corpus the server already keeps in the content store, so
 		// the default must not fall back to re-reading the working copy on every list request.
-		const crossBranch = url.searchParams.get("crossBranch") !== "false";
+		const crossBranch = !this.centralMode && url.searchParams.get("crossBranch") !== "false";
 		const excludeStatusParams = collectDelimitedSearchParams(url, [
 			"excludeStatus",
 			"exclude-status",
@@ -1077,7 +1112,7 @@ export class BacklogServer {
 		const resolved = await this.resolveDetailTask(taskId);
 		if (resolved instanceof Response) return resolved;
 		await this.ensureServicesReady();
-		return Response.json(await loadTaskDetail(this.core, resolved, { includeCrossBranch: true }));
+		return Response.json(await loadTaskDetail(this.core, resolved, { includeCrossBranch: !this.centralMode }));
 	}
 
 	private async handleUpdateTask(req: Request, taskId: string): Promise<Response> {
@@ -1526,7 +1561,7 @@ export class BacklogServer {
 			if (!config) {
 				return Response.json({ error: "Configuration not found" }, { status: 404 });
 			}
-			return Response.json(config);
+			return Response.json(this.centralMode ? { ...config, projectName: this.projectName } : config);
 		} catch (error) {
 			console.error("Error loading config:", error);
 			return Response.json({ error: "Failed to load configuration" }, { status: 500 });
@@ -1536,6 +1571,40 @@ export class BacklogServer {
 	private async handleUpdateConfig(req: Request): Promise<Response> {
 		try {
 			const updatedConfig = await req.json();
+			if (this.centralMode) {
+				if (!updatedConfig || typeof updatedConfig !== "object" || Array.isArray(updatedConfig)) {
+					return Response.json({ error: "Configuration must be an object." }, { status: 400 });
+				}
+				const allowed = new Set([
+					"defaultStatus",
+					"definitionOfDone",
+					"dateFormat",
+					"hideEmptyColumns",
+					"maxColumnWidth",
+				]);
+				const forbidden = Object.keys(updatedConfig).filter((key) => !allowed.has(key));
+				if (forbidden.length)
+					return Response.json({ error: `Unsupported settings: ${forbidden.join(", ")}` }, { status: 400 });
+				const current = await this.core.filesystem.loadConfig();
+				if (!current) return Response.json({ error: "Configuration not found" }, { status: 503 });
+				if (
+					(updatedConfig.defaultStatus !== undefined &&
+						(typeof updatedConfig.defaultStatus !== "string" ||
+							!current.statuses.includes(updatedConfig.defaultStatus))) ||
+					(updatedConfig.definitionOfDone !== undefined &&
+						(!Array.isArray(updatedConfig.definitionOfDone) ||
+							updatedConfig.definitionOfDone.some((item: unknown) => typeof item !== "string"))) ||
+					(updatedConfig.dateFormat !== undefined && typeof updatedConfig.dateFormat !== "string") ||
+					(updatedConfig.hideEmptyColumns !== undefined && typeof updatedConfig.hideEmptyColumns !== "boolean") ||
+					(updatedConfig.maxColumnWidth !== undefined &&
+						(!Number.isInteger(updatedConfig.maxColumnWidth) || updatedConfig.maxColumnWidth < 1))
+				) {
+					return Response.json({ error: "Invalid setting value." }, { status: 400 });
+				}
+				const merged = { ...current, ...updatedConfig };
+				await this.core.filesystem.saveConfig(merged);
+				return Response.json({ ...merged, projectName: this.projectName });
+			}
 
 			// Validate configuration
 			if (!updatedConfig.projectName?.trim()) {

@@ -1,0 +1,192 @@
+{
+	"stage": "A-01.2",
+	"task_id": "BACK-787",
+	"result": "passed",
+	"recorded_at_utc": "2026-10-21T07:47:51.689295+00:00",
+	"source": {
+		"base_commit": "2225c4167234fd300b477cc3207689c8454abed1",
+		"base_tag": "v1.54.0",
+		"work_branch": "tasks/server-a012-project-records",
+		"changes_committed": false,
+		"changes_pushed": false,
+		"bun_version": "1.4.3",
+		"bun_lock_sha256": "9c2ed823aa71ced2e1d6638280028d670240bcf4d4d93f83e3ba830d001a1679",
+		"implementation_sha256": {
+			"src/server/project-store.ts": "ba08a4f5d085bbb70aa5020d6522173b6871cd05796db0504f3177fdcfefa679",
+			"src/commands/server.ts": "bc397f016ed7466327b4a88e26ca3f9ea60321d903eba6727419b43f5a22e3be",
+			"src/cli.ts": "702dfe6223c2aee69c6cc2cd13bd44ae39dd8a0583bea09d19b5393b58cd109f",
+			"src/test/server-project-store.test.ts": "95c36256b62b91addec010b1de3cf0953db80fb1a644f9bb47b3942a889ca962",
+			"src/test/cli-server-project.test.ts": "f31b23e7799b8b0f1b61f12fd5be5de9e6491f233c1d92c25f0eedc44315a2e0",
+			"README.md": "14470ef6ffc3765f44c45adfdb011641df2daeb10f12997a67b18b7229d5e594"
+		}
+	},
+	"approved_choices": {
+		"command_group": "backlog server",
+		"data_directory": "--data-dir is required; no default",
+		"database_filename": "server.sqlite",
+		"project_fields": ["id", "name", "rootPath", "createdAt"],
+		"identity": "SQLite AUTOINCREMENT integer returned as a string; independent from Task.project",
+		"source_of_truth": "Project content remains in Markdown. Only project bindings are stored in central SQLite."
+	},
+	"implementation": {
+		"project_store": "One small Bun SQLite store with register/list/load, per-operation connections, readonly reads, BEGIN IMMEDIATE writes, and a 5000ms busy timeout.",
+		"registration": "Validates an existing root and supported Backlog config without initialization/migration; canonical paths, duplicates and overlapping roots checked transactionally.",
+		"read_behavior": "Missing database is an empty list; unknown IDs fail; invalid/unreadable databases are not rebuilt. Reads create no data directory or database.",
+		"cli": "register/list/view with human-readable text and schemaVersion 1 JSON. Explicit paths resolve from terminal cwd; server commands bypass local project auto-migration.",
+		"simplicity_review": "Existing FileSystem config parsing, directory normalization, CLI help/JSON conventions, and ProjectContextRegistry reused. No ORM, versioning framework, extra lock layer, unused edit/delete APIs, or source compatibility shims."
+	},
+	"checks": {
+		"types": {
+			"command": "bun run check:types",
+			"result": "passed",
+			"files": 544,
+			"evidence": "types.log"
+		},
+		"biome": {
+			"command": "bun run check",
+			"result": "passed",
+			"writes": false,
+			"evidence": "biome.log"
+		},
+		"test_bundle": {
+			"command": "BACKLOG_BUILD_OUTDIR=/tmp/backlog-back787-verification-rtit9x4h/test-cli bun scripts/build.ts",
+			"result": "passed",
+			"evidence": "test-cli-build.log"
+		},
+		"tests": {
+			"command": "BACKLOG_TEST_SKIP_DOM_PRELOAD=1 BACKLOG_TEST_CLI_BUNDLE=/tmp/backlog-back787-verification-rtit9x4h/test-cli/cli.js bun test --isolate --timeout=10000 src/test/cli-init-create.test.ts src/test/project-context.test.ts src/test/cli-root-entry.test.ts src/test/server-port.test.ts src/test/cli-server-project.test.ts src/test/cli-browser-port.test.ts src/test/server-project-store.test.ts src/test/server-hostname.test.ts src/test/cli-json-output.test.ts src/test/runtime-cwd.test.ts src/test/config-migration.test.ts --reporter=junit --reporter-outfile=/tmp/backlog-back787-verification-rtit9x4h/regression-tests.xml",
+			"result": "passed",
+			"exit_code": 0,
+			"passed": 133,
+			"failures": 0,
+			"skipped": 0,
+			"assertions": 591,
+			"new_behavior_tests": 27,
+			"files": [
+				{
+					"path": "src/test/cli-init-create.test.ts",
+					"tests": 40
+				},
+				{
+					"path": "src/test/project-context.test.ts",
+					"tests": 10
+				},
+				{
+					"path": "src/test/cli-root-entry.test.ts",
+					"tests": 5
+				},
+				{
+					"path": "src/test/server-port.test.ts",
+					"tests": 8
+				},
+				{
+					"path": "src/test/cli-server-project.test.ts",
+					"tests": 10
+				},
+				{
+					"path": "src/test/cli-browser-port.test.ts",
+					"tests": 2
+				},
+				{
+					"path": "src/test/server-project-store.test.ts",
+					"tests": 17
+				},
+				{
+					"path": "src/test/server-hostname.test.ts",
+					"tests": 3
+				},
+				{
+					"path": "src/test/cli-json-output.test.ts",
+					"tests": 17
+				},
+				{
+					"path": "src/test/runtime-cwd.test.ts",
+					"tests": 14
+				},
+				{
+					"path": "src/test/config-migration.test.ts",
+					"tests": 7
+				}
+			],
+			"evidence": ["regression-tests.log", "regression-tests.xml"]
+		},
+		"build": {
+			"command": "bun run build",
+			"result": "passed",
+			"exit_code": 0,
+			"executable": "dist/backlog",
+			"evidence": "build.log"
+		},
+		"compiled_cli": {
+			"command": "python3 /tmp/backlog-back787-verification-rtit9x4h/compiled-server-smoke.py ./dist/backlog",
+			"result": "passed",
+			"exit_code": 0,
+			"coverage": [
+				"existing init/task creation",
+				"two TASK-1 fixtures",
+				"new CLI JSON/text",
+				"stable IDs across processes",
+				"source hashes unchanged",
+				"duplicate rejected",
+				"no state created on reads",
+				"damaged database preserved",
+				"server/browser help"
+			],
+			"evidence": ["compiled-server-smoke.py", "compiled-server-smoke.log"]
+		}
+	},
+	"environment_findings": [
+		"Sandbox içinde Bun alt süreçlerinin standart çıktı akışı neo-neo-bblessed üzerinden TypeError ile kesildi. Aynı boş liste komutu sandbox dışında çıktı ve çıkış kodu 0 verdi; nihai CLI ve HTTP regresyon grubu gerekli süreç/localhost izinleriyle geçti.",
+		"Backlog görev oluşturma kilidi .git/backlog.md altında olduğu için ilk görev oluşturma denemesi EROFS verdi; CLI aynı standart kilitle izinli ortamda BACK-787 kimliğini ayırdı. Elle görev dosyası veya kimlik oluşturulmadı.",
+		"Groma komutu kurulu değil; Groma taraması veya yönettiği dosyalarda değişiklik yapılmadı."
+	],
+	"verification_limits": [
+		"Bu çalışma 11 dosyalık ilgili regresyon grubudur; A-00 tam CI profilinin yeniden çalıştırıldığı iddia edilmiyor.",
+		"Bu teslim kalıcı proje kaydı ve yerel sunucu CLI yönetimidir. Merkezi HTTP/UI, hesap/yetki ve tarihçe bu aşamada eklenmedi; gerçek projeler bağlanmadı.",
+		"İzinli klasör alanları ve sonradan değişen sembolik bağlantılara karşı yetki kontrolleri, yetkili proje ekleme aşamasına aittir."
+	],
+	"raw_evidence_directory": "/tmp/backlog-back787-verification-rtit9x4h",
+	"evidence_manifest": [
+		{
+			"path": "types.log",
+			"bytes": 57,
+			"sha256": "3daa18c66a6300dc89865a31ad1b9392555a7aead1ed0e5f5160035756d06f3a"
+		},
+		{
+			"path": "biome.log",
+			"bytes": 62,
+			"sha256": "681fa8b1f6c1ae75d0ecbdef91fb40d045e6213187c1e4311e91c429886cee11"
+		},
+		{
+			"path": "build.log",
+			"bytes": 23,
+			"sha256": "a20e7a648db258ad689394e88df95db8b5e00f446c7b9e47b6e9878838cf4db6"
+		},
+		{
+			"path": "test-cli-build.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "regression-tests.log",
+			"bytes": 16368,
+			"sha256": "a15727d7649b84d0628497b0ea07d593c61b835de391cf7968cb0d93ca255b45"
+		},
+		{
+			"path": "regression-tests.xml",
+			"bytes": 34184,
+			"sha256": "4a750f71a90bf02ef22467768c4c62d82a3a595b5b54388c5d24429dbbc8e06f"
+		},
+		{
+			"path": "compiled-server-smoke.py",
+			"bytes": 3698,
+			"sha256": "a50d22fe4e1f2ed07e4b8cff0ee778855f2b827691d257fe94baa181a60bf4bd"
+		},
+		{
+			"path": "compiled-server-smoke.log",
+			"bytes": 424,
+			"sha256": "5d36ca95c13f3e2c4e66603b88e0b78e1ee3df1db0086725e1b55a4bfdb9df88"
+		}
+	],
+	"next_scope": "Backlog.md içinde kayıtlı projenin mevcut panosunu açma ve proje değiştirirken API/veri/canlı bildirim bağlamlarının ayrılması. Yeni görev henüz oluşturulmadı veya başlatılmadı."
+}

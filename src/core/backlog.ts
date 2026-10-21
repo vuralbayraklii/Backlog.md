@@ -665,10 +665,13 @@ export class Core {
 	private remoteRefRefreshPromise: Promise<void> | null = null;
 	private lastRemoteRefRefreshAt = 0;
 
-	constructor(projectRoot: string, options?: { enableWatchers?: boolean }) {
+	private readonly serverMode: boolean;
+
+	constructor(projectRoot: string, options?: { enableWatchers?: boolean; serverMode?: boolean }) {
 		this.fs = new FileSystem(projectRoot);
 		this.git = new GitOperations(projectRoot, null, () => this.fs.loadConfig());
 		this.branchTaskLoader = new BranchTaskLoader(this.git);
+		this.serverMode = options?.serverMode ?? false;
 		// Disable watchers by default for CLI commands (non-interactive)
 		// Interactive modes (TUI, browser, MCP) should explicitly pass enableWatchers: true
 		this.enableWatchers = options?.enableWatchers ?? false;
@@ -926,14 +929,14 @@ export class Core {
 
 	private getActiveBranchSettings(config: BacklogConfig | null, filesystem = this.fs) {
 		const activeBranchDays = config?.activeBranchDays ?? 30;
-		const checkActiveBranches = config?.checkActiveBranches !== false;
-		const filesystemOnly = config?.filesystemOnly === true;
+		const checkActiveBranches = !this.serverMode && config?.checkActiveBranches !== false;
+		const filesystemOnly = this.serverMode || config?.filesystemOnly === true;
 		return {
 			checkActiveBranches,
 			activeBranchDays,
 			branchHistoryCutoff:
 				checkActiveBranches && !filesystemOnly ? (getBranchHistoryCutoff(activeBranchDays)?.getTime() ?? null) : null,
-			remoteOperations: config?.remoteOperations !== false,
+			remoteOperations: !this.serverMode && config?.remoteOperations !== false,
 			filesystemOnly,
 			taskPrefix: config?.prefixes?.task ?? "task",
 			taskResolutionStrategy: config?.taskResolutionStrategy ?? "most_progressed",
@@ -1013,7 +1016,7 @@ export class Core {
 		git = this.git,
 		options?: { force?: boolean },
 	): Promise<void> {
-		if (git !== this.git) return;
+		if (this.serverMode || git !== this.git) return;
 		if (
 			config?.checkActiveBranches === false ||
 			config?.remoteOperations === false ||
@@ -1696,6 +1699,7 @@ export class Core {
 	}
 
 	async shouldAutoCommit(overrideValue?: boolean): Promise<boolean> {
+		if (this.serverMode) return false;
 		const config = await this.fs.loadConfig();
 		this.git.setConfig(config);
 		if (config?.filesystemOnly) {
@@ -3291,6 +3295,7 @@ export class Core {
 	 * Failures are logged but don't block the status change.
 	 */
 	private async executeStatusChangeCallback(task: Task, oldStatus: string, newStatus: string): Promise<void> {
+		if (this.serverMode) return;
 		const config = await this.fs.loadConfig();
 
 		// Per-task callback takes precedence over global config
@@ -5136,7 +5141,8 @@ export class Core {
 		const statuses = config?.statuses || [...DEFAULT_STATUSES];
 		const resolutionStrategy = config?.taskResolutionStrategy || "most_progressed";
 		const includeArchived = options.includeArchived ?? false;
-		const shouldLoadBranches = config?.checkActiveBranches !== false && config?.filesystemOnly !== true;
+		const shouldLoadBranches =
+			!this.serverMode && config?.checkActiveBranches !== false && config?.filesystemOnly !== true;
 
 		// Check for cancellation
 		if (abortSignal?.aborted) {

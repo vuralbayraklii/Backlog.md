@@ -1,0 +1,93 @@
+{
+	"stage": "A-01.3",
+	"tasks": ["BACK-788", "BACK-789"],
+	"date": "2026-10-21",
+	"branch": "tasks/server-a013-open-project-board",
+	"browser": {
+		"engine": "Chromium headless shell 1243 via Chrome DevTools Protocol",
+		"viewport": "1440x900",
+		"binary": "dist/backlog",
+		"sample_projects": "two temporary registered Backlog projects with identical TASK-1, doc-1, decision-1 and same.txt IDs",
+		"assertions": {
+			"empty_selector_websockets": true,
+			"selector_lists_both": true,
+			"alpha_board": true,
+			"project_websockets": true,
+			"two_tabs": true,
+			"task_edit_isolated": true,
+			"project_switch": true,
+			"back_forward": true,
+			"direct_task": true,
+			"direct_doc_decision": true,
+			"markdown_links_assets": true,
+			"task_draft_cancel": true,
+			"document_draft_cancel": true,
+			"decision_draft_cancel": true,
+			"milestone_draft_cancel": true,
+			"settings_draft_cancel": true,
+			"settings_allowlist_ui": true,
+			"settings_save": true,
+			"error_isolation": true,
+			"local_browser": true,
+			"drafts_page": true,
+			"scoped_search": true,
+			"project_preferences": true
+		}
+	},
+	"checks": {
+		"central_api": "9 passed, 0 failed, 62 assertions",
+		"scoped_api_dom": "121 passed, 0 failed, 1215 assertions",
+		"debug_cross_file_regression": "74 passed, 0 failed, 398 assertions",
+		"types": "550 files, no errors",
+		"biome": "473 files, no fixes applied",
+		"build": "passed",
+		"compiled_smoke": "passed",
+		"full_suite": "3591 passed, 13 skipped, 0 failed across 3604 tests; exit code 0"
+	},
+	"full_test_run": {
+		"initial": "3572 pass, 13 skip, 18 fail across 3603 tests",
+		"cause": "An existing offline-mode test restored absent DEBUG with assignment, leaving a truthy string for later CLI tests.",
+		"intermediate": "After DEBUG cleanup: 3591 passed, 13 skipped, 0 failed, but Bun exited 1 because list-window.test.ts restored an absent process.exitCode with undefined.",
+		"final": {
+			"command": "bun run test",
+			"passed": 3591,
+			"skipped": 13,
+			"failed": 0,
+			"tests": 3604,
+			"files": 322,
+			"assertions": 17361,
+			"seconds": 542.78,
+			"exit_code": 0,
+			"log_path": "/tmp/backlog-a013-full-tests-final.log",
+			"log_bytes": 510268,
+			"log_sha256": "f32bd23813928583bede3562461961aa77690df681a5a2abd212ef7e77cb9b9e"
+		}
+	},
+	"evidence_manifest": [
+		{
+			"path": "verification/server/a01-3b-browser.log",
+			"bytes": 7957,
+			"sha256": "4dce7a7f27decb1be03f10c98f3d045b1e581566d18ad8e0a1fb3db96a4c6e85"
+		},
+		{
+			"path": "verification/server/a01-3b-browser-probe.txt",
+			"bytes": 24486,
+			"sha256": "1e16ef75a465324f44566cde2d6eadb7ab423a4b661b45495030a408f0836d0c"
+		},
+		{
+			"path": "verification/server/a01-3b-selector.png",
+			"bytes": 14217,
+			"sha256": "a2daade85df30ae0760402a88cfc351ac5aa391168e3ff1295964e84904cdd65"
+		},
+		{
+			"path": "verification/server/a01-3b-board.png",
+			"bytes": 63695,
+			"sha256": "df7c6886717c2d2d95c07d6ff2882be13a9beca83de39b6b94007d334777b7da"
+		},
+		{
+			"path": "verification/server/a01-3b-settings.png",
+			"bytes": 63494,
+			"sha256": "700b8c04b9f195b27598b42620f2179e8742e51e9d64f0890f07c60b537ff327"
+		}
+	]
+}

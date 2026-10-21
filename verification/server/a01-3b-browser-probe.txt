@@ -1,0 +1,195 @@
+import { mkdtemp, readFile, rm, mkdir, rename } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { CentralServer } from '/home/vuralbayrakli/Backlog.md/src/server/central.ts';
+import { Core } from '/home/vuralbayrakli/Backlog.md/src/core/backlog.ts';
+import { ProjectStore } from '/home/vuralbayrakli/Backlog.md/src/server/project-store.ts';
+import { initializeFilesystemTestProject } from '/home/vuralbayrakli/Backlog.md/src/test/test-utils.ts';
+
+const root = await mkdtemp(join(tmpdir(), 'a013-chrome-'));
+let compiled: ReturnType<typeof Bun.spawn> | undefined;
+const chromePath = '/home/vuralbayrakli/.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell';
+let chrome: ReturnType<typeof Bun.spawn> | undefined;
+try {
+  const store = new ProjectStore(join(root,'data'));
+  for (const name of ['Alpha','Beta']) {
+    const projectRoot=join(root,name); const core=new Core(projectRoot);
+    await initializeFilesystemTestProject(core,name);
+    await core.fs.saveTask({id:'TASK-1',title:`${name} task`,status:'To Do',assignee:[],labels:[],dependencies:[],createdDate:'2026-10-21',rawContent:`${name} body`});
+    await core.fs.saveDraft({id:'DRAFT-1',title:`${name} draft`,status:'Draft',assignee:[],labels:[],dependencies:[],createdDate:'2026-10-21'});
+    await core.fs.saveDocument({id:'doc-1',title:`${name} document`,type:'guide',createdDate:'2026-10-21',rawContent:`${name} document body\n\n[Task](/tasks/TASK-1)\n\n![Asset](/assets/same.txt)`});
+    await core.fs.saveDecision({id:'decision-1',title:`${name} decision`,date:'2026-10-21',status:'proposed',context:name,decision:name,consequences:name,rawContent:`## Context\n${name}\n\n## Decision\n${name}\n\n## Consequences\n${name}`});
+    await mkdir(join(core.fs.backlogDir,'assets'),{recursive:true}); await Bun.write(join(core.fs.backlogDir,'assets','same.txt'),name);
+    await store.register(`Example ${name}`,projectRoot);
+  }
+  compiled = Bun.spawn(['/home/vuralbayrakli/Backlog.md/dist/backlog','server','--data-dir',join(root,'data'),'start','--port','18974'],{stdout:'pipe',stderr:'pipe'});
+  let ready=false; for(let i=0;i<100;i++){try{ready=(await fetch('http://127.0.0.1:18974/api/projects')).ok;if(ready)break;}catch{} await Bun.sleep(100);} if(!ready)throw new Error('Compiled central server did not start');
+  chrome = Bun.spawn([chromePath, '--no-sandbox', '--disable-gpu', '--headless', '--remote-debugging-port=0', `--user-data-dir=${join(root,'profile')}`, 'about:blank'], {stdout:'pipe', stderr:'pipe'});
+  let port = '';
+  for (let i=0; i<100; i++) {
+    try {port = (await readFile(join(root,'profile','DevToolsActivePort'),'utf8')).split('\n')[0] ?? ''; if (port) break;} catch {}
+    await Bun.sleep(100);
+  }
+  if (!port) throw new Error('Chrome DevTools did not start');
+  const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json() as Array<{webSocketDebuggerUrl:string}>;
+  const ws = new WebSocket(targets[0]!.webSocketDebuggerUrl);
+  await new Promise<void>((resolve,reject)=>{ws.onopen=()=>resolve();ws.onerror=()=>reject(new Error('CDP websocket'));});
+  let seq=0;
+  const pending = new Map<number,(value:any)=>void>();
+  const dialogs: string[] = [];
+  const websocketUrls: string[] = []; const rootWsEvents:any[]=[];
+  ws.onmessage = event => {const data=JSON.parse(String(event.data)); if (data.id) {pending.get(data.id)?.(data); pending.delete(data.id);} else if(data.method==='Page.javascriptDialogOpening'){dialogs.push(data.params?.message ?? '');void send('Page.handleJavaScriptDialog',{accept:false});} else if(data.method==='Network.webSocketCreated'){websocketUrls.push(data.params?.url ?? '');if((data.params?.url??'').endsWith(':18974/'))rootWsEvents.push(data.params);}};
+  const send = (method:string, params:Record<string,unknown>={}) => new Promise<any>(resolve=>{const id=++seq; pending.set(id,resolve); ws.send(JSON.stringify({id,method,params}));});
+  await send('Page.enable');
+  await send('Emulation.setDeviceMetricsOverride',{width:1440,height:900,deviceScaleFactor:1,mobile:false});
+  await send('Runtime.enable');
+  await send('Network.enable');
+  await send('Page.navigate',{url:'http://127.0.0.1:18974/projects'});
+  let body='';
+  for(let i=0;i<100;i++) {
+    const result = await send('Runtime.evaluate',{expression:'document.body.innerText',returnByValue:true});
+    body = result.result?.result?.value ?? '';
+    if(body.includes('Example Alpha')) break;
+    await Bun.sleep(100);
+  }
+  await Bun.sleep(500);
+  console.log(JSON.stringify({selectorWebSockets:websocketUrls.slice(),rootWsEvents}));
+  const selectorShot=await send('Page.captureScreenshot',{format:'png'}); if(selectorShot.result?.data)await Bun.write('/tmp/backlog-a013-selector-desktop.png',Buffer.from(selectorShot.result.data,'base64'));
+  console.log(JSON.stringify({body, url:(await send('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"document.querySelector('a[href=\"/projects/1/board\"]').click()"});
+  for(let i=0;i<100;i++){const r=await send('Runtime.evaluate',{expression:'document.body.innerText',returnByValue:true});body=r.result?.result?.value??'';if(body.includes('Alpha task'))break;await Bun.sleep(100);}
+  const boardShot=await send('Page.captureScreenshot',{format:'png'}); if(boardShot.result?.data)await Bun.write('/tmp/backlog-a013-board-desktop.png',Buffer.from(boardShot.result.data,'base64'));
+  console.log(JSON.stringify({boardBody:body.slice(0,600),boardUrl:(await send('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value}));
+  const created = await send('Target.createTarget',{url:'about:blank'});
+  const targetId=created.result?.targetId;
+  const allTargets=await (await fetch(`http://127.0.0.1:${port}/json/list`)).json() as Array<{id:string;webSocketDebuggerUrl:string}>;
+  const secondTarget=allTargets.find(x=>x.id===targetId);
+  if(!secondTarget)throw new Error('Second browser tab missing');
+  const ws2=new WebSocket(secondTarget.webSocketDebuggerUrl);
+  await new Promise<void>((resolve,reject)=>{ws2.onopen=()=>resolve();ws2.onerror=()=>reject(new Error('Second CDP websocket'));});
+  const pending2=new Map<number,(value:any)=>void>(); let seq2=0; const websocketUrls2:string[]=[];const requestUrls2:string[]=[];
+  ws2.onmessage=event=>{const data=JSON.parse(String(event.data));if(data.id){pending2.get(data.id)?.(data);pending2.delete(data.id);}else if(data.method==='Network.webSocketCreated'){websocketUrls2.push(data.params?.url??'');}else if(data.method==='Network.requestWillBeSent'){requestUrls2.push(data.params?.request?.url??'');}};
+  const send2=(method:string,params:Record<string,unknown>={})=>new Promise<any>(resolve=>{const id=++seq2;pending2.set(id,resolve);ws2.send(JSON.stringify({id,method,params}));});
+  await send2('Page.enable'); await send2('Runtime.enable'); await send2('Network.enable');
+  await send2('Page.navigate',{url:'http://127.0.0.1:18974/projects/2/board'});
+  let betaTab='';for(let i=0;i<60;i++){const r=await send2('Runtime.evaluate',{expression:'document.body.innerText',returnByValue:true});betaTab=r.result?.result?.value??'';if(betaTab.includes('Beta task'))break;await Bun.sleep(100);}
+  console.log(JSON.stringify({alphaWebSockets:websocketUrls,betaTabHasTask:betaTab.includes('Beta task'),betaWebSockets:websocketUrls2,storageKeys:(await send('Runtime.evaluate',{expression:'Object.keys(localStorage).filter(x=>x.includes(\"backlog.md:project:\"))',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"document.querySelector('[aria-label^=\"Open TASK-1\"]')?.click()"});
+  await Bun.sleep(250);
+  console.log(JSON.stringify({modal:(await send('Runtime.evaluate',{expression:'document.body.innerText.slice(-1200)',returnByValue:true})).result?.result?.value,inputs:(await send('Runtime.evaluate',{expression:'Array.from(document.querySelectorAll(\"input\")).map(x=>({id:x.id,placeholder:x.placeholder,value:x.value})).slice(-20)',returnByValue:true})).result?.result?.value}));
+  const detailUrl=(await send('Runtime.evaluate',{expression:'location.pathname',returnByValue:true})).result?.result?.value;
+  await send('Runtime.evaluate',{expression:'history.back()'}); await Bun.sleep(120);
+  const backUrl=(await send('Runtime.evaluate',{expression:'location.pathname',returnByValue:true})).result?.result?.value;
+  await send('Runtime.evaluate',{expression:'history.forward()'}); await Bun.sleep(120);
+  const forwardUrl=(await send('Runtime.evaluate',{expression:'location.pathname',returnByValue:true})).result?.result?.value;
+  console.log(JSON.stringify({detailUrl,backUrl,forwardUrl}));
+  await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('button')).find(x=>x.textContent?.trim()==='Edit')?.click()"});
+  await Bun.sleep(100);
+  console.log(JSON.stringify({editButtons:(await send('Runtime.evaluate',{expression:'Array.from(document.querySelectorAll(\"button\")).map(x=>x.textContent?.trim()).filter(Boolean).slice(-30)',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"(()=>{const input=Array.from(document.querySelectorAll('input')).find(x=>x.value==='Alpha task');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'Alpha browser edit');input.dispatchEvent(new Event('input',{bubbles:true}));})()"});
+  await Bun.sleep(100);
+  await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('button')).find(x=>x.textContent?.trim()==='Save')?.click()"});
+  await Bun.sleep(400);
+  console.log(JSON.stringify({saved:(await (await fetch('http://127.0.0.1:18974/api/projects/1/task/TASK-1')).json()).title,other:(await (await fetch('http://127.0.0.1:18974/api/projects/2/task/TASK-1')).json()).title,betaTabStillIndependent:(await send2('Runtime.evaluate',{expression:'document.body.innerText.includes(\"Beta task\") && !document.body.innerText.includes(\"Alpha browser edit\")',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"document.querySelector('a[href=\"/projects\"]')?.click()"});
+  await Bun.sleep(250);
+  console.log(JSON.stringify({selectorAgain:(await send('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"document.querySelector('a[href=\"/projects/2/board\"]')?.click()"});
+  await Bun.sleep(450);
+  console.log(JSON.stringify({betaUrl:(await send('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value,betaBody:(await send('Runtime.evaluate',{expression:'document.body.innerText.slice(-450)',returnByValue:true})).result?.result?.value}));
+  await send2('Page.navigate',{url:'http://127.0.0.1:18974/projects/2/drafts'});
+  let draftsBody='';for(let i=0;i<40;i++){const r=await send2('Runtime.evaluate',{expression:'document.body.innerText',returnByValue:true});draftsBody=r.result?.result?.value??'';if(draftsBody.includes('Beta draft'))break;await Bun.sleep(100);}
+  console.log(JSON.stringify({draftsUrl:(await send2('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value,draftsLoaded:draftsBody.includes('Beta draft')&&!draftsBody.includes('Alpha draft')}));
+  await send2('Runtime.evaluate',{expression:"(()=>{const input=document.querySelector('input[placeholder^=\"Search\"]');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'Beta task');input.dispatchEvent(new Event('input',{bubbles:true}));})()"});
+  await Bun.sleep(600);
+  console.log(JSON.stringify({scopedSearchRequest:requestUrls2.some(url=>url.includes('/api/projects/2/search?')),searchRequests:requestUrls2.filter(url=>url.includes('/search?')).slice(-3)}));
+  await send2('Page.navigate',{url:'http://127.0.0.1:18974/projects/2/tasks/TASK-1/beta-task'});
+  let directTask='';for(let i=0;i<50;i++){const r=await send2('Runtime.evaluate',{expression:'document.body.innerText',returnByValue:true});directTask=r.result?.result?.value??'';if(directTask.includes('TASK-1 — Beta task'))break;await Bun.sleep(100);}
+  console.log(JSON.stringify({directTaskUrl:(await send2('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value,directTaskLoaded:directTask.includes('TASK-1 — Beta task')}));
+  await send('Page.navigate',{url:'http://127.0.0.1:18974/projects/2/documentation/doc-1'});
+  for(let i=0;i<40;i++){const r=await send('Runtime.evaluate',{expression:'document.body.innerText.includes(\"Beta document body\")',returnByValue:true});if(r.result?.result?.value)break;await Bun.sleep(100);}
+  console.log(JSON.stringify({docUrl:(await send('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value,docBody:(await send('Runtime.evaluate',{expression:'document.body.innerText.slice(-450)',returnByValue:true})).result?.result?.value,links:(await send('Runtime.evaluate',{expression:'Array.from(document.querySelectorAll(\".wmde-markdown a,.wmde-markdown img\")).map(x=>x.href||x.src)',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('button')).find(x=>x.textContent?.trim()==='Edit')?.click()"});
+  await Bun.sleep(80);
+  await send('Runtime.evaluate',{expression:"(()=>{const input=document.querySelector('input[placeholder=\"Document title\"]');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'Unsaved document');input.dispatchEvent(new Event('input',{bubbles:true}));})()"});
+  await Bun.sleep(80);
+  await send('Runtime.evaluate',{expression:"document.querySelector('a[href=\"/projects/2/tasks\"]')?.click()"});
+  await Bun.sleep(100);
+  console.log(JSON.stringify({docDialog:dialogs.at(-1),docStayed:(await send('Runtime.evaluate',{expression:'location.pathname',returnByValue:true})).result?.result?.value,docInput:(await send('Runtime.evaluate',{expression:'document.querySelector(\"input[placeholder=\\\"Document title\\\"]\")?.value',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('button')).find(x=>x.textContent?.trim()==='Cancel')?.click()"});
+  await Bun.sleep(80);
+  await send('Page.navigate',{url:'http://127.0.0.1:18974/projects/2/decisions/new'});
+  for(let i=0;i<40;i++){const r=await send('Runtime.evaluate',{expression:'document.body.innerText.includes(\"Beta decision\")',returnByValue:true});if(r.result?.result?.value)break;await Bun.sleep(100);}
+  console.log(JSON.stringify({decisionUrl:(await send('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value,decisionBody:(await send('Runtime.evaluate',{expression:'document.body.innerText.slice(-350)',returnByValue:true})).result?.result?.value}));
+  await Bun.sleep(80);
+  console.log(JSON.stringify({decisionBefore:(await send('Runtime.evaluate',{expression:'location.pathname+location.search',returnByValue:true})).result?.result?.value,decisionEditInput:(await send('Runtime.evaluate',{expression:'document.querySelector(\"input[placeholder=\\\"Decision title\\\"]\")?.value',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"(()=>{const input=document.querySelector('input[placeholder=\"Decision title\"]');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'Unsaved decision');input.dispatchEvent(new Event('input',{bubbles:true}));})()"});
+  await Bun.sleep(80);
+  await send('Runtime.evaluate',{expression:"document.querySelector('a[href=\"/projects/2/tasks\"]')?.click()"});
+  await Bun.sleep(100);
+  console.log(JSON.stringify({decisionDialog:dialogs.at(-1),decisionStayed:(await send('Runtime.evaluate',{expression:'location.pathname',returnByValue:true})).result?.result?.value,decisionInput:(await send('Runtime.evaluate',{expression:'document.querySelector(\"input[placeholder=\\\"Decision title\\\"]\")?.value',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('button')).find(x=>x.textContent?.trim()==='Cancel')?.click()"});
+  await Bun.sleep(80);
+  await send('Page.navigate',{url:'http://127.0.0.1:18974/projects/2/milestones'});
+  for(let i=0;i<40;i++){const r=await send('Runtime.evaluate',{expression:'document.body.innerText.includes(\"Add milestone\")',returnByValue:true});if(r.result?.result?.value)break;await Bun.sleep(100);}
+  await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('button')).find(x=>x.textContent?.trim()==='+ Add milestone')?.click()"});
+  await Bun.sleep(80);
+  await send('Runtime.evaluate',{expression:"(()=>{const input=document.querySelector('input[placeholder=\"e.g. Release 1.0\"]');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'Unsaved milestone');input.dispatchEvent(new Event('input',{bubbles:true}));})()"});
+  await Bun.sleep(80);
+  console.log(JSON.stringify({milestoneBefore:(await send('Runtime.evaluate',{expression:'location.pathname',returnByValue:true})).result?.result?.value,milestoneEditInput:(await send('Runtime.evaluate',{expression:'document.querySelector(\"input[placeholder=\\\"e.g. Release 1.0\\\"]\")?.value',returnByValue:true})).result?.result?.value,createDisabled:(await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('button')).find(x=>x.textContent?.trim()==='Create')?.disabled",returnByValue:true})).result?.result?.value,dialogsBefore:dialogs.length}));
+  await send('Runtime.evaluate',{expression:"document.querySelector('a[href=\"/projects/2/tasks\"]')?.click()"});
+  await Bun.sleep(100);
+  console.log(JSON.stringify({milestoneDialog:dialogs.at(-1),milestoneStayed:(await send('Runtime.evaluate',{expression:'location.pathname',returnByValue:true})).result?.result?.value,milestoneInput:(await send('Runtime.evaluate',{expression:'document.querySelector(\"input[placeholder=\\\"e.g. Release 1.0\\\"]\")?.value',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('button')).find(x=>x.textContent?.trim()==='Cancel')?.click()"});
+  await Bun.sleep(80);
+  await send('Page.navigate',{url:'http://127.0.0.1:18974/projects/1/settings'});
+  for(let i=0;i<40;i++){const r=await send('Runtime.evaluate',{expression:'document.body.innerText.includes(\"Hide Empty Columns\")',returnByValue:true});if(r.result?.result?.value)break;await Bun.sleep(100);}
+  const settingsShot=await send('Page.captureScreenshot',{format:'png'}); if(settingsShot.result?.data)await Bun.write('/tmp/backlog-a013-settings-desktop.png',Buffer.from(settingsShot.result.data,'base64'));
+  console.log(JSON.stringify({settings:(await send('Runtime.evaluate',{expression:'document.body.innerText.slice(-500)',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('label')).find(x=>x.textContent?.includes('Hide Empty Columns'))?.querySelector('input')?.click()"});
+  await Bun.sleep(100);
+  await send('Runtime.evaluate',{expression:"document.querySelector('a[href=\"/projects/1/tasks\"]')?.click()"});
+  await Bun.sleep(150);
+  console.log(JSON.stringify({settingsDialogs:dialogs,settingsUrl:(await send('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value}));
+  await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('button')).find(x=>x.textContent?.trim()==='Save Changes')?.click()"});
+  await Bun.sleep(250);
+  console.log(JSON.stringify({savedSettings:await (await fetch('http://127.0.0.1:18974/api/projects/1/config')).json()}));
+  await send('Page.navigate',{url:'http://127.0.0.1:18974/projects/1/board'});
+  for(let i=0;i<40;i++){const r=await send('Runtime.evaluate',{expression:'document.querySelector(\"[aria-label^=\\\"Open TASK-1\\\"]\")!==null',returnByValue:true});if(r.result?.result?.value)break;await Bun.sleep(100);}
+  await send('Runtime.evaluate',{expression:"document.querySelector('[aria-label^=\"Open TASK-1\"]')?.click()"});
+  await Bun.sleep(150);
+  await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('button')).find(x=>x.textContent?.trim()==='Edit')?.click()"});
+  await Bun.sleep(100);
+  await send('Runtime.evaluate',{expression:"(()=>{const input=Array.from(document.querySelectorAll('input')).find(x=>x.value==='Alpha browser edit');const setter=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;setter.call(input,'Unsaved draft');input.dispatchEvent(new Event('input',{bubbles:true}));})()"});
+  await Bun.sleep(100);
+  await send('Runtime.evaluate',{expression:"document.querySelector('a[href=\"/projects/1/tasks\"]')?.click()"});
+  await Bun.sleep(250);
+  console.log(JSON.stringify({dialogs,urlAfterCancel:(await send('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value,inputAfterCancel:(await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('input')).find(x=>x.value==='Unsaved draft')?.value",returnByValue:true})).result?.result?.value}));
+  const rectJson=(await send('Runtime.evaluate',{expression:"(()=>{const r=document.querySelector('a[href=\"/projects\"]').getBoundingClientRect();return JSON.stringify({x:r.x+r.width/2,y:r.y+r.height/2})})()",returnByValue:true})).result?.result?.value;
+  const rect=JSON.parse(rectJson);
+  await send('Input.dispatchMouseEvent',{type:'mousePressed',x:rect.x,y:rect.y,button:'left',clickCount:1});
+  await send('Input.dispatchMouseEvent',{type:'mouseReleased',x:rect.x,y:rect.y,button:'left',clickCount:1});
+  await Bun.sleep(250);
+  console.log(JSON.stringify({dialogsAfterSwitch:dialogs,urlAfterSwitchCancel:(await send('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value,inputAfterSwitchCancel:(await send('Runtime.evaluate',{expression:"Array.from(document.querySelectorAll('input')).find(x=>x.value==='Unsaved draft')?.value",returnByValue:true})).result?.result?.value}));
+  await send2('Page.navigate',{url:'http://127.0.0.1:18974/projects/999/board'}); await Bun.sleep(100);
+  const unknownBody=(await send2('Runtime.evaluate',{expression:'document.body.innerText',returnByValue:true})).result?.result?.value;
+  await rename(join(root,'Alpha'),join(root,'Alpha-missing'));
+  await send2('Page.navigate',{url:'http://127.0.0.1:18974/projects/1/board'}); await Bun.sleep(100);
+  const unreadableBody=(await send2('Runtime.evaluate',{expression:'document.body.innerText',returnByValue:true})).result?.result?.value;
+  console.log(JSON.stringify({unknownStatus:(await fetch('http://127.0.0.1:18974/projects/999/board')).status,unknownBody,unreadableStatus:(await fetch('http://127.0.0.1:18974/projects/1/board')).status,unreadableBody,betaHealthy:(await fetch('http://127.0.0.1:18974/api/projects/2/tasks')).status}));
+  const local=Bun.spawn(['/home/vuralbayrakli/Backlog.md/dist/backlog','browser','--port','18975','--no-open'],{cwd:join(root,'Beta'),stdout:'pipe',stderr:'pipe'});
+  try {let localReady=false;for(let i=0;i<100;i++){try{localReady=(await fetch('http://127.0.0.1:18975/api/tasks')).ok;if(localReady)break;}catch{}await Bun.sleep(100);}if(!localReady)throw new Error('Local browser did not start');
+    await send2('Page.navigate',{url:'http://127.0.0.1:18975/board'});
+    let localBody='';for(let i=0;i<50;i++){const r=await send2('Runtime.evaluate',{expression:'document.body.innerText',returnByValue:true});localBody=r.result?.result?.value??'';if(localBody.includes('Beta task'))break;await Bun.sleep(100);}
+    console.log(JSON.stringify({localBrowserUrl:(await send2('Runtime.evaluate',{expression:'location.href',returnByValue:true})).result?.result?.value,localBrowserTask:localBody.includes('Beta task')}));
+  } finally {local.kill();await local.exited;}
+  const shot = await send('Page.captureScreenshot',{format:'png'});
+  if (shot.result?.data) await Bun.write('/tmp/backlog-a013-board.png', Buffer.from(shot.result.data,'base64'));
+  ws2.close();
+  ws.close();
+} finally {
+  chrome?.kill();
+  compiled?.kill();
+  if(compiled) await compiled.exited;
+  await rm(root,{recursive:true,force:true});
+}

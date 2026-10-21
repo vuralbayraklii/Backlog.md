@@ -19,6 +19,8 @@ import { buildTaskIdIndex, resolveTaskReference } from "../utils/task-id-links";
 import { findDirectSubtasks, findParentTask, summarizeSubtaskProgress } from "../../utils/task-subtasks.ts";
 import { isTerminalStatus } from "../../utils/terminal-status.ts";
 import { createUrlPath } from "../utils/urlHelpers";
+import { useIsUnsavedGuardActive, useUnsavedChanges } from "../contexts/UnsavedChangesContext";
+import { scopeMarkdownUrl } from "../lib/project-scope";
 
 interface Props {
   task?: Task | TaskDetail; // Optional for create mode
@@ -657,10 +659,13 @@ export const TaskDetailsModal: React.FC<Props> = ({
       modifiedFiles.length > 0);
   const hasUnsavedEdits =
     (mode === "edit" || mode === "create") && (isDirty || hasCommentDraft || hasCreateModeEntries);
+  useUnsavedChanges(isOpen && hasUnsavedEdits);
+  const hasNavigationGuard = useIsUnsavedGuardActive();
 
   // Links inside the modal (dependency chips, auto-linked task IDs in markdown) leave this
   // task behind, so they ask the same question closing does before the navigation happens.
   const confirmNavigationAwayFromEdits = (event: React.MouseEvent<HTMLElement>) => {
+	if (hasNavigationGuard) return;
     if (!hasUnsavedEdits || event.defaultPrevented || event.button !== 0) return;
     if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     const link = (event.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
@@ -1340,7 +1345,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
                       <span className="flex-1 min-w-0">
                         {ref.startsWith("http://") || ref.startsWith("https://") ? (
                           <a
-                            href={ref}
+                            href={scopeMarkdownUrl(ref, "href")}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"
@@ -1479,7 +1484,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
                       <span className="flex-1 min-w-0">
                         {doc.startsWith("http://") || doc.startsWith("https://") ? (
                           <a
-                            href={doc}
+                            href={scopeMarkdownUrl(doc, "href")}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="text-sm text-blue-600 dark:text-blue-400 hover:underline break-all"

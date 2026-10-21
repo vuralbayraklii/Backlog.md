@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { type Task } from '../../types';
 import StoredDate from './StoredDate';
 import { formatPriorityLabel } from '../../utils/priority-config';
+import { projectScope } from '../lib/project-scope';
 
 interface DraftsListProps {
   onEditTask: (task: Task) => void;
@@ -31,7 +32,7 @@ const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft, dateFor
   const loadDrafts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/drafts');
+      const response = await fetch(`${projectScope.apiBase}/drafts`);
       if (!response.ok) {
         throw new Error(`Failed to load drafts: ${response.statusText}`);
       }
@@ -54,7 +55,7 @@ const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft, dateFor
 
   const handlePromoteDraft = async (draftId: string) => {
     try {
-      const response = await fetch(`/api/drafts/${draftId}/promote`, {
+      const response = await fetch(`${projectScope.apiBase}/drafts/${draftId}/promote`, {
         method: 'POST',
       });
       

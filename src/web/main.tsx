@@ -6,8 +6,6 @@ import { HealthCheckProvider } from './contexts/HealthCheckContext';
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement);
 root.render(
   <React.StrictMode>
-    <HealthCheckProvider>
-      <App />
-    </HealthCheckProvider>
+    {window.location.pathname === '/projects' ? <App /> : <HealthCheckProvider><App /></HealthCheckProvider>}
   </React.StrictMode>
 );

@@ -1,0 +1,139 @@
+{
+	"stage": "A-01.1",
+	"task_id": "BACK-786",
+	"result": "passed",
+	"recorded_at_utc": "2026-10-20T12:40:18.621615+00:00",
+	"source": {
+		"base_commit": "2225c4167234fd300b477cc3207689c8454abed1",
+		"base_tag": "v1.54.0",
+		"work_branch": "tasks/back-786-project-contexts",
+		"changes_committed": false,
+		"changes_pushed": false,
+		"bun_version": "1.4.3",
+		"bun_lock_sha256": "9c2ed823aa71ced2e1d6638280028d670240bcf4d4d93f83e3ba830d001a1679",
+		"implementation_sha256": {
+			"src/server/project-context.ts": "f85054fc53b70899f4c5e5e839358696326b43fe1e80a2c34090df8543002c81",
+			"src/test/project-context.test.ts": "a186757b2f381ace119a4b276bc174ed38e6091b84d0de34e744f7d42c7db9ed"
+		}
+	},
+	"implementation": {
+		"module": "src/server/project-context.ts",
+		"behavior_tests": "src/test/project-context.test.ts",
+		"scope": "Proje kimliğiyle bağımsız Core, ContentStore, SearchService ve dosya izleyicisi yaşam döngüsü. Görev içi project alanı ayrı kalır.",
+		"lifecycle": "Eşzamanlı açılış paylaşılır; aynı açık kimliğin farklı köke taşınması reddedilir. Başlatma hatası, kapanış ve bekleyen kapanışlarla sunucu kaynaklarının bırakılması diğer bağlamları etkilemez.",
+		"simplicity_review": "Mevcut Core, içerik, arama ve kapatma uygulamaları yeniden kullanıldı. Yeni kalıcı depo, sarmalanmış CRUD katmanı veya genel aktif proje yok; ortak kaynak kapatma tek yardımcıda.",
+		"deferred": "Kalıcı proje kayıtları, API/UI yollarının bağlama alınması, giriş/yetki, sunucu güvenlik politikaları ve açık inceleme önerileri bu görevin dışındadır."
+	},
+	"checks": {
+		"types": {
+			"command": "bun run check:types",
+			"result": "passed",
+			"files": 540,
+			"evidence": "types.log"
+		},
+		"biome": {
+			"command": "bun run check",
+			"result": "passed",
+			"writes": false,
+			"evidence": "biome.log"
+		},
+		"tests": {
+			"command": "BACKLOG_TEST_SKIP_DOM_PRELOAD=1 bun test --timeout=10000 src/test/project-context.test.ts src/test/search-service.test.ts src/test/config-watcher.test.ts src/test/server-cache.test.ts src/test/server-search-endpoint.test.ts src/test/server-task-project-endpoint.test.ts src/test/content-store.test.ts src/test/server-search-project-filter.test.ts --reporter=junit --reporter-outfile=/tmp/backlog-back786-verification-4gwewqlf/scoped-tests.xml",
+			"result": "passed",
+			"exit_code": 0,
+			"passed": 128,
+			"failed": 0,
+			"skipped": 0,
+			"assertions": 1077,
+			"new_behavior_tests": 10,
+			"evidence": ["scoped-tests.log", "scoped-tests.xml"],
+			"files": [
+				{
+					"path": "src/test/project-context.test.ts",
+					"tests": 10
+				},
+				{
+					"path": "src/test/search-service.test.ts",
+					"tests": 6
+				},
+				{
+					"path": "src/test/config-watcher.test.ts",
+					"tests": 10
+				},
+				{
+					"path": "src/test/server-cache.test.ts",
+					"tests": 2
+				},
+				{
+					"path": "src/test/server-search-endpoint.test.ts",
+					"tests": 26
+				},
+				{
+					"path": "src/test/server-task-project-endpoint.test.ts",
+					"tests": 2
+				},
+				{
+					"path": "src/test/content-store.test.ts",
+					"tests": 68
+				},
+				{
+					"path": "src/test/server-search-project-filter.test.ts",
+					"tests": 4
+				}
+			]
+		},
+		"build": {
+			"command": "bun run build",
+			"result": "passed",
+			"exit_code": 0,
+			"executable": "dist/backlog",
+			"evidence": "build.log"
+		}
+	},
+	"environment_findings": [
+		"İlk ilgili test çalışması sandbox içinde localhost listen çağrısında EPERM ile kesildi; aynı grup yerel dinleme izniyle son kaynak üzerinde 128/128 geçti. İlk çalışma scoped-tests-sandbox.log içinde korunuyor.",
+		"Groma komutu kurulu değil; Groma taraması veya yönettiği dosyalarda değişiklik yapılmadı.",
+		"Git user.name ve user.email tanımlı değil; yazar kimliği uydurulmadı, commit/push yapılmadı."
+	],
+	"verification_limits": [
+		"Bu görev için sekiz dosyalık ilgili test grubu çalıştırıldı; A-00 tam CI profilinin yeniden çalıştırıldığı iddia edilmiyor.",
+		"Mevcut BacklogServer HTTP/UI akışı yeni yöneticiyi henüz kullanmıyor; bu A-01 aşamasının sonraki küçük parçasıdır.",
+		"Dosya kökü izinleri, gerçek yol/çakışma doğrulaması ve kimlik doğrulama kayıt bağlama aşamalarına aittir; bu modül güvenilen proje kimliği/kök eşlemelerini alır.",
+		"Özgün chat-handoff.tar.gz, A-01.1 öncesi kayıtları içerir; yerinde değiştirilmedi."
+	],
+	"raw_evidence_directory": "/tmp/backlog-back786-verification-4gwewqlf",
+	"evidence_manifest": [
+		{
+			"path": "types.log",
+			"bytes": 55,
+			"sha256": "367b957a666510307d3c7017adfc77b155511504ff007eb260ffbeb68c4ef053"
+		},
+		{
+			"path": "biome.log",
+			"bytes": 62,
+			"sha256": "f39a9ea236ecbbdd6d766e1fa1e48df2bfeec6e672fcd3a7f5f7468a99b97a62"
+		},
+		{
+			"path": "build.log",
+			"bytes": 23,
+			"sha256": "a20e7a648db258ad689394e88df95db8b5e00f446c7b9e47b6e9878838cf4db6"
+		},
+		{
+			"path": "scoped-tests.log",
+			"bytes": 20541,
+			"sha256": "edb091a0016641b8ff338a51e97d6714145ce17be05c55a4ea461b8c70387897"
+		},
+		{
+			"path": "scoped-tests.xml",
+			"bytes": 30401,
+			"sha256": "a26bc1a316c5ce011289701ec361b095ef325951e86908cb8a060aba22a73343"
+		},
+		{
+			"path": "scoped-tests-sandbox.log",
+			"bytes": 3330,
+			"sha256": "00577bfbef6096f5e6ef039816142ce02c839d0edc9c683cabcb93913db8c376"
+		}
+	],
+	"next_scope": "Bağımsız Backlog.md uygulamasının kendi kullanıcı, yetki, çoklu proje, proje kaydetme ve tarihçe özelliklerini geliştirmek. Diğer projeler, uygulama hazır olduğunda Proje kaydet üzerinden mevcut Backlog.md dosya yapılarıyla merkezi takibe alınacak. Yeni uygulama görevi henüz oluşturulmadı veya başlatılmadı.",
+	"product_clarification": "Bu depoda geliştirilen ürün, bağımsız Backlog.md proje takip uygulamasıdır. Kullanıcı yönetimi, yetkilendirme, çoklu proje ve tarihçe Backlog.md’nin kendi özellikleridir. Önce bu uygulama istenen seviyeye getirilecek. Ardından diğer projelerdeki Backlog.md dosya yapıları, özelleştirdiğimiz uygulamanın “Proje kaydet” özelliği üzerinden okunup otomatik olarak merkezi takip sisteminde gösterilecek. Finbee ve diğer projeler hazır uygulamaya bu yolla daha sonra bağlanacak."
+}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { BrowserRouter, Navigate, Route, Routes, useLocation, useMatch, useNavigate } from 'react-router-dom';
+import { createBrowserRouter, Navigate, Route, RouterProvider, Routes, useLocation, useMatch, useNavigate } from 'react-router-dom';
 import Layout from './components/Layout';
 import BoardPage from './components/BoardPage';
 import DocumentationDetail from './components/DocumentationDetail';
@@ -12,6 +12,7 @@ import MilestonesPage from './components/MilestonesPage';
 import TaskDetailsModal from './components/TaskDetailsModal';
 import InitializationScreen from './components/InitializationScreen';
 import LoadingSpinner from './components/LoadingSpinner';
+import ProjectSelector from './components/ProjectSelector';
 import { SuccessToast } from './components/SuccessToast';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { TaskIdIndexProvider } from './contexts/TaskIdIndexContext';
@@ -40,6 +41,8 @@ import { createUrlPath } from './utils/urlHelpers';
 import { filterKanbanTasks } from './utils/kanban-tasks';
 import { reconcileById } from './utils/reconcile';
 import { parseBrowserLoadingState } from '../utils/browser-loading-state';
+import { projectScope, projectWebSocketUrl } from './lib/project-scope';
+import { UnsavedChangesProvider } from './contexts/UnsavedChangesContext';
 
 type TaskRouteNavigationState = {
   taskModalFrom?: string;
@@ -802,8 +805,7 @@ function AppContent() {
   }, [detailSession, detailId, dataVersion]);
 
   useEffect(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}`);
+    const ws = new WebSocket(projectWebSocketUrl());
 	let disposed = false;
     ws.onmessage = (event) => {
 	  const loadingState = parseBrowserLoadingState(event.data);
@@ -1116,11 +1118,13 @@ function AppContent() {
 }
 
 function App() {
-  return (
-    <BrowserRouter>
-      <AppContent />
-    </BrowserRouter>
-  );
+	const [appRouter] = useState(() => typeof window === 'undefined' || window.location.pathname === '/projects'
+		? null
+		: createBrowserRouter([
+			{ path: '*', element: <UnsavedChangesProvider><AppContent /></UnsavedChangesProvider> },
+		], { basename: projectScope.routeBase || '/' }));
+	if (typeof window !== 'undefined' && window.location.pathname === '/projects') return <ProjectSelector />;
+	return appRouter ? <RouterProvider router={appRouter} /> : null;
 }
 
 export default App;

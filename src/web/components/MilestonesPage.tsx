@@ -7,6 +7,7 @@ import { createTaskSearchIndex } from "../../utils/task-search";
 import MilestoneTaskRow from "./MilestoneTaskRow";
 import Modal from "./Modal";
 import StoredDate from "./StoredDate";
+import { useUnsavedChanges } from "../contexts/UnsavedChangesContext";
 
 type RemoveTaskHandling = "clear" | "reassign";
 
@@ -78,6 +79,15 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	const [removeReassignTo, setRemoveReassignTo] = useState("");
 	const [modalError, setModalError] = useState<string | null>(null);
 	const [searchQuery, setSearchQuery] = useState("");
+	const originalMilestone = editingBucket?.milestone
+		? milestoneEntities.find((item) => milestoneKey(item.id) === milestoneKey(editingBucket.milestone))
+		: null;
+	useUnsavedChanges(
+		(showAddModal && (newMilestone.trim() !== "" || newMilestoneDueDate !== "")) ||
+			(editingBucket !== null &&
+				(editMilestoneName !== (editingBucket.label || editingBucket.milestone) ||
+					editMilestoneDueDate !== (originalMilestone?.dueDate ?? ""))),
+	);
 
 	const archivedMilestoneIds = useMemo(
 		() => collectArchivedMilestoneKeys(archivedMilestones, milestoneEntities),

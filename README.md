@@ -260,6 +260,36 @@ backlog browser --no-open
 
 To keep the Web UI running as an auto-starting local service, see [Running Backlog.md as a Service](backlog/docs/doc-003%20-%20Running-Backlog-Browser-as-a-Service.md).
 
+### Server project records
+
+This fork provides persistent project registration as the foundation for its central project tracking application.
+Choose an explicit data directory for the server's `server.sqlite` database:
+
+```bash
+backlog server --data-dir ./server-data project register /path/to/project --name "Example"
+backlog server --data-dir ./server-data project list --json
+backlog server --data-dir ./server-data project view 1
+backlog server --data-dir ./server-data start --port 6420
+```
+
+Registration records an existing Backlog project's directory without modifying its Markdown or configuration.
+The display name belongs to the server record; the numeric project ID is persistent and separate from tasks' `project` field.
+Duplicate directory aliases and overlapping project roots are rejected. Paths resolve from the terminal working directory;
+`BACKLOG_CWD` does not select server data or projects. Standard, hidden, and configured custom Backlog directories are supported.
+
+All three commands accept `--json`. Single-record responses use `{ schemaVersion: 1, kind: "server-project", project }`;
+lists use `{ schemaVersion: 1, kind: "server-project-list", projects }`. A project contains `id` (string), `name`, `rootPath`,
+and `createdAt` (UTC). Reads return stored metadata, including when the source directory is unavailable. Reading a missing
+database produces an empty list or a not-found error without creating files. Invalid databases are reported without being rebuilt.
+
+`start` listens on `127.0.0.1` at port `6420` by default and opens a browser only with `--open`. Visit `/projects` to
+select a registered project; project switching reloads the page. The selected board and its existing screens use
+`/projects/<id>/...`, with data under `/api/projects/<id>/...` and attachments under `/api/projects/<id>/assets/...`.
+Central mode reads tasks only from each registered working directory. Its settings screen edits the default status,
+Definition of Done, date format, empty-column visibility, and maximum column width. Git fetch, cross-branch task merging,
+automatic commits, and status commands are disabled in this mode. The existing `backlog browser` command keeps its local
+behavior. Accounts, permissions, and browser-based project registration are later work.
+
 ---
 
 ## 🔧 MCP Integration (Model Context Protocol)

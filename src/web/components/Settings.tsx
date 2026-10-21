@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '../lib/api';
 import { SuccessToast } from './SuccessToast';
 import type { BacklogConfig } from '../../types';
+import { projectScope } from '../lib/project-scope';
+import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
 
 const Settings: React.FC = () => {
 	const [config, setConfig] = useState<BacklogConfig | null>(null);
@@ -88,13 +90,19 @@ const Settings: React.FC = () => {
 
 		try {
 			setSaving(true);
-			const normalizedConfig = {
+			const payload = projectScope.id ? {
+				defaultStatus: config.defaultStatus,
+				definitionOfDone: normalizeDefinitionOfDone(config.definitionOfDone) ?? [],
+				dateFormat: config.dateFormat,
+				hideEmptyColumns: config.hideEmptyColumns ?? false,
+				maxColumnWidth: config.maxColumnWidth,
+			} : {
 				...config,
 				definitionOfDone: normalizeDefinitionOfDone(config.definitionOfDone),
 			};
-			await apiClient.updateConfig(normalizedConfig);
-			setConfig(normalizedConfig);
-			setOriginalConfig(normalizedConfig);
+			const saved = await apiClient.updateConfig(payload);
+			setConfig(saved);
+			setOriginalConfig(saved);
 			setShowSuccess(true);
 			setTimeout(() => setShowSuccess(false), 3000);
 			setError(null);
@@ -111,6 +119,7 @@ const Settings: React.FC = () => {
 	};
 
 	const hasUnsavedChanges = JSON.stringify(config) !== JSON.stringify(originalConfig);
+	useUnsavedChanges(hasUnsavedChanges);
 
 	if (loading) {
 		return (
@@ -128,6 +137,58 @@ const Settings: React.FC = () => {
 				<div className="flex items-center justify-center py-12">
 					<div className="text-red-600 dark:text-red-400">Failed to load configuration</div>
 				</div>
+			</div>
+		);
+	}
+
+	if (projectScope.id) {
+		return (
+			<div className="page-shell mx-auto max-w-3xl space-y-6">
+				<h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
+				{error && <p role="alert" className="text-red-700 dark:text-red-400">{error}</p>}
+				<div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800 space-y-5">
+					<label className="block space-y-1">
+						<span>Default Status</span>
+						<select value={config.defaultStatus ?? statuses[0] ?? ''} onChange={(event) => handleInputChange('defaultStatus', event.target.value)} className="w-full rounded border p-2 dark:bg-gray-700">
+							{statuses.map((status) => <option key={status} value={status}>{status}</option>)}
+						</select>
+					</label>
+					<div className="space-y-2">
+						<h2 className="font-medium">Definition of Done</h2>
+						{(config.definitionOfDone ?? []).map((item, index) => (
+							<div key={`dod-${index}`} className="flex gap-2">
+								<input aria-label={`Definition of Done item ${index + 1}`} value={item} onChange={(event) => {
+									const next = [...(config.definitionOfDone ?? [])];
+									next[index] = event.target.value;
+									handleInputChange('definitionOfDone', next);
+								}} className="min-w-0 flex-1 rounded border p-2 dark:bg-gray-700" />
+								<button type="button" onClick={() => handleInputChange('definitionOfDone', (config.definitionOfDone ?? []).filter((_, itemIndex) => itemIndex !== index))} className="text-red-700 dark:text-red-400">Remove</button>
+							</div>
+						))}
+						<button type="button" onClick={() => handleInputChange('definitionOfDone', [...(config.definitionOfDone ?? []), ''])} className="text-blue-700 dark:text-blue-400">Add item</button>
+					</div>
+					<label className="block space-y-1">
+						<span>Date Format</span>
+						<select value={config.dateFormat} onChange={(event) => handleInputChange('dateFormat', event.target.value)} className="w-full rounded border p-2 dark:bg-gray-700">
+							<option value="yyyy-mm-dd">yyyy-mm-dd</option>
+							<option value="dd/mm/yyyy">dd/mm/yyyy</option>
+							<option value="mm/dd/yyyy">mm/dd/yyyy</option>
+						</select>
+					</label>
+					<label className="flex items-center gap-2">
+						<input type="checkbox" checked={config.hideEmptyColumns ?? false} onChange={(event) => handleInputChange('hideEmptyColumns', event.target.checked)} />
+						<span>Hide Empty Columns</span>
+					</label>
+					<label className="block space-y-1">
+						<span>Max Column Width</span>
+						<input type="number" min="20" max="200" value={config.maxColumnWidth ?? 80} onChange={(event) => handleInputChange('maxColumnWidth', Number(event.target.value))} className="w-full rounded border p-2 dark:bg-gray-700" />
+					</label>
+				</div>
+				<div className="flex justify-end gap-3">
+					<button type="button" disabled={!hasUnsavedChanges || saving} onClick={handleCancel} className="rounded border px-4 py-2 disabled:opacity-50">Cancel</button>
+					<button type="button" disabled={!hasUnsavedChanges || saving} onClick={handleSave} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{saving ? 'Saving...' : 'Save Changes'}</button>
+				</div>
+				{showSuccess && <SuccessToast message="Settings saved successfully!" onDismiss={() => setShowSuccess(false)} />}
 			</div>
 		);
 	}

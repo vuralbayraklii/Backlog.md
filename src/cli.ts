@@ -20,6 +20,7 @@ import {
 } from "./commands/help-schema.ts";
 import { registerInstructionsCommand } from "./commands/instructions.ts";
 import { registerMcpCommand } from "./commands/mcp.ts";
+import { registerServerCommand } from "./commands/server.ts";
 import { pickTaskForEditWizard, runTaskCreateWizard, runTaskEditWizard } from "./commands/task-wizard.ts";
 import { watchJson } from "./commands/watch-json.ts";
 import { DEFAULT_DIRECTORIES, DEFAULT_FILES, DEFAULT_STATUSES } from "./constants/index.ts";
@@ -1030,8 +1031,9 @@ function getMcpStartCwdOverrideFromArgv(argv = process.argv): string | undefined
 }
 
 // Global config migration - run before any command processing
-// Only run if we're in a backlog project (skip for init, help, version)
+// Server commands use explicit paths and must never migrate the terminal's local project.
 const shouldRunMigration =
+	process.argv[2] !== "server" &&
 	!process.argv.includes("init") &&
 	!process.argv.includes("--help") &&
 	!process.argv.includes("-h") &&
@@ -6145,6 +6147,8 @@ registerInstructionsCommand(program);
 
 // MCP command group
 registerMcpCommand(program);
+
+registerServerCommand(program);
 
 program
 	.parseAsync(process.argv)

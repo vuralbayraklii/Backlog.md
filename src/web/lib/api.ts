@@ -13,7 +13,9 @@ import type {
 	TaskStatus,
 } from "../../types/index.ts";
 
-const API_BASE = "/api";
+import { projectScope } from "./project-scope";
+
+const API_BASE = projectScope.apiBase;
 
 export interface ReorderTaskPayload {
 	taskId: string;
@@ -434,7 +436,7 @@ export class ApiClient {
 		return response.json();
 	}
 
-	async updateConfig(config: BacklogConfig): Promise<BacklogConfig> {
+	async updateConfig(config: Partial<BacklogConfig>): Promise<BacklogConfig> {
 		const response = await fetch(`${API_BASE}/config`, {
 			method: "PUT",
 			headers: {
@@ -442,9 +444,7 @@ export class ApiClient {
 			},
 			body: JSON.stringify(config),
 		});
-		if (!response.ok) {
-			throw new Error("Failed to update config");
-		}
+		if (!response.ok) throw await toApiError(response, "Failed to update config");
 		return response.json();
 	}
 

@@ -6,6 +6,7 @@ import { resolvePriorityValue } from '../../utils/priority-config';
 import { resolveProjectValue } from '../../utils/project-config';
 import { resolveTaskTypeValue } from '../../utils/task-type-config';
 import { type LaneMode } from '../lib/lanes';
+import { projectStorageKey } from '../lib/project-scope';
 
 interface BoardPageProps {
 	onEditTask: (task: Task) => void;
@@ -52,7 +53,7 @@ export default function BoardPage({
 	const [highlightTaskId, setHighlightTaskId] = useState<string | null>(null);
 	const [laneMode, setLaneMode] = useState<LaneMode>('none');
 	const [milestoneFilter, setMilestoneFilter] = useState<string | null>(null);
-	const laneStorageKey = 'backlog.board.lane';
+	const laneStorageKey = projectStorageKey('backlog.board.lane');
 
 	useEffect(() => {
 		const storedLane = typeof window !== 'undefined' ? window.localStorage.getItem(laneStorageKey) : null;

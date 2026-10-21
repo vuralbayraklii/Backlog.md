@@ -1,5 +1,6 @@
 import { useState, useEffect, memo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
 import { apiClient, isAmbiguousIdConflict } from '../lib/api';
 import MDEditor from '@uiw/react-md-editor';
 import MermaidMarkdown from './MermaidMarkdown';
@@ -97,6 +98,8 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 	// The editor opens on request (the Edit button, `?edit=true` in the URL, the new page), but never
 	// for an archived decision: the request can come before or after the record has loaded.
 	const isEditing = editRequested && !isArchived;
+	const hasChanges = content !== originalContent || decisionTitle !== originalDecisionTitle;
+	const clearUnsaved = useUnsavedChanges(isEditing && hasChanges);
 	const { archive, isArchiving, archiveError, dismissArchiveError } = useRecordArchive(
 		'decision',
 		currentDecision && !isLoading && !isNewDecision ? { id: currentDecision.id, title: currentDecision.title } : null,
@@ -213,6 +216,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 				setEditRequested(false);
 				setIsNewDecision(false);
 				const newId = stripIdPrefix(decision.id);
+				clearUnsaved();
 				navigate(`/decisions/${newId}/${sanitizeUrlTitle(decisionTitle)}`);
 			} else {
 				// Update existing decision
@@ -225,6 +229,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 				setTimeout(() => setShowSaveSuccess(false), 4000);
 				// Exit edit mode and navigate to decision detail page (this will load in preview mode)
 				setEditRequested(false);
+				clearUnsaved();
 				navigate(`/decisions/${id}/${sanitizeUrlTitle(decisionTitle)}`);
 			}
 		} catch (error) {
@@ -249,8 +254,6 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 			setEditRequested(false);
 		}
 	};
-
-	const hasChanges = content !== originalContent || decisionTitle !== originalDecisionTitle;
 
 	const getStatusColor = (status: string) => {
 		const colors = {

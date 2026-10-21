@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { projectWebSocketUrl } from "../lib/project-scope";
 
 const RECONNECT_DELAY = 5000; // 5 seconds
 
@@ -27,8 +28,7 @@ export function useHealthCheck() {
 		}
 
 		try {
-			const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-			const wsUrl = `${protocol}//${window.location.host}`;
+			const wsUrl = projectWebSocketUrl();
 			
 			const ws = new WebSocket(wsUrl);
 			wsRef.current = ws;
@@ -84,7 +84,7 @@ export function useHealthCheck() {
 			clearTimeout(connectTimer);
 			
 			// Cleanup on unmount
-			if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+			if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
 				wsRef.current.close();
 				wsRef.current = null;
 			}

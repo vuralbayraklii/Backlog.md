@@ -3,6 +3,7 @@ import MDEditor from "@uiw/react-md-editor";
 import { useTaskIdIndex } from "../contexts/TaskIdIndexContext";
 import { renderMermaidIn } from "../utils/mermaid";
 import { createTaskIdLinkPlugin } from "../utils/task-id-links";
+import { scopeMarkdownUrl } from "../lib/project-scope";
 
 interface Props {
 	source: string;
@@ -25,14 +26,6 @@ function treatHtmlAsText(this: { data(): object }): void {
 	settings.micromarkExtensions ??= [];
 	// "htmlFlow" is block-level HTML and "htmlText" is inline HTML in micromark, the parser behind remark.
 	settings.micromarkExtensions.push({ disable: { null: ["htmlFlow", "htmlText"] } });
-}
-
-function keepHashLinksInCurrentRoute(url: string, key: string): string {
-	if (key !== "href" || !url.startsWith("#") || typeof window === "undefined") {
-		return url;
-	}
-
-	return `${window.location.pathname}${window.location.search}${url}`;
 }
 
 export default function MermaidMarkdown({ source }: Props) {
@@ -58,7 +51,7 @@ export default function MermaidMarkdown({ source }: Props) {
 		<div ref={ref} className="wmde-markdown">
 			<MDEditor.Markdown
 				source={source}
-				urlTransform={keepHashLinksInCurrentRoute}
+				urlTransform={scopeMarkdownUrl}
 				remarkPlugins={remarkPlugins}
 			/>
 		</div>

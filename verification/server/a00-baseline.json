@@ -1,0 +1,286 @@
+{
+	"stage": "A-00",
+	"task_id": "BACK-785",
+	"result": "passed_with_recorded_findings",
+	"recorded_at_utc": "2026-10-20T12:04:45.077405+00:00",
+	"source": {
+		"fork": "https://github.com/vuralbayraklii/Backlog.md",
+		"tag": "v1.54.0",
+		"commit": "2225c4167234fd300b477cc3207689c8454abed1",
+		"development_base_branch": "server",
+		"work_branch": "tasks/server-a00-baseline",
+		"package_version_at_pinned_commit": "1.53.0",
+		"bun_lock_sha256": "9c2ed823aa71ced2e1d6638280028d670240bcf4d4d93f83e3ba830d001a1679"
+	},
+	"execution": {
+		"checks_run_by": "Kullanıcı, bu konuşmadaki terminal komutlarıyla",
+		"evidence_reviewed_by": "Codex; günlükler ve iki JUnit dosyası doğrudan incelendi",
+		"bun_version": "1.4.3",
+		"dependency_install": {
+			"command": "bun install --frozen-lockfile --linker=isolated",
+			"packages_installed": 521,
+			"seconds": 29.91,
+			"evidence": "Kullanıcının bu konuşmada ilettiği kurulum sonucu; ayrı kurulum günlüğü yok."
+		},
+		"working_tree_clean_before_and_after_checks": true,
+		"raw_evidence_directory": "/home/vuralbayrakli/backlog-a00"
+	},
+	"checks": {
+		"types": {
+			"command": "bun run check:types",
+			"result": "passed",
+			"files": 538,
+			"evidence": "types.log"
+		},
+		"biome": {
+			"command": "bun run check",
+			"result": "passed",
+			"files": 460,
+			"writes": false,
+			"evidence": "biome.log"
+		},
+		"test_bundle": {
+			"command": "BACKLOG_BUILD_OUTDIR=\"$HOME/backlog-a00/test-cli\" bun scripts/build.ts",
+			"result": "passed",
+			"evidence": "test-cli-build.log"
+		},
+		"tests": {
+			"command": "BACKLOG_TEST_CLI_BUNDLE=\"$HOME/backlog-a00/test-cli/cli.js\" bun scripts/run-ci-tests.ts --profile=full --parallel=2 --isolate --timeout=10000 --max-concurrency=2 --reporter=junit --reporter-outfile=\"$HOME/backlog-a00/test-results.xml\"",
+			"result": "passed",
+			"exit_code_reported_by_user": 0,
+			"passed": 3542,
+			"skipped": 13,
+			"failures": 0,
+			"errors": 0,
+			"profiles": [
+				{
+					"profile": "full: non-DOM",
+					"junit_file": "test-results.xml",
+					"tests": 3156,
+					"passed": 3143,
+					"skipped": 13,
+					"failures": 0,
+					"errors": 0,
+					"seconds": 194.731924865,
+					"skipped_cases": [
+						{
+							"name": "walks the highlight with real xterm shift-arrows and recruits the task the fallback cannot reach",
+							"suite": "interactive board multi-select move",
+							"reason": null
+						},
+						{
+							"name": "renders unrelated healthy drafts beside an unparsable twin",
+							"suite": "interactive draft picker collision guard",
+							"reason": null
+						},
+						{
+							"name": "uses AGENTS.md and completes without opening an editor",
+							"suite": "Cursor init PTY behavior",
+							"reason": null
+						},
+						{
+							"name": "shows a CLI mutation in the open board within a bounded time",
+							"suite": "interactive TUI editor handoff",
+							"reason": null
+						},
+						{
+							"name": "selects the next neighbor when the open task is removed",
+							"suite": "interactive TUI editor handoff",
+							"reason": null
+						},
+						{
+							"name": "launches terminal editor from board view and marks task updated",
+							"suite": "interactive TUI editor handoff",
+							"reason": null
+						},
+						{
+							"name": "launches terminal editor from task list view and marks task updated",
+							"suite": "interactive TUI editor handoff",
+							"reason": null
+						},
+						{
+							"name": "keeps j and k moving the task list selection after each of two editor sessions",
+							"suite": "interactive TUI editor handoff",
+							"reason": null
+						},
+						{
+							"name": "filters blocked tasks out of the very first render",
+							"suite": "interactive task list --ready",
+							"reason": null
+						},
+						{
+							"name": "shows the rows --plain prints, in the same order, for the default order and every option",
+							"suite": "interactive task list order",
+							"reason": null
+						},
+						{
+							"name": "shows the default order when the list is reached from the board, a task view, or search",
+							"suite": "interactive task list order",
+							"reason": null
+						},
+						{
+							"name": "keeps an open list sorted and its selection on the same task when tasks change on disk",
+							"suite": "interactive task list order",
+							"reason": null
+						},
+						{
+							"name": "marks each configured priority with an arrow, and with an ASCII arrow without Unicode",
+							"suite": "interactive task list order",
+							"reason": null
+						}
+					]
+				},
+				{
+					"profile": "full: DOM",
+					"junit_file": "test-results-dom.xml",
+					"tests": 399,
+					"passed": 399,
+					"skipped": 0,
+					"failures": 0,
+					"errors": 0,
+					"seconds": 28.827465324,
+					"skipped_cases": []
+				}
+			]
+		},
+		"build": {
+			"command": "bun run build",
+			"result": "passed",
+			"exit_code_reported_by_user": 0,
+			"executable": "dist/backlog",
+			"evidence": "build.log"
+		},
+		"compiled_smoke": {
+			"command": "bun scripts/smoke-compiled-build.ts ./dist/backlog \"$(bun -p 'require(\"./package.json\").version')\"",
+			"result": "passed",
+			"exit_code": 0,
+			"coverage": [
+				"CLI help and package version",
+				"temporary project initialization",
+				"browser HTML/CSS/JavaScript/favicon HTTP responses",
+				"MCP connection, tool list and workflow resource",
+				"test process and temporary directory cleanup"
+			],
+			"evidence": ["smoke.log", "smoke-exit.txt"]
+		}
+	},
+	"known_findings": [
+		{
+			"kind": "upstream_data",
+			"detail": "Eski backlog/archive/tasks ve backlog/completed kayıtlarında 10 kimlik çakışması, toplam 20 dosya. Doctor yalnız önizleme olarak çalıştırıldı; veri onarımı yapılmadı.",
+			"ids": [
+				"BACK-41",
+				"BACK-76",
+				"BACK-81",
+				"BACK-82",
+				"BACK-88",
+				"BACK-89",
+				"BACK-90",
+				"BACK-168",
+				"BACK-275",
+				"BACK-569"
+			],
+			"evidence": "doctor.log"
+		},
+		{
+			"kind": "upstream_metadata",
+			"detail": "v1.54.0 etiketiyle sabitlenen commit’te package.json sürümü 1.53.0. Kaynak commit üzerinden sabitlendi; smoke testi beklenen sürümü package.json’dan okudu."
+		},
+		{
+			"kind": "agent_environment",
+			"detail": "Agent terminalinde GitHub HTTPS DNS çözümlemesi başarısız; SSH çağrısı sistem SSH yapılandırmasının sahiplik/izin kontrolünden geçmiyor. Kullanıcının server dalını göndermesi bu konuşmada doğrulandı. Uzak Git verisi agent tarafından yenilenemedi.",
+			"evidence": "doctor.log"
+		},
+		{
+			"kind": "agent_environment",
+			"detail": "Groma komutu kurulu değil. Mimari tarama veya Groma dosyası düzenlemesi yapılmadı."
+		}
+	],
+	"verification_limits": [
+		"Bu rapor mevcut Linux terminalindeki başlangıç durumunu kaydeder; üretim sunucusu pilotu değildir.",
+		"13 test mevcut koşullarında atlandı; bu senaryoların çalıştığı iddia edilmiyor.",
+		"macOS/Windows, Nix paketleme ve ek etkileşimli TUI CI adımları bu A-00 çalışmasında ayrıca çalıştırılmadı.",
+		"Ham günlükler ve JUnit dosyaları yerel evidence dizinindedir; bu JSON içerik özetlerini ve SHA-256 değerlerini korur."
+	],
+	"next_task": {
+		"id": "BACK-786",
+		"stage": "A-01.1",
+		"status": "To Do",
+		"title": "Proje kimliğiyle bağımsız Backlog çalışma bağlamları",
+		"depends_on": "BACK-785",
+		"acceptance_focus": "Aynı süreçte iki proje ve iki TASK-1: veri, arama, yapılandırma, dosya bildirimi ve bağlam kapatma izolasyonu.",
+		"product_decisions": "Önceki incelemedeki ek ürün önerileri uygulanmadan önce ayrıca karara bağlanacak."
+	},
+	"evidence_manifest": [
+		{
+			"path": "bun-version.txt",
+			"bytes": 6,
+			"sha256": "bd31e8d9cf8d14a1e9e3fdf3b9f6a524819aed0d1b14627523c6765767c7d8f1"
+		},
+		{
+			"path": "commit.txt",
+			"bytes": 41,
+			"sha256": "40b3f8729679caf4c80c74e535d84a52efee3522e74684ec4a6acba62a4ceeee"
+		},
+		{
+			"path": "git-status.txt",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "types.log",
+			"bytes": 57,
+			"sha256": "9740f9c093802d06ce9d88805a5b542921b14e92badad80675ad373d088a0e42"
+		},
+		{
+			"path": "biome.log",
+			"bytes": 62,
+			"sha256": "494eb00ac1532e7a68cbecd9e5671ce652ea523fa5f54de05125ce2a0bb04a24"
+		},
+		{
+			"path": "test-cli-build.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "tests.log",
+			"bytes": 527083,
+			"sha256": "59903c5ff94e46ad18022289f8d42e25195dbcbd3c9995b0486e762c63905d7d"
+		},
+		{
+			"path": "test-results.xml",
+			"bytes": 853867,
+			"sha256": "974a0fcc76d9278377fd137f1bd1a2dbc2e9e79829cee8b1d3d705207ac7ce34"
+		},
+		{
+			"path": "test-results-dom.xml",
+			"bytes": 108570,
+			"sha256": "42412a2d99b4046a16d819486c133051deab0e1f9a4c3cf85c8bfac6e3b7ebd6"
+		},
+		{
+			"path": "build.log",
+			"bytes": 23,
+			"sha256": "a20e7a648db258ad689394e88df95db8b5e00f446c7b9e47b6e9878838cf4db6"
+		},
+		{
+			"path": "smoke.log",
+			"bytes": 84,
+			"sha256": "ab6cb6de71650a7ba106e06d9b35a721b2a0161859ab25746ecc2c6cf73cc95f"
+		},
+		{
+			"path": "smoke-exit.txt",
+			"bytes": 24,
+			"sha256": "c4d248f6e1050505e1acad1ffeeeff64d067119a64ba7f8563e29bae4a952dd8"
+		},
+		{
+			"path": "git-status-after.txt",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "doctor.log",
+			"bytes": 16121,
+			"sha256": "a934902d0c98dd1e0c1f0e0f63a63a958e97fa41271bb7ef711f35a3f4c4c210"
+		}
+	]
+}

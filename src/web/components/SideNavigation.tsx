@@ -14,6 +14,7 @@ import ErrorBoundary from './ErrorBoundary';
 import { createUrlPath, sanitizeUrlTitle } from '../utils/urlHelpers';
 import { getWebVersion } from '../utils/version';
 import { apiClient } from '../lib/api';
+import { projectStorageKey } from '../lib/project-scope';
 import { parseSearchCommandQuery } from '../utils/search-command-query';
 import { buildDocsTree, type DocsTreeNode } from '../lib/docs-tree';
 
@@ -272,7 +273,7 @@ const SideNavigation = memo(function SideNavigation({
 	onRetry
 }: SideNavigationProps) {
 	const [isCollapsed, setIsCollapsed] = useState(() => {
-		const saved = localStorage.getItem('sideNavCollapsed');
+		const saved = localStorage.getItem(projectStorageKey('sideNavCollapsed'));
 		return saved ? JSON.parse(saved) : false;
 	});
 	const [searchQuery, setSearchQuery] = useState('');
@@ -286,7 +287,7 @@ const SideNavigation = memo(function SideNavigation({
 		setIsCollapsed(false);
 	}, []);
 	const [isDocsCollapsed, setIsDocsCollapsed] = useState(() => {
-		const saved = localStorage.getItem('docsCollapsed');
+		const saved = localStorage.getItem(projectStorageKey('docsCollapsed'));
 		if (saved !== null) {
 			return JSON.parse(saved);
 		}
@@ -294,11 +295,11 @@ const SideNavigation = memo(function SideNavigation({
 		return docs.length > 6;
 	});
 	const [folderExpanded, setFolderExpanded] = useState<Record<string, boolean>>(() => {
-		const saved = localStorage.getItem('docsFolderExpanded');
+		const saved = localStorage.getItem(projectStorageKey('docsFolderExpanded'));
 		return saved ? JSON.parse(saved) : {};
 	});
 	const [isDecisionsCollapsed, setIsDecisionsCollapsed] = useState(() => {
-		const saved = localStorage.getItem('decisionsCollapsed');
+		const saved = localStorage.getItem(projectStorageKey('decisionsCollapsed'));
 		if (saved !== null) {
 			return JSON.parse(saved);
 		}
@@ -319,7 +320,7 @@ const SideNavigation = memo(function SideNavigation({
 	}, [navigate]);
 
 	useEffect(() => {
-		localStorage.setItem('sideNavCollapsed', JSON.stringify(isCollapsed));
+		localStorage.setItem(projectStorageKey('sideNavCollapsed'), JSON.stringify(isCollapsed));
 	}, [isCollapsed]);
 
 	// Fetch version on mount
@@ -329,28 +330,28 @@ const SideNavigation = memo(function SideNavigation({
 
 	// Save docs collapse state to localStorage
 	useEffect(() => {
-		localStorage.setItem('docsCollapsed', JSON.stringify(isDocsCollapsed));
+		localStorage.setItem(projectStorageKey('docsCollapsed'), JSON.stringify(isDocsCollapsed));
 	}, [isDocsCollapsed]);
 
 	// Save decisions collapse state to localStorage
 	useEffect(() => {
-		localStorage.setItem('decisionsCollapsed', JSON.stringify(isDecisionsCollapsed));
+		localStorage.setItem(projectStorageKey('decisionsCollapsed'), JSON.stringify(isDecisionsCollapsed));
 	}, [isDecisionsCollapsed]);
 
 	useEffect(() => {
-		localStorage.setItem('docsFolderExpanded', JSON.stringify(folderExpanded));
+		localStorage.setItem(projectStorageKey('docsFolderExpanded'), JSON.stringify(folderExpanded));
 	}, [folderExpanded]);
 
 	// Auto-collapse when data loads/changes if no saved preference exists
 	useEffect(() => {
-		const savedDocsCollapsed = localStorage.getItem('docsCollapsed');
+		const savedDocsCollapsed = localStorage.getItem(projectStorageKey('docsCollapsed'));
 		if (savedDocsCollapsed === null && docs.length > 6) {
 			setIsDocsCollapsed(true);
 		}
 	}, [docs.length]);
 
 	useEffect(() => {
-		const savedDecisionsCollapsed = localStorage.getItem('decisionsCollapsed');
+		const savedDecisionsCollapsed = localStorage.getItem(projectStorageKey('decisionsCollapsed'));
 		if (savedDecisionsCollapsed === null && decisions.length > 6) {
 			setIsDecisionsCollapsed(true);
 		}
