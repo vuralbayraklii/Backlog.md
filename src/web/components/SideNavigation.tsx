@@ -1,3 +1,4 @@
+import { useAuth } from "../contexts/AuthContext";
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Tooltip } from 'react-tooltip';
@@ -272,6 +273,7 @@ const SideNavigation = memo(function SideNavigation({
 	error,
 	onRetry
 }: SideNavigationProps) {
+	const { central, session, permissions } = useAuth();
 	const [isCollapsed, setIsCollapsed] = useState(() => {
 		const saved = localStorage.getItem(projectStorageKey('sideNavCollapsed'));
 		return saved ? JSON.parse(saved) : false;
@@ -746,7 +748,8 @@ const SideNavigation = memo(function SideNavigation({
 									</span>
 								</div>
 									<button
-										onClick={handleCreateDocument}
+										disabled={!permissions.docsWrite}
+                                        onClick={handleCreateDocument}
 										className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors duration-200"
 										title="Create new document"
 									>
@@ -810,19 +813,7 @@ const SideNavigation = memo(function SideNavigation({
 										Decisions (<NavigationCount count={decisions.length} isLoading={isLoading} error={error} label="decision" />)
 									</span>
 								</div>
-								{/* Temporarily hidden - decisions editing not ready */}
-								{/*{false && (*/}
-								{/*	<button*/}
-								{/*		onClick={handleCreateDecision}*/}
-								{/*		className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors cursor-pointer"*/}
-								{/*		title="Create new decision"*/}
-								{/*	>*/}
-								{/*		<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">*/}
-								{/*			<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />*/}
-								{/*			<circle cx="12" cy="12" r="10" />*/}
-								{/*		</svg>*/}
-								{/*	</button>*/}
-								{/*)}*/}
+								{central && permissions.decisionsWrite && <button type="button" onClick={() => navigate('/decisions/new')} title="Create new decision" className="p-1 text-gray-500 hover:text-gray-900 dark:hover:text-gray-100">+</button>}
 							</div>
 							
 							{/* Decision List */}
@@ -981,9 +972,13 @@ const SideNavigation = memo(function SideNavigation({
 				)}
 			</nav>
 			
+			<div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 space-y-2">
+                <NavLink to="/archive" className="block text-sm hover:underline">Archive</NavLink>
+                {central && session?.user.role === "admin" && <NavLink to="/members" className="block text-sm hover:underline">Project access</NavLink>}
+            </div>
 			{/* Settings Button - Bottom Left */}
 			<div className={`border-t border-gray-200 dark:border-gray-700 ${isCollapsed ? 'px-2 py-2' : 'px-4 py-4'}`}>
-				{!isCollapsed ? (
+				{(!central || session?.user.role === "admin") && (!isCollapsed ? (
 					<NavLink
 						to="/settings"
 						className={({ isActive }) =>
@@ -1017,7 +1012,7 @@ const SideNavigation = memo(function SideNavigation({
 							<Icons.DocumentSettings />
 						</div>
 					</NavLink>
-				)}
+				))}
 			</div>
 			
 			<Tooltip id="sidebar-tooltip" place="right" />

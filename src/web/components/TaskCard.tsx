@@ -1,3 +1,4 @@
+import { useAuth } from "../contexts/AuthContext";
 import React from 'react';
 import { type Task } from '../../types';
 import { formatPriorityLabel } from '../../utils/priority-config';
@@ -75,6 +76,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   isSelectionDragging = false,
   onSelectionDragChange,
 }) => {
+  const { permissions } = useAuth();
   const [isDragging, setIsDragging] = React.useState(false);
   const [showBranchTooltip, setShowBranchTooltip] = React.useState(false);
 
@@ -188,7 +190,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
             : ''
         }`}
         aria-selected={isSelected}
-        draggable={!isFromOtherBranch}
+        draggable={!isFromOtherBranch && permissions.tasksWrite}
 		role="button"
 		tabIndex={0}
 		aria-label={accessibleLabel}

@@ -1,3 +1,4 @@
+import { useAuth } from "../contexts/AuthContext";
 import {useState, useEffect, memo, useCallback} from 'react';
 import {useParams, useNavigate, useSearchParams} from 'react-router-dom';
 import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
@@ -101,7 +102,8 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
     const isArchived = currentDocument?.archived === true;
     // The editor opens on request (the Edit button, `?edit=true` in the URL, the new page), but never
     // for an archived document: the request can come before or after the record has loaded.
-    const isEditing = editRequested && !isArchived;
+    const { permissions } = useAuth();
+    const isEditing = editRequested && !isArchived && permissions.docsWrite;
     const hasChanges = content !== originalContent || docTitle !== originalDocTitle || docPath !== originalDocPath;
     const clearUnsaved = useUnsavedChanges(isEditing && hasChanges);
     const {archive, isArchiving, archiveError, dismissArchiveError} = useRecordArchive(
@@ -112,6 +114,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
     );
 
     useEffect(() => {
+        if (editRequested && hasChanges && (id === "new" || currentDocument)) return;
         let active = true;
         if (id === 'new') {
             // Handle new document creation
@@ -405,6 +408,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
                                 {isArchived ? null : !isEditing ? (
                                     <>
                                     <button
+                                        disabled={!permissions.docsWrite}
                                         onClick={handleEdit}
                                         className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors duration-200"
                                     >
@@ -415,7 +419,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
                                         </svg>
                                         Edit
                                     </button>
-                                    {currentDocument && !isNewDocument && (
+                                    {currentDocument && !isNewDocument && permissions.archive && (
                                         <ArchiveButton onClick={archive} disabled={isArchiving} />
                                     )}
                                     </>
@@ -429,7 +433,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
 	                                        </button>
                                         <button
                                             onClick={handleSave}
-                                            disabled={!hasChanges || isSaving}
+                                            disabled={!permissions.docsWrite || !hasChanges || isSaving}
 	                                            className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors duration-200 ${
 	                                                hasChanges && !isSaving
 	                                                    ? 'bg-blue-600 dark:bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-700 focus:ring-blue-500 dark:focus:ring-blue-400'

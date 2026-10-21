@@ -1,0 +1,654 @@
+{
+	"stage": "A-02",
+	"task_ids": ["BACK-790", "BACK-791", "BACK-792", "BACK-793"],
+	"result": "passed",
+	"recorded_at_utc": "2026-10-21T12:56:28.192368+00:00",
+	"source": {
+		"base_commit": "d13a31b241ffb1d57f5430bba4c85dbf83b3c5ce",
+		"bun_version": "1.4.3",
+		"work_branch": "tasks/server-a02-accounts-authorization",
+		"source_manifest": [
+			{
+				"path": "README.md",
+				"bytes": 27653,
+				"sha256": "9a2da29fce2a459337888a73dcfcd0dc8338927c5678c8a3a0be37221334b233"
+			},
+			{
+				"path": "src/commands/server.ts",
+				"bytes": 17735,
+				"sha256": "195c0b1474d839b1b6031dc0d5126ca9bade757131d3e9b4fe73c0739b702710"
+			},
+			{
+				"path": "src/server/auth-store.ts",
+				"bytes": 18022,
+				"sha256": "cb30f9f92668c14f8a755abcebaa21c8f82fe55b4853dfd2180babf5731f6ccc"
+			},
+			{
+				"path": "src/server/auth-types.ts",
+				"bytes": 1280,
+				"sha256": "932352b1248e7f4c6949bbe9ed28fecea57ceb3c765027b8fbbe39dccd59a92c"
+			},
+			{
+				"path": "src/server/central.ts",
+				"bytes": 17916,
+				"sha256": "b974724797365c0198bf4db5d5624e5be40619e41b9a3e2e9dfd08e2ca4b6720"
+			},
+			{
+				"path": "src/server/database.ts",
+				"bytes": 4674,
+				"sha256": "885da0d7bfb7a012edece9994d1ac15e703d8c8d63e0089d678adf3abc77ec01"
+			},
+			{
+				"path": "src/server/index.ts",
+				"bytes": 87788,
+				"sha256": "cc7bc52cbe4edbd22df10d1c75d14c081c87f61b3123fa64175fba45882d5c29"
+			},
+			{
+				"path": "src/server/project-store.ts",
+				"bytes": 3378,
+				"sha256": "931e7b25b4675722eb50f5c3764953d458dba7ba9600b330459605eac6628911"
+			},
+			{
+				"path": "src/test/central-auth.test.ts",
+				"bytes": 14929,
+				"sha256": "25fcdbb546049263c89445bfe4583470df555c3823ac2483b52ee564d0c59495"
+			},
+			{
+				"path": "src/test/central-server.test.ts",
+				"bytes": 14121,
+				"sha256": "679ddaaf870f7ccef45d4301f882b89373a25cd11e8473b4ab3d42fbfde1ed2e"
+			},
+			{
+				"path": "src/test/cli-server-user.test.ts",
+				"bytes": 8283,
+				"sha256": "ebac76840d632705cfcc8b580126501a020295af70a8f5f2d559854e88c7e548"
+			},
+			{
+				"path": "src/test/server-auth-store.test.ts",
+				"bytes": 12141,
+				"sha256": "dcfe44996c1becb43596f31928316ec97c648132e9e75ba2e8301ff6cdb024c7"
+			},
+			{
+				"path": "src/test/server-content-record-archive.test.ts",
+				"bytes": 9135,
+				"sha256": "5bab6c45becef20dd0b974eb72ae43df62e2be4ece7bc38599e4546e8a82660a"
+			},
+			{
+				"path": "src/test/server-project-permissions.test.ts",
+				"bytes": 15492,
+				"sha256": "a726c6cfbe89427d5bc05e7932576531e513f4e45cb508be0b823ee7db9c2e24"
+			},
+			{
+				"path": "src/test/web-archive-page.test.tsx",
+				"bytes": 5041,
+				"sha256": "c57666e9d4584af5d556f484987f37b7c613be826d9b1465bc2d48953eda5e5c"
+			},
+			{
+				"path": "src/test/web-auth.test.tsx",
+				"bytes": 13487,
+				"sha256": "edb70311df23add680ab6b219fa2cfcea916169ab8f083360501d866e7c1770d"
+			},
+			{
+				"path": "src/test/web-project-members.test.tsx",
+				"bytes": 4598,
+				"sha256": "bc218134f2255ef4eeedc90a5deb1d3b6d3fb1c69f4ab6caea0a0f788657238f"
+			},
+			{
+				"path": "src/web/App.tsx",
+				"bytes": 48032,
+				"sha256": "061e18aaa0f99aff86015e24c48f6ad0978e4a58b11bdd46f12dd56445ec9bfb"
+			},
+			{
+				"path": "src/web/components/AccountForms.tsx",
+				"bytes": 3673,
+				"sha256": "91b8740f48d47e0b68b18bb43e4c7a890ed9df8ac55dd28e2b1ead23036d121b"
+			},
+			{
+				"path": "src/web/components/AccountNavigation.tsx",
+				"bytes": 624,
+				"sha256": "7bc21cbf92a6157c6a070a4bfa68dde811779d4ddfd3addee49a80b5b808d8d8"
+			},
+			{
+				"path": "src/web/components/AdminUsers.tsx",
+				"bytes": 6103,
+				"sha256": "1d30a12c8d6e188bc54984adcccd085fa719633197ee52c6126afcd591620c4c"
+			},
+			{
+				"path": "src/web/components/ArchivePage.tsx",
+				"bytes": 5455,
+				"sha256": "2a8df3b616f8263daf4c2ef84e85a9d41caaf79d1479e5eb49d77270b26b8cc6"
+			},
+			{
+				"path": "src/web/components/Board.tsx",
+				"bytes": 41650,
+				"sha256": "d2fa1f26c622292e649af0c45caaa10fcdec3fbe99e5bab26484e26b7d591257"
+			},
+			{
+				"path": "src/web/components/DecisionDetail.tsx",
+				"bytes": 18302,
+				"sha256": "74a2d31c8b2b352d027d2edaeee505c50348b2a05e00004ccde70be8db4ef0ec"
+			},
+			{
+				"path": "src/web/components/DocumentationDetail.tsx",
+				"bytes": 27601,
+				"sha256": "6aa3b5f586681c0063c3b89b8ec1ba770d7b115d190fc7d9ee70f61774e2630a"
+			},
+			{
+				"path": "src/web/components/DraftsList.tsx",
+				"bytes": 8838,
+				"sha256": "6adb0aa1dde7a43312bb4b65a07d9396cdcb449123d0496e2a8fb6a3aedb1ec7"
+			},
+			{
+				"path": "src/web/components/MilestonesPage.tsx",
+				"bytes": 45552,
+				"sha256": "5079f451aeffbeac666bf7913b7ebfb757a6d7ae34e3d18acc92665d1b9f2cc8"
+			},
+			{
+				"path": "src/web/components/Navigation.tsx",
+				"bytes": 1818,
+				"sha256": "952a3c7ed1e7eed46151b6886cfbc2758e22b0037de756fb6c53e1a45bb3675b"
+			},
+			{
+				"path": "src/web/components/ProjectMembers.tsx",
+				"bytes": 4148,
+				"sha256": "6e7fd59b37182f52c958f119f209245e7c3f1f395fc07a512e3cf9ee7c9b748b"
+			},
+			{
+				"path": "src/web/components/ProjectSelector.tsx",
+				"bytes": 2424,
+				"sha256": "283f5a4ca29779937b485028286a69d6537cb45659834c78a5f13b6c5ebcc81e"
+			},
+			{
+				"path": "src/web/components/SideNavigation.tsx",
+				"bytes": 42402,
+				"sha256": "1af9cc299624dbe455923a6f489d6cf5e5dc3fd68d165d83bef75e2abe28b420"
+			},
+			{
+				"path": "src/web/components/TaskCard.tsx",
+				"bytes": 13528,
+				"sha256": "c953cc81ac242b1a46e25e385377153f5c3f6e66f9492cde276a608cbd2f043d"
+			},
+			{
+				"path": "src/web/components/TaskDetailsModal.tsx",
+				"bytes": 90899,
+				"sha256": "5cc5cac43fbc4a85a5d09280364ee20d8e2c8e4096688715fa21dcd4f7000a2d"
+			},
+			{
+				"path": "src/web/components/TaskList.tsx",
+				"bytes": 39537,
+				"sha256": "821ecfd1449822f18ccc6381d9fe11d81bba1472241ef1c96509fc55c91b78f6"
+			},
+			{
+				"path": "src/web/contexts/AuthContext.tsx",
+				"bytes": 6464,
+				"sha256": "76a9414a5afdf04fd8856b0383e4a97669e1e63f33fedd749d5c4cce7f6e4f80"
+			},
+			{
+				"path": "src/web/hooks/useHealthCheck.tsx",
+				"bytes": 2706,
+				"sha256": "b15b76855c307b091aad05a0814472ba02b66f38bc28643700b7665d9ddceb77"
+			},
+			{
+				"path": "src/web/lib/api.ts",
+				"bytes": 22156,
+				"sha256": "c9ce911f9493cd47dbe5ce09b14210321adb2741739305e71b3e8aa9a99ad81b"
+			},
+			{
+				"path": "src/web/lib/project-scope.ts",
+				"bytes": 2190,
+				"sha256": "4704e855d37d477b2e0aa7783820d82784668ce302305fc73040db09c9f35049"
+			},
+			{
+				"path": "src/web/lib/request.ts",
+				"bytes": 1721,
+				"sha256": "4475fa810b4899cc651d09592256385ad761a6784d931576bd311a15a09d39c7"
+			},
+			{
+				"path": "src/web/main.tsx",
+				"bytes": 579,
+				"sha256": "c05883dde2e48f77e5d9e3251bc81a0f42274565e4c7b867b83852ef0dde514c"
+			},
+			{
+				"path": "src/web/utils/version.ts",
+				"bytes": 364,
+				"sha256": "bb933a59a16a8087ed3fbe8a215a28fc89c29c442e3648d5b43c11850805979e"
+			}
+		],
+		"identity": "The source SHA-256 manifest identifies the tested tree; final delivery commits are in the feature branch Git log."
+	},
+	"decisions": {
+		"admin": "Automatic access to all projects and operations",
+		"login": "Admin-created username/password accounts",
+		"decisionEditing": "proposed edits require decisionsWrite; every status transition and all other states additionally require decisionsManage",
+		"permissions": ["tasksWrite", "docsWrite", "decisionsWrite", "decisionsManage", "archive", "delete"],
+		"password": {
+			"algorithm": "argon2id",
+			"memoryCost": 19456,
+			"timeCost": 2,
+			"characters": [15, 128]
+		},
+		"session": {
+			"absolute_hours": 12,
+			"idle_hours": 2,
+			"activity": "trusted visible interaction, at most once per minute; reads and WS do not renew"
+		},
+		"deferred": [
+			"A-03 project registration UI and allowed roots",
+			"A-04 history, versions, recovery",
+			"A-05 connected agent CLI/MCP"
+		]
+	},
+	"checks": {
+		"groma": {
+			"command": "groma agent-instructions",
+			"result": "unavailable",
+			"exit_code": 127,
+			"scan_performed": false
+		},
+		"types": {
+			"command": "bun run check:types",
+			"result": "passed",
+			"exit_code": 0,
+			"log": "types.log"
+		},
+		"biome": {
+			"command": "bun run check",
+			"result": "passed",
+			"exit_code": 0,
+			"writes": false,
+			"log": "final-biome.log"
+		},
+		"build": {
+			"command": "bun run build",
+			"result": "passed",
+			"exit_code": 0,
+			"log": "build.log"
+		},
+		"test_cli_bundle": {
+			"command": "BACKLOG_BUILD_OUTDIR=/tmp/backlog-a02-verification/test-cli bun scripts/build.ts",
+			"result": "passed",
+			"exit_code": 0
+		},
+		"full_tests": {
+			"command": "BACKLOG_TEST_CLI_BUNDLE=/tmp/backlog-a02-verification/test-cli/cli.js bun run test",
+			"result": "passed",
+			"exit_code": 0,
+			"passed": 3689,
+			"skipped": 13,
+			"failed": 0,
+			"total": 3702,
+			"files": 329,
+			"assertions": 17906,
+			"elapsed": "1239.91s",
+			"log": "full-tests.log",
+			"includes_dom": true,
+			"skipped_cases": [
+				"interactive draft picker collision guard > renders unrelated healthy drafts beside an unparsable twin",
+				"interactive TUI editor handoff > shows a CLI mutation in the open board within a bounded time",
+				"interactive TUI editor handoff > selects the next neighbor when the open task is removed",
+				"interactive TUI editor handoff > launches terminal editor from board view and marks task updated",
+				"interactive TUI editor handoff > launches terminal editor from task list view and marks task updated",
+				"interactive TUI editor handoff > keeps j and k moving the task list selection after each of two editor sessions",
+				"interactive task list --ready > filters blocked tasks out of the very first render",
+				"Cursor init PTY behavior > uses AGENTS.md and completes without opening an editor",
+				"interactive task list order > shows the rows --plain prints, in the same order, for the default order and every option",
+				"interactive task list order > shows the default order when the list is reached from the board, a task view, or search",
+				"interactive task list order > keeps an open list sorted and its selection on the same task when tasks change on disk",
+				"interactive task list order > marks each configured priority with an arrow, and with an ASCII arrow without Unicode",
+				"interactive board multi-select move > walks the highlight with real xterm shift-arrows and recruits the task the fallback cannot reach"
+			]
+		},
+		"scoped": [
+			{
+				"scope": "accounts and project-store/CLI",
+				"passed": 48,
+				"failed": 0,
+				"assertions": 270,
+				"evidence": "BACK-791 CLI task record and full-tests.log"
+			},
+			{
+				"scope": "project permissions, archive, local API regressions",
+				"passed": 83,
+				"failed": 0,
+				"assertions": 309,
+				"evidence": "/tmp/backlog-a02-project-operations-tests.log"
+			},
+			{
+				"scope": "web focused regression group",
+				"passed": 125,
+				"failed": 0,
+				"assertions": 778,
+				"evidence": "BACK-793 CLI task record"
+			},
+			{
+				"scope": "new auth/archive/membership DOM tests",
+				"passed": 15,
+				"failed": 0,
+				"assertions": 61,
+				"evidence": "full-tests.log and BACK-793 CLI task record"
+			}
+		],
+		"browser": {
+			"command": "bun /tmp/backlog-a02-verification/cdp-browser.mjs",
+			"result": "passed",
+			"exit_code": 0,
+			"browser": "HeadlessChrome/153.0.8010.12",
+			"viewport": [1440, 1000],
+			"assertions": [
+				"admin first login requires and completes password change",
+				"admin creates a user through UI",
+				"admin assigns project membership through UI",
+				"unauthenticated direct project root resumes board after login",
+				"normal user only sees joined project",
+				"two isolated browser sessions retain distinct accounts",
+				"normal user opens project board",
+				"visible polling and WebSocket traffic do not renew idle time",
+				"trusted visible interaction renews idle at most once per minute",
+				"open normal browser applies revoked edit permission",
+				"revoked edit permission enforced by API",
+				"open normal browser applies newly granted edit permission",
+				"normal direct API access to other project is denied",
+				"normal archive attempt denied before grant",
+				"admin changes archive and delete permissions through UI",
+				"tasks archive API succeeds after grant",
+				"tasks restore from archive UI",
+				"tasks permanent deletion from archive UI with confirmation",
+				"docs archive API succeeds after grant",
+				"docs restore from archive UI",
+				"docs permanent deletion from archive UI with confirmation",
+				"decisions archive API succeeds after grant",
+				"decisions restore from archive UI",
+				"decisions permanent deletion from archive UI with confirmation",
+				"safe FTP links remain and dangerous Markdown URLs stay inert",
+				"unsaved document survives session expiry and same-account login",
+				"different-account login clears previous editor state",
+				"admin retains access without membership",
+				"compiled local browser works without accounts",
+				"delete confirmations contain task, document, and decision IDs",
+				"cookies are HttpOnly and host scoped"
+			],
+			"count": 31,
+			"fixtures": "Temporary example projects only; isolated admin and normal-user contexts",
+			"evidence": ["browser-result.json", "browser.log", "admin-members.png", "document-account-switch.png"]
+		},
+		"compiled_smoke": {
+			"command": "bun scripts/smoke-compiled-build.ts ./dist/backlog 1.53.0",
+			"result": "passed",
+			"exit_code": 0,
+			"scope": ["CLI", "local web", "MCP"],
+			"log": "compiled-smoke.log"
+		},
+		"diff_check": {
+			"command": "git diff --check",
+			"result": "passed",
+			"exit_code": 0
+		}
+	},
+	"acceptance_evidence": [
+		{
+			"scenario": "Initial admin, reinstall rejection, additive A-01 migration, corrupt/unrecognized schemas",
+			"tests": ["server-auth-store.test.ts", "cli-server-user.test.ts", "server-project-store.test.ts"]
+		},
+		{
+			"scenario": "Account first login, forced/reset/self password changes, 429 persistence, restart, 12h/2h expiry, final-admin race",
+			"tests": ["server-auth-store.test.ts", "cli-server-user.test.ts", "central-auth.test.ts"]
+		},
+		{
+			"scenario": "Matching record IDs in two projects, direct page/API/search/assets/WS denial, immediate grants/revocation",
+			"tests": ["central-server.test.ts", "central-auth.test.ts", "server-project-permissions.test.ts"],
+			"browser": true
+		},
+		{
+			"scenario": "Every route grant, missing metadata fail closed, raw YAML decision states, queued current status/permissions, concurrent decision allocation",
+			"tests": ["server-project-permissions.test.ts"]
+		},
+		{
+			"scenario": "Tasks/docs/decisions archive restore delete, active deletion refusal, subtask refusal and reference outcomes",
+			"tests": [
+				"server-project-permissions.test.ts",
+				"server-content-record-archive.test.ts",
+				"web-archive-page.test.tsx"
+			],
+			"browser": true
+		},
+		{
+			"scenario": "CSRF, foreign Origin, safe redirects, asset realpath escape, passive downloads and Markdown scheme blocking",
+			"tests": ["central-auth.test.ts", "server-project-permissions.test.ts", "web-auth.test.tsx"]
+		},
+		{
+			"scenario": "Real browser admin/user workflows, live permission changes, trusted activity, unsaved expiry/same-account resume/different-account clearing, local browser",
+			"browser": true,
+			"tests": ["web-auth.test.tsx", "web-project-members.test.tsx"]
+		},
+		{
+			"scenario": "Existing CLI, local browser and A-01 separation regressions",
+			"tests": "full suite plus compiled CLI/web/MCP smoke and Chromium local browser"
+		}
+	],
+	"independent_reviews": [
+		{
+			"agent": "codex-accounts",
+			"scope": "Session and permission revocation",
+			"result": "No remaining blocker; current hash/active state rechecks and atomic session rotation reviewed"
+		},
+		{
+			"agent": "codex-projects",
+			"scope": "UI permission bypass against APIs",
+			"result": "Fixed concurrent decision allocation; permission metadata and queue checks tested; milestone/delete and dirty-editor findings resolved by web owner"
+		},
+		{
+			"agent": "codex-web",
+			"scope": "API/user-flow consistency",
+			"result": "Shared payloads and CSRF, account remount/late401, preference isolation, applied lifecycle outcomes verified"
+		}
+	],
+	"simplicity_review": "One shared SQLite connection/schema policy; route-local permission metadata; existing Core lifecycle semantics; one project-local decision queue; one browser request client. No history/agent/provisioning layers added.",
+	"environment_and_limits": [
+		"Groma command unavailable; no scan or Groma-owned file mutation was claimed.",
+		"Localhost/child-process/Git metadata operations required reviewed sandbox escalation; no approval rejection remained.",
+		"One complete earlier run reported 3688 passed, 13 skipped and one safe FTP-link regression; that regression was fixed and verified by 30 scoped tests and final Chromium. Earlier full run was intentionally interrupted after source changed; it is not presented as a passing run. Final run uses a CLI bundle built from the final source.",
+		"One type-check overlapped a temporary CLI fixture and saw a transient import; final type-check ran after test cleanup.",
+		"Browser automation timing attempts were retained; final passing desktop run waits for data, enabled controls and completed account load.",
+		"Linux development verification only; skipped platform/PTY tests remain skipped. No production deployment or real-project migration performed.",
+		"Known upstream duplicate task IDs were preserved; no unrelated task identity repair performed.",
+		"Raw evidence is under /tmp and requires copying for long-term retention; SHA-256 summaries and task/handoff records are tracked."
+	],
+	"raw_evidence_directory": "/tmp/backlog-a02-verification",
+	"evidence_manifest": [
+		{
+			"path": "/tmp/backlog-a02-verification/admin-members.png",
+			"bytes": 71822,
+			"sha256": "c1dcb50c3b269bd7c6b3cdb94acf721a8a6a3fa45a4b07ce52e23748dde66c82"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/biome.log",
+			"bytes": 62,
+			"sha256": "266de1fa6952fa46ec2c66cccbb4d9cdd0080a15a5fb04236a1b91de71ec0390"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-attempt1-result.json",
+			"bytes": 382,
+			"sha256": "00464fddd5e9064700397508f3e6c923f054ab9a5d969bf1dee89773b897e9a2"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-attempt1.log",
+			"bytes": 611,
+			"sha256": "441abcf618f63bde8c521c3ba75e7214f85d6dade33b2d86de1577e51007da6c"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-attempt2-result.json",
+			"bytes": 1530,
+			"sha256": "7090b353f284a338bedfe040cc8aa1924b94b3b6940ab03ed3955d8f0ceea512"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-attempt2.log",
+			"bytes": 1886,
+			"sha256": "dc7f65cce62399f4a107c0909a1e677355d278a8cfcf4aed6d259580ef1b0f40"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-attempt3-result.json",
+			"bytes": 943,
+			"sha256": "da01d7e9fec272d0bbd24bdc0a8837844586feb099c782edcc4b0d35753d8e07"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-attempt3.log",
+			"bytes": 1144,
+			"sha256": "d7200ccd28b0be839076fc7aca0176e73db9f2e016c70d3754f76e0374cd34cf"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-before-ftp-fix-result.json",
+			"bytes": 1994,
+			"sha256": "868d0d16a4b1ca2c72bfb5e49690e268bcbbd5357aa2b1124a7b8fb9780369f4"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-before-ftp-fix.log",
+			"bytes": 1768,
+			"sha256": "9de6740da0c48b7497753a4fb56a60396886210ef5ceb26685f1dd61b85a0a95"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-desktop-click-result.json",
+			"bytes": 1713,
+			"sha256": "c4f934c1b53d014cc495b70847feef21decf8a839a5fd9bc3ddc8097cbdf6099"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-desktop-click.log",
+			"bytes": 3288,
+			"sha256": "1ebc45d95d8456c7c73065af06a579b77491239228f9f1138dcdcb5946d05c39"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-desktop-timing-result.json",
+			"bytes": 1573,
+			"sha256": "df45f03af84d8a418c5c48544153b082c299cf5618ef9ddc6f55cbc1506bf507"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-desktop-timing.log",
+			"bytes": 3153,
+			"sha256": "fdb2930b0ac85cb1b29a1b4e1f1160469171f36d8159fa26511713f2107a8b64"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-result.json",
+			"bytes": 2062,
+			"sha256": "e7c07ebdc099c5b91ec586b8573e37f33273142bd498d74665288ddc19704cf9"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-server-error.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-server.log",
+			"bytes": 61,
+			"sha256": "0850aa7da6e0de9c55fe0b3a8e9e23f26864d58d61469c89686ff9656ed0068f"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-success-before-desktop.json",
+			"bytes": 1855,
+			"sha256": "07fb080a79da82d881544c8eef5b6211158e48de6f343bc0b821fdd439659e4d"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser-success-before-desktop.log",
+			"bytes": 1633,
+			"sha256": "cbc2e658c18d92930e01fec38e23cc14991a1db3a6c5fe2a826d8cf39ed79eea"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/browser.log",
+			"bytes": 1892,
+			"sha256": "f1b1e048522c81e855336566c5149d2dc687d36293a3ea715dc4c3e2c4860a91"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/build.log",
+			"bytes": 23,
+			"sha256": "a20e7a648db258ad689394e88df95db8b5e00f446c7b9e47b6e9878838cf4db6"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/cdp-browser.mjs",
+			"bytes": 18091,
+			"sha256": "c3043b00fdb0e27acd767f581ea598ea64479851aaddceecc03e192ba5896a1b"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/chromium.log",
+			"bytes": 519,
+			"sha256": "745c60c0da186bc3719f91f131fe8333ec4fc9fbddee5aec08994ebd0869cdc3"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/compiled-smoke.log",
+			"bytes": 84,
+			"sha256": "ab6cb6de71650a7ba106e06d9b35a721b2a0161859ab25746ecc2c6cf73cc95f"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/document-account-switch.png",
+			"bytes": 70230,
+			"sha256": "d8e7b3f6b910c7cc7169da2d7efffc739aeb10913fdd25dc965e38698a5c6bf5"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/final-biome.log",
+			"bytes": 62,
+			"sha256": "9e77361aa7e990a38d65512998699b98cc06033dc51ec78e7d804ae0d1ace11a"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/full-tests-before-source-freeze-interrupted.log",
+			"bytes": 184069,
+			"sha256": "02aa39ec9204097025503290be0ab5833c686e318abc69ac6eb851c0176b0b72"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/full-tests-ftp-regression.log",
+			"bytes": 523826,
+			"sha256": "84c71ee1ef36fa951e87b89189b5c7cb503ae2d41ba396ff9f0ae4c79aa63990"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/full-tests.log",
+			"bytes": 523049,
+			"sha256": "3ac75381b7bfb267117e10f3fa7399ffdbf40f25523a7bcacf3ad323cec0899a"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/local-browser-error.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/local-browser.log",
+			"bytes": 239,
+			"sha256": "19b1e30c738c78f1854b745dda044f731408847509d38163999964a7e4746378"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/make-report.py",
+			"bytes": 9590,
+			"sha256": "ca8f91a7f065edb47293385568555ec4cce64f9266a1ed06e07a859442c91ad8"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/test-cli-build.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/types-concurrent-fixture.log",
+			"bytes": 316,
+			"sha256": "8486e4bd858ccd10ee61f874c1f268831e1eff38f89615701e9ed95bede49bc5"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/types.log",
+			"bytes": 57,
+			"sha256": "078fff07900075257d11f93055a3af0ad32e2a4331369ee39f1c74d31e27901a"
+		},
+		{
+			"path": "/tmp/backlog-a02-verification/update-handoff.py",
+			"bytes": 12145,
+			"sha256": "e5fc3934cf445e2a00e510e18de46696671287fa675aa2058708815b3c5f13e7"
+		},
+		{
+			"path": "/tmp/backlog-a02-central-tests.log",
+			"bytes": 3809,
+			"sha256": "8ee370a8ac7a4d669061b7ea615872cae012a09acab1c69a5019ea4028f7cac9"
+		},
+		{
+			"path": "/tmp/backlog-a02-project-operations-tests.log",
+			"bytes": 19972,
+			"sha256": "0a2a1b704616e34b60fd3f18a8cc4a0e7552ec6c7e1af690abf2c7ae0860812f"
+		},
+		{
+			"path": "/tmp/backlog-a02-start.tar.gz",
+			"bytes": 524589,
+			"sha256": "d3fd674bec8250fd8aeb762a70472e607f04a35a0eb26a4fd3d0bac46881bb44"
+		}
+	]
+}

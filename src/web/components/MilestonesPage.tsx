@@ -1,3 +1,4 @@
+import { useAuth } from "../contexts/AuthContext";
 import React, { useMemo, useState, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { apiClient } from "../lib/api";
@@ -57,6 +58,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	onRefreshData,
 	dateFormat,
 }) => {
+	const { permissions } = useAuth();
 	const [newMilestone, setNewMilestone] = useState("");
 	const [newMilestoneDueDate, setNewMilestoneDueDate] = useState("");
 	const [error, setError] = useState<string | null>(null);
@@ -580,7 +582,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							<button
 								type="button"
 								onClick={() => openEditModal(bucket)}
-								disabled={isArchiving || isSavingMilestone || isRemoving}
+								disabled={!permissions.tasksWrite || isArchiving || isSavingMilestone || isRemoving}
 								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
 							>
 								<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -591,7 +593,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							<button
 								type="button"
 								onClick={() => openRemoveModal(bucket)}
-								disabled={isArchiving || isSavingMilestone || isRemoving}
+								disabled={!permissions.delete || isArchiving || isSavingMilestone || isRemoving}
 								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-60"
 							>
 								<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -602,7 +604,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							<button
 								type="button"
 								onClick={() => handleArchiveMilestone(bucket)}
-								disabled={isArchiving || isSavingMilestone || isRemoving}
+								disabled={!permissions.archive || isArchiving || isSavingMilestone || isRemoving}
 								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-60"
 							>
 								<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -824,7 +826,8 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 					)}
 					<button
 						type="button"
-						onClick={() => setShowAddModal(true)}
+						disabled={!permissions.tasksWrite}
+                        onClick={() => setShowAddModal(true)}
 						className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-offset-gray-900 transition-colors"
 					>
 						+ Add milestone
@@ -939,7 +942,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 						</button>
 						<button
 							type="submit"
-							disabled={isSaving || !newMilestone.trim()}
+							disabled={!permissions.tasksWrite || isSaving || !newMilestone.trim()}
 							className="px-4 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-colors"
 						>
 							{isSaving ? "Saving..." : "Create"}
@@ -990,7 +993,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 						</button>
 						<button
 							type="submit"
-							disabled={savingMilestoneKey !== null || !editMilestoneName.trim()}
+							disabled={!permissions.tasksWrite || savingMilestoneKey !== null || !editMilestoneName.trim()}
 							className="px-4 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-colors"
 						>
 							{savingMilestoneKey ? "Saving..." : "Save"}
@@ -1073,7 +1076,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 						<button
 							type="button"
 							onClick={handleRemoveMilestone}
-							disabled={removingMilestoneKey !== null || (removeTaskHandling === "reassign" && !removeReassignTo)}
+							disabled={!permissions.delete || removingMilestoneKey !== null || (removeTaskHandling === "reassign" && !removeReassignTo)}
 							className="px-4 py-2 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 transition-colors"
 						>
 							{removingMilestoneKey ? "Removing..." : "Remove milestone"}

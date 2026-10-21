@@ -1,3 +1,5 @@
+import { useAuth } from "../contexts/AuthContext";
+import { sessionFetch } from "../lib/request";
 import React, { useState, useEffect } from 'react';
 import { type Task } from '../../types';
 import StoredDate from './StoredDate';
@@ -11,6 +13,7 @@ interface DraftsListProps {
 }
 
 const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft, dateFormat }) => {
+  const { permissions } = useAuth();
   const [drafts, setDrafts] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +35,7 @@ const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft, dateFor
   const loadDrafts = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${projectScope.apiBase}/drafts`);
+      const response = await sessionFetch(`${projectScope.apiBase}/drafts`);
       if (!response.ok) {
         throw new Error(`Failed to load drafts: ${response.statusText}`);
       }
@@ -55,7 +58,7 @@ const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft, dateFor
 
   const handlePromoteDraft = async (draftId: string) => {
     try {
-      const response = await fetch(`${projectScope.apiBase}/drafts/${draftId}/promote`, {
+      const response = await sessionFetch(`${projectScope.apiBase}/drafts/${draftId}/promote`, {
         method: 'POST',
       });
       
@@ -115,7 +118,8 @@ const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft, dateFor
             </div>
 	            <button 
 	              className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-offset-gray-900 transition-colors duration-200" 
-	              onClick={onNewDraft}
+	              disabled={!permissions.tasksWrite}
+              onClick={onNewDraft}
 	            >
 	              + New Draft
             </button>
@@ -178,6 +182,7 @@ const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft, dateFor
                   </div>
                   <div className="ml-4">
                     <button
+                      disabled={!permissions.tasksWrite}
                       onClick={(e) => {
                         e.stopPropagation();
                         handlePromoteDraft(draft.id);

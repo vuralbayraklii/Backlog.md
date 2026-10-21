@@ -12,8 +12,8 @@ import type {
 	Task,
 	TaskStatus,
 } from "../../types/index.ts";
-
 import { projectScope } from "./project-scope";
+import { sessionFetch } from "./request";
 
 const API_BASE = projectScope.apiBase;
 
@@ -157,7 +157,9 @@ export class ApiClient {
 	// Enhanced fetch with retry logic and better error handling
 	private async fetchWithRetry(url: string, options: RequestInit = {}, retriesOverride?: number): Promise<Response> {
 		const { retries: configuredRetries = 3, timeout = 10000 } = this.config;
-		const retries = retriesOverride ?? configuredRetries;
+		const retries = ["GET", "HEAD"].includes((options.method ?? "GET").toUpperCase())
+			? (retriesOverride ?? configuredRetries)
+			: 0;
 		let lastError: Error | undefined;
 
 		for (let attempt = 0; attempt <= retries; attempt++) {
@@ -166,7 +168,7 @@ export class ApiClient {
 				const controller = new AbortController();
 				const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-				const response = await fetch(url, {
+				const response = await sessionFetch(url, {
 					...options,
 					signal: controller.signal,
 					headers: {
@@ -421,7 +423,7 @@ export class ApiClient {
 	}
 
 	async fetchStatuses(): Promise<string[]> {
-		const response = await fetch(`${API_BASE}/statuses`);
+		const response = await sessionFetch(`${API_BASE}/statuses`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch statuses");
 		}
@@ -429,7 +431,7 @@ export class ApiClient {
 	}
 
 	async fetchConfig(): Promise<BacklogConfig> {
-		const response = await fetch(`${API_BASE}/config`);
+		const response = await sessionFetch(`${API_BASE}/config`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch config");
 		}
@@ -437,7 +439,7 @@ export class ApiClient {
 	}
 
 	async updateConfig(config: Partial<BacklogConfig>): Promise<BacklogConfig> {
-		const response = await fetch(`${API_BASE}/config`, {
+		const response = await sessionFetch(`${API_BASE}/config`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
@@ -449,7 +451,7 @@ export class ApiClient {
 	}
 
 	async fetchDocs(): Promise<Document[]> {
-		const response = await fetch(`${API_BASE}/docs`);
+		const response = await sessionFetch(`${API_BASE}/docs`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch documentation");
 		}
@@ -457,7 +459,7 @@ export class ApiClient {
 	}
 
 	async fetchDoc(filename: string): Promise<Document> {
-		const response = await fetch(`${API_BASE}/docs/${encodeURIComponent(filename)}`);
+		const response = await sessionFetch(`${API_BASE}/docs/${encodeURIComponent(filename)}`);
 		if (!response.ok) {
 			throw await toApiError(response, "Failed to fetch document");
 		}
@@ -465,7 +467,7 @@ export class ApiClient {
 	}
 
 	async fetchDocument(id: string): Promise<Document> {
-		const response = await fetch(`${API_BASE}/doc/${encodeURIComponent(id)}`);
+		const response = await sessionFetch(`${API_BASE}/doc/${encodeURIComponent(id)}`);
 		if (!response.ok) {
 			throw await toApiError(response, "Failed to fetch document");
 		}
@@ -481,7 +483,7 @@ export class ApiClient {
 			payload.path = path;
 		}
 
-		const response = await fetch(`${API_BASE}/docs/${encodeURIComponent(filename)}`, {
+		const response = await sessionFetch(`${API_BASE}/docs/${encodeURIComponent(filename)}`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
@@ -495,7 +497,7 @@ export class ApiClient {
 	}
 
 	async createDoc(filename: string, content: string, path?: string): Promise<Document & { success?: boolean }> {
-		const response = await fetch(`${API_BASE}/docs`, {
+		const response = await sessionFetch(`${API_BASE}/docs`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -519,7 +521,7 @@ export class ApiClient {
 	}
 
 	async fetchDecisions(): Promise<Decision[]> {
-		const response = await fetch(`${API_BASE}/decisions`);
+		const response = await sessionFetch(`${API_BASE}/decisions`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch decisions");
 		}
@@ -527,7 +529,7 @@ export class ApiClient {
 	}
 
 	async fetchDecision(id: string): Promise<Decision> {
-		const response = await fetch(`${API_BASE}/decisions/${encodeURIComponent(id)}`);
+		const response = await sessionFetch(`${API_BASE}/decisions/${encodeURIComponent(id)}`);
 		if (!response.ok) {
 			throw await toApiError(response, "Failed to fetch decision");
 		}
@@ -535,7 +537,7 @@ export class ApiClient {
 	}
 
 	async fetchDecisionData(id: string): Promise<Decision> {
-		const response = await fetch(`${API_BASE}/decision/${encodeURIComponent(id)}`);
+		const response = await sessionFetch(`${API_BASE}/decision/${encodeURIComponent(id)}`);
 		if (!response.ok) {
 			throw await toApiError(response, "Failed to fetch decision");
 		}
@@ -543,7 +545,7 @@ export class ApiClient {
 	}
 
 	async updateDecision(id: string, content: string): Promise<void> {
-		const response = await fetch(`${API_BASE}/decisions/${encodeURIComponent(id)}`, {
+		const response = await sessionFetch(`${API_BASE}/decisions/${encodeURIComponent(id)}`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "text/plain",
@@ -556,7 +558,7 @@ export class ApiClient {
 	}
 
 	async createDecision(title: string): Promise<Decision> {
-		const response = await fetch(`${API_BASE}/decisions`, {
+		const response = await sessionFetch(`${API_BASE}/decisions`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -570,7 +572,7 @@ export class ApiClient {
 	}
 
 	async fetchMilestones(): Promise<Milestone[]> {
-		const response = await fetch(`${API_BASE}/milestones`);
+		const response = await sessionFetch(`${API_BASE}/milestones`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch milestones");
 		}
@@ -578,7 +580,7 @@ export class ApiClient {
 	}
 
 	async fetchArchivedMilestones(): Promise<Milestone[]> {
-		const response = await fetch(`${API_BASE}/milestones/archived`);
+		const response = await sessionFetch(`${API_BASE}/milestones/archived`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch archived milestones");
 		}
@@ -586,7 +588,7 @@ export class ApiClient {
 	}
 
 	async fetchMilestone(id: string): Promise<Milestone> {
-		const response = await fetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`);
+		const response = await sessionFetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch milestone");
 		}
@@ -594,7 +596,7 @@ export class ApiClient {
 	}
 
 	async createMilestone(title: string, description?: string, dueDate?: string): Promise<Milestone> {
-		const response = await fetch(`${API_BASE}/milestones`, {
+		const response = await sessionFetch(`${API_BASE}/milestones`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -613,7 +615,7 @@ export class ApiClient {
 		title: string,
 		dueDate?: string | null,
 	): Promise<{ success: boolean; milestone?: Milestone | null; message?: string }> {
-		const response = await fetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`, {
+		const response = await sessionFetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
@@ -631,7 +633,7 @@ export class ApiClient {
 		id: string,
 		options: { taskHandling?: "clear" | "keep" | "reassign"; reassignTo?: string } = {},
 	): Promise<{ success: boolean; message?: string }> {
-		const response = await fetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`, {
+		const response = await sessionFetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`, {
 			method: "DELETE",
 			headers: {
 				"Content-Type": "application/json",
@@ -646,7 +648,7 @@ export class ApiClient {
 	}
 
 	async archiveMilestone(id: string): Promise<{ success: boolean; milestone?: Milestone | null }> {
-		const response = await fetch(`${API_BASE}/milestones/${encodeURIComponent(id)}/archive`, {
+		const response = await sessionFetch(`${API_BASE}/milestones/${encodeURIComponent(id)}/archive`, {
 			method: "POST",
 		});
 		if (!response.ok) {

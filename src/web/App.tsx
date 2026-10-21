@@ -13,6 +13,11 @@ import TaskDetailsModal from './components/TaskDetailsModal';
 import InitializationScreen from './components/InitializationScreen';
 import LoadingSpinner from './components/LoadingSpinner';
 import ProjectSelector from './components/ProjectSelector';
+import AdminUsers from './components/AdminUsers';
+import ProjectMembers from './components/ProjectMembers';
+import ArchivePage from './components/ArchivePage';
+import { PasswordForm } from './components/AccountForms';
+import { useAuth } from './contexts/AuthContext';
 import { SuccessToast } from './components/SuccessToast';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { TaskIdIndexProvider } from './contexts/TaskIdIndexContext';
@@ -211,6 +216,7 @@ type TaskModalState =
     };
 
 function AppContent() {
+  const { ready, session, central } = useAuth();
   const [modal, setModal] = useState<TaskModalState>({ kind: 'closed' });
   // Each entry into the modal takes the next session number, so a response can name the modal it
   // was read for.
@@ -805,6 +811,7 @@ function AppContent() {
   }, [detailSession, detailId, dataVersion]);
 
   useEffect(() => {
+    if (!ready) return;
     const ws = new WebSocket(projectWebSocketUrl());
 	let disposed = false;
     ws.onmessage = (event) => {
@@ -848,7 +855,7 @@ function AppContent() {
 		disposed = true;
 		ws.close();
 	};
-  }, [refreshData, refreshMilestoneData, fullRefreshData, loadAllData, applyLoadError]);
+  }, [ready, refreshData, refreshMilestoneData, fullRefreshData, loadAllData, applyLoadError]);
 
   const handleSubmitTask = async (taskData: Partial<Task>) => {
     // Don't catch errors here - let TaskDetailsModal handle them
@@ -1048,7 +1055,9 @@ function AppContent() {
             <Route path="decisions/:id" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} dateFormat={config?.dateFormat} />} />
             <Route path="decisions/:id/:title" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} dateFormat={config?.dateFormat} />} />
             <Route path="statistics" element={<Statistics tasks={tasks} isLoading={isLoading} onEditTask={handleEditTask} projectName={projectName} dateFormat={config?.dateFormat} />} />
-            <Route path="settings" element={<Settings />} />
+            <Route path="settings" element={!central || session?.user.role === "admin" ? <Settings /> : <p role="alert" className="p-8">Admin access required.</p>} />
+            <Route path="archive" element={<ArchivePage onRefreshData={refreshData} />} />
+            <Route path="members" element={<ProjectMembers />} />
           </Route>
       </Routes>
 
@@ -1118,12 +1127,18 @@ function AppContent() {
 }
 
 function App() {
-	const [appRouter] = useState(() => typeof window === 'undefined' || window.location.pathname === '/projects'
+  const { acceptSession } = useAuth();
+  const globalPage = typeof window !== "undefined" && ["/projects", "/login", "/password", "/admin", "/admin/users"].includes(window.location.pathname);
+	const [appRouter] = useState(() => typeof window === 'undefined' || globalPage
 		? null
 		: createBrowserRouter([
 			{ path: '*', element: <UnsavedChangesProvider><AppContent /></UnsavedChangesProvider> },
 		], { basename: projectScope.routeBase || '/' }));
-	if (typeof window !== 'undefined' && window.location.pathname === '/projects') return <ProjectSelector />;
+	if (typeof window !== 'undefined') {
+    if (window.location.pathname === '/password') return <PasswordForm onSession={acceptSession} />;
+    if (['/admin', '/admin/users'].includes(window.location.pathname)) return <AdminUsers />;
+    if (globalPage) return <ProjectSelector />;
+  }
 	return appRouter ? <RouterProvider router={appRouter} /> : null;
 }
 

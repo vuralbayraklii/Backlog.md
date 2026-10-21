@@ -1,3 +1,4 @@
+import { useAuth } from "../contexts/AuthContext";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { apiClient } from "../lib/api";
@@ -133,6 +134,7 @@ const TaskList: React.FC<TaskListProps> = ({
 	dateFormat,
 	isLoading = false,
 }) => {
+	const { permissions } = useAuth();
 	const [searchParams, setSearchParams] = useSearchParams();
 	const statusOptions = useMemo(
 		() => (availableStatuses.length > 0 ? availableStatuses : [...DEFAULT_STATUSES]),
@@ -733,7 +735,8 @@ const TaskList: React.FC<TaskListProps> = ({
 						<h1 className="text-2xl font-bold text-gray-900 dark:text-white">All Tasks</h1>
 						<button
 							className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-offset-gray-900 transition-colors duration-200"
-							onClick={onNewTask}
+							disabled={!permissions.tasksWrite}
+            onClick={onNewTask}
 						>
 							+ New Task
 					</button>
@@ -804,7 +807,8 @@ const TaskList: React.FC<TaskListProps> = ({
 						{isFilteringTerminalStatus && currentCount > 0 && (
 								<button
 									type="button"
-									onClick={() => setShowCleanupModal(true)}
+									disabled={!permissions.archive}
+                                    onClick={() => setShowCleanupModal(true)}
 									className="py-2 px-3 text-sm border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 flex items-center gap-2 whitespace-nowrap"
 									title="Clean up old completed tasks"
 								>

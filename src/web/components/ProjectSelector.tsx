@@ -1,4 +1,8 @@
+import { useAuth } from "../contexts/AuthContext";
+import { sessionFetch } from "../lib/request";
 import { useEffect, useState } from "react";
+
+import AccountNavigation from "./AccountNavigation";
 
 interface ProjectChoice {
 	id: string;
@@ -6,12 +10,13 @@ interface ProjectChoice {
 }
 
 export default function ProjectSelector() {
+	const { central, session } = useAuth();
 	const [projects, setProjects] = useState<ProjectChoice[] | null>(null);
 	const [error, setError] = useState(false);
 
 	useEffect(() => {
 		const controller = new AbortController();
-		fetch("/api/projects", { signal: controller.signal })
+		sessionFetch("/api/projects", { signal: controller.signal })
 			.then(async (response) => {
 				if (!response.ok) throw new Error("Could not load projects.");
 				return (await response.json()) as ProjectChoice[];
@@ -27,10 +32,11 @@ export default function ProjectSelector() {
 	return (
 		<main className="min-h-screen bg-gray-50 dark:bg-gray-900 px-6 py-16 text-gray-900 dark:text-gray-100">
 			<div className="mx-auto max-w-2xl">
-				<h1 className="mb-8 text-3xl font-bold">Projects</h1>
+				<div className="mb-8 flex items-center justify-between gap-4"><h1 className="text-3xl font-bold">Projects</h1><AccountNavigation /></div>
 				{error && <p role="alert">Could not load projects. Refresh this page to try again.</p>}
 				{!error && projects === null && <p>Loading projects...</p>}
-				{projects?.length === 0 && (
+				{projects?.length === 0 && central && session?.user.role !== "admin" && <p>No accessible projects.</p>}
+				{projects?.length === 0 && (!central || session?.user.role === "admin") && (
 				<p>
 					No projects registered. Use <code>backlog server --data-dir &lt;directory&gt; project register &lt;path&gt; --name &lt;name&gt;</code>.
 				</p>

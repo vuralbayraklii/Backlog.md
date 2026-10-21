@@ -1,3 +1,4 @@
+import { useAuth } from "../contexts/AuthContext";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isReadOnlyTask, isWorkingCopyTask, type AcceptanceCriterion, type Milestone, type Task, type TaskComment } from "../../types";
 import { type TaskDetail, taskDependencyGraph, taskReadiness } from "../../core/task-detail";
@@ -202,7 +203,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const { theme } = useTheme();
   const isCreateMode = !task;
   // A task from another branch or in the archive is shown but cannot be changed here.
-  const isReadOnly = task ? isReadOnlyTask(task) : false;
+  const { permissions } = useAuth();
+  const isRecordReadOnly = task ? isReadOnlyTask(task) : false;
+  const isReadOnly = isRecordReadOnly || !permissions.tasksWrite;
   // Promoting a draft replaces it with a new task ID, which the Drafts page does through its own
   // Promote action, so the popup shows the draft status without turning the field into a second one.
   const isOpenDraft = (task?.status ?? "").trim().toLowerCase() === "draft";
@@ -800,7 +803,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
   };
 
   const handleSave = async () => {
-    if (demoting) return;
+    if (demoting || isReadOnly) return;
     setSaving(true);
     setError(null);
 
@@ -1915,7 +1918,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
           </div>
 
           {/* Archive button at bottom of sidebar */}
-		          {task && onArchive && !isReadOnly && (
+		          {task && onArchive && !isRecordReadOnly && permissions.archive && (
 		            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
 		              <button
 		                onClick={handleArchive}

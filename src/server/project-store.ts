@@ -1,9 +1,8 @@
-import { Database } from "bun:sqlite";
-import { statSync } from "node:fs";
-import { mkdir, realpath, stat } from "node:fs/promises";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { realpath, stat } from "node:fs/promises";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 import { FileSystem } from "../file-system/operations.ts";
 import { normalizeProjectBacklogDirectory } from "../utils/backlog-directory.ts";
+import { ServerDatabase } from "./database.ts";
 
 export interface ServerProject {
 	id: string;
@@ -23,20 +22,17 @@ function rootsOverlap(left: string, right: string): boolean {
 /** Persistent workspace bindings. Task content remains in each project's Markdown files. */
 export class ProjectStore {
 	readonly databasePath: string;
+	private readonly database: ServerDatabase;
 
 	constructor(dataDirectory: string) {
-		if (!dataDirectory.trim()) throw new Error("--data-dir must name a directory.");
-		this.databasePath = join(resolve(dataDirectory), "server.sqlite");
+		this.database = new ServerDatabase(dataDirectory);
+		this.databasePath = this.database.databasePath;
 	}
 
 	list(): ServerProject[] {
-		if (!this.databaseExists()) return [];
-		const database = this.openDatabase(true);
-		try {
-			return database.query<ServerProject, []>(`SELECT ${PROJECT_COLUMNS} FROM projects ORDER BY id`).all();
-		} finally {
-			database.close();
-		}
+		return this.database.read([], (database) =>
+			database.query<ServerProject, []>(`SELECT ${PROJECT_COLUMNS} FROM projects ORDER BY id`).all(),
+		);
 	}
 
 	load(projectId: string): ServerProject | null {
@@ -62,64 +58,23 @@ export class ProjectStore {
 			throw new Error(`Backlog path "${filesystem.backlogDir}" is not a directory.`);
 		}
 
-		const existingDatabase = this.databaseExists();
-		await mkdir(dirname(this.databasePath), { recursive: true });
-		const database = this.openDatabase(false);
-		try {
-			return database
-				.transaction(() => {
-					// Existing files must already contain our schema; do not repair an empty or damaged database.
-					if (!existingDatabase) {
-						database.exec(`CREATE TABLE IF NOT EXISTS projects (
-						id INTEGER PRIMARY KEY AUTOINCREMENT,
-						name TEXT NOT NULL,
-						root_path TEXT NOT NULL UNIQUE,
-						created_at TEXT NOT NULL
-					) STRICT`);
-					}
-					const projects = database.query<ServerProject, []>(`SELECT ${PROJECT_COLUMNS} FROM projects`).all();
-					for (const project of projects) {
-						if (project.rootPath === rootPath) {
-							throw new Error(
-								`Directory "${rootPath}" is already registered as project ${project.id} (${project.name}).`,
-							);
-						}
-						if (rootsOverlap(project.rootPath, rootPath)) {
-							throw new Error(`Directory "${rootPath}" overlaps project ${project.id} at "${project.rootPath}".`);
-						}
-					}
-					const project = database
-						.query<ServerProject, [string, string, string]>(
-							`INSERT INTO projects (name, root_path, created_at) VALUES (?, ?, ?) RETURNING ${PROJECT_COLUMNS}`,
-						)
-						.get(trimmedName, rootPath, new Date().toISOString());
-					if (!project) throw new Error("Project registration returned no record.");
-					return project;
-				})
-				.immediate();
-		} finally {
-			database.close();
-		}
-	}
-
-	private databaseExists(): boolean {
-		try {
-			statSync(this.databasePath);
-			return true;
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
-			throw error;
-		}
-	}
-
-	private openDatabase(readonly: boolean): Database {
-		const database = new Database(this.databasePath, { readonly, create: !readonly, strict: true });
-		try {
-			database.exec("PRAGMA busy_timeout = 5000");
-			return database;
-		} catch (error) {
-			database.close();
-			throw error;
-		}
+		return this.database.write((database) => {
+			const projects = database.query<ServerProject, []>(`SELECT ${PROJECT_COLUMNS} FROM projects`).all();
+			for (const project of projects) {
+				if (project.rootPath === rootPath) {
+					throw new Error(`Directory "${rootPath}" is already registered as project ${project.id} (${project.name}).`);
+				}
+				if (rootsOverlap(project.rootPath, rootPath)) {
+					throw new Error(`Directory "${rootPath}" overlaps project ${project.id} at "${project.rootPath}".`);
+				}
+			}
+			const project = database
+				.query<ServerProject, [string, string, string]>(
+					`INSERT INTO projects (name, root_path, created_at) VALUES (?, ?, ?) RETURNING ${PROJECT_COLUMNS}`,
+				)
+				.get(trimmedName, rootPath, new Date().toISOString());
+			if (!project) throw new Error("Project registration returned no record.");
+			return project;
+		});
 	}
 }

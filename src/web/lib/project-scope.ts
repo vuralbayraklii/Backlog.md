@@ -16,8 +16,16 @@ export function readProjectScope(pathname: string): ProjectScope {
 /** Project switches reload the page, so this scope never changes while requests are in flight. */
 export const projectScope = readProjectScope(typeof window === "undefined" ? "/" : window.location.pathname);
 
+let storageAccount: string | null = null;
+
+/** Preference keys are account-scoped in central mode; session credentials never enter storage. */
+export function setProjectStorageAccount(userId: string | null): void {
+	storageAccount = userId;
+}
+
 export function projectStorageKey(key: string, scope = projectScope): string {
-	return scope.id ? `backlog.md:project:${scope.id}:${key}` : key;
+	const projectKey = scope.id ? `backlog.md:project:${scope.id}:${key}` : key;
+	return storageAccount ? `backlog.md:user:${storageAccount}:${projectKey}` : projectKey;
 }
 
 export function projectWebSocketUrl(): string {
@@ -26,6 +34,12 @@ export function projectWebSocketUrl(): string {
 }
 
 export function scopeMarkdownUrl(url: string, key: string): string {
+	// Control characters and whitespace cannot disguise active URL schemes.
+	const normalized = [...url]
+		.filter((character) => character.charCodeAt(0) > 32 && character.charCodeAt(0) !== 127)
+		.join("");
+	if (/^[a-z][a-z0-9+.-]*:/i.test(normalized) && !/^(https?:|ftp:|mailto:|tel:)/i.test(normalized)) return "";
+	if (normalized.startsWith("//")) return "";
 	if (key === "href" && url.startsWith("#") && typeof window !== "undefined") {
 		return `${window.location.pathname}${window.location.search}${url}`;
 	}

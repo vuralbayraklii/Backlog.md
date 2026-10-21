@@ -1,4 +1,5 @@
 import React from 'react';
+import AccountNavigation from './AccountNavigation';
 import { BranchIndexingIndicator } from './BranchIndexingIndicator';
 import ThemeToggle from './ThemeToggle';
 import { projectScope } from '../lib/project-scope';
@@ -26,6 +27,7 @@ const Navigation: React.FC<NavigationProps> = ({projectName, loadingMessage}) =>
                 </div>
                 <div className="flex items-center gap-3">
                     {projectScope.id && <a href="/projects" className="text-sm text-stone-700 dark:text-stone-300 hover:underline">Projects</a>}
+                    <AccountNavigation />
                     <BranchIndexingIndicator message={loadingMessage} />
                     <ThemeToggle />
                 </div>

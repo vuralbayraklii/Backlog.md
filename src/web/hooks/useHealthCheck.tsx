@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { projectWebSocketUrl } from "../lib/project-scope";
 
+import { useAuth } from "../contexts/AuthContext";
+
 const RECONNECT_DELAY = 5000; // 5 seconds
 
 export function useHealthCheck() {
+	const { ready } = useAuth();
 	const [isOnline, setIsOnline] = useState(true);
 	const [wasDisconnected, setWasDisconnected] = useState(false);
 	
@@ -12,7 +15,7 @@ export function useHealthCheck() {
 	const isMountedRef = useRef(true);
 
 	const connectWebSocket = useCallback(() => {
-		if (!isMountedRef.current) {
+		if (!isMountedRef.current || !ready) {
 			return; // Don't connect if component is unmounted
 		}
 
@@ -57,7 +60,7 @@ export function useHealthCheck() {
 			setIsOnline(false);
 			setWasDisconnected(true);
 		}
-	}, []);
+	}, [ready]);
 
 	// Manual retry function
 	const retry = useCallback(() => {

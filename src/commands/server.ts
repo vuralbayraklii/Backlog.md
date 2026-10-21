@@ -1,5 +1,13 @@
+import { isCancel, password as promptPassword } from "@clack/prompts";
 import type { Command } from "commander";
 import { printJson } from "../formatters/json-output.ts";
+import { AuthStore } from "../server/auth-store.ts";
+import {
+	PERMISSION_NAMES,
+	type ProjectMember,
+	type ProjectPermissions,
+	type ServerUser,
+} from "../server/auth-types.ts";
 import { CentralServer } from "../server/central.ts";
 import { ProjectStore, type ServerProject } from "../server/project-store.ts";
 import { addHelpSchema } from "./help-schema.ts";
@@ -20,24 +28,37 @@ export function registerServerCommand(program: Command): void {
 		.requiredOption("--data-dir <directory>", "directory containing server.sqlite (required; no default)")
 		.addHelpText("after", "\nPaths are relative to the terminal working directory. BACKLOG_CWD is not used.");
 	addHelpSchema(server.command("start"), {
-		required: [{ name: "--data-dir", type: "Directory", description: "Server data directory" }],
+		required: [
+			{ name: "--data-dir", type: "Directory", description: "Server data directory" },
+			{ name: "--public-url", type: "HTTPS URL", description: "Browser origin served by the reverse proxy" },
+		],
 		optional: [
 			{ name: "--port", type: "Integer", description: "Listening port; default 6420" },
 			{ name: "--open", type: "Boolean", description: "Open the project selector in a browser" },
+			{
+				name: "--allow-http-loopback",
+				type: "Boolean",
+				description: "Allow an HTTP loopback public URL for development",
+			},
 		],
-		reads: "Project bindings from <data-dir>/server.sqlite; absent database means no registered projects",
+		reads: "Accounts and project bindings from <data-dir>/server.sqlite; an initial active admin is required",
 		writes: "No project files at startup",
 		output: "Local server URL at 127.0.0.1; Ctrl+C stops the listener",
-		examples: ["backlog server --data-dir ./server-data start --port 6420"],
+		examples: ["backlog server --data-dir ./server-data start --public-url https://backlog.example.com --port 6420"],
 	})
 		.description("start the central project server on this machine only")
 		.option("--port <port>", "port to listen on", "6420")
 		.option("--open", "open a browser after starting")
-		.action(async (options: { port: string; open?: boolean }) => {
+		.requiredOption("--public-url <url>", "public HTTPS origin used for cookies and Origin checks")
+		.option("--allow-http-loopback", "allow an HTTP loopback public URL for development and tests")
+		.action(async (options: { port: string; open?: boolean; publicUrl: string; allowHttpLoopback?: boolean }) => {
 			const port = Number(options.port);
 			const central = new CentralServer(server.opts<{ dataDir: string }>().dataDir);
 			try {
-				await central.start(port, options.open ?? false);
+				await central.start(port, options.open ?? false, {
+					publicUrl: options.publicUrl,
+					allowHttpLoopback: options.allowHttpLoopback,
+				});
 			} catch (error) {
 				console.error(error instanceof Error ? error.message : String(error));
 				process.exitCode = 1;
@@ -104,5 +125,236 @@ export function registerServerCommand(program: Command): void {
 			const project = store().load(id);
 			if (!project) throw new Error(`Server project "${id}" was not found.`);
 			printProject(project, options.json);
+		});
+	registerAccountCommands(server, projects);
+}
+
+function booleanOption(value: string): boolean {
+	if (value !== "true" && value !== "false") throw new Error("Boolean values must be true or false.");
+	return value === "true";
+}
+
+async function readPassword(options: { passwordStdin?: boolean }): Promise<string> {
+	if (options.passwordStdin) {
+		// Remove only the terminal line ending; spaces are part of the password.
+		return (await Bun.stdin.text()).replace(/\r?\n$/, "");
+	}
+	if (!process.stdin.isTTY)
+		throw new Error("A terminal is required for the hidden password prompt. Use --password-stdin.");
+	const result = await promptPassword({ message: "Password", output: process.stderr });
+	if (isCancel(result)) throw new Error("Password entry canceled.");
+	return result;
+}
+
+function printUser(user: ServerUser, json?: boolean): void {
+	if (json) printJson({ schemaVersion: 1, kind: "server-user", user });
+	else
+		console.log(
+			`${user.id} - ${user.username}\n  Name: ${user.displayName}\n  Role: ${user.role}\n  Active: ${user.active}\n  Password change required: ${user.mustChangePassword}`,
+		);
+}
+
+function printMember(member: ProjectMember, json?: boolean): void {
+	if (json) printJson({ schemaVersion: 1, kind: "server-project-member", member });
+	else
+		console.log(
+			`${member.projectId} - ${member.userId}\n${PERMISSION_NAMES.map((key) => `  ${key}: ${member.permissions[key]}`).join("\n")}`,
+		);
+}
+
+function registerAccountCommands(server: Command, projects: Command): void {
+	const store = () => new AuthStore(server.opts<{ dataDir: string }>().dataDir);
+	const users = server.command("user").description("manage central accounts without exposing passwords in arguments");
+	const dataDirectory = { name: "--data-dir", type: "Directory", description: "Required option on backlog server" };
+	const jsonOption = { name: "--json", type: "Boolean", description: "Print schemaVersion 1 JSON" };
+	const passwordOption = {
+		name: "--password-stdin",
+		type: "Boolean",
+		description: "Read the password from stdin instead of a hidden terminal prompt; preserve spaces",
+	};
+	const userId = { name: "id", type: "String", description: "Persistent user ID" };
+	const userOutput =
+		"User id, username, displayName, role, active, mustChangePassword; password summaries are never printed. JSON kind: server-user";
+	for (const command of ["init-admin", "create"] as const) {
+		const create = addHelpSchema(users.command(`${command} <username>`), {
+			required: [
+				dataDirectory,
+				{
+					name: "username",
+					type: "String",
+					description: "Immutable normalized 3–64 character username: a-z, 0-9, period, underscore, hyphen",
+				},
+			],
+			optional: [
+				jsonOption,
+				passwordOption,
+				{ name: "--display-name", type: "String", description: "Unicode display name" },
+				...(command === "create"
+					? [{ name: "--role", type: "admin | user", description: "Account role; default user" }]
+					: []),
+			],
+			reads: "Existing accounts in <data-dir>/server.sqlite; password length is 15–128 characters",
+			writes:
+				command === "init-admin"
+					? "Initial admin only when no accounts exist; additive database upgrade"
+					: "New active account; password change required on first login",
+			output: userOutput,
+			examples: [`backlog server --data-dir ./server-data user ${command} example --password-stdin --json`],
+		})
+			.description(
+				command === "init-admin"
+					? "initialize the first admin once; use reset-password for recovery"
+					: "create an account that must change its initial password",
+			)
+			.option("--display-name <name>", "Unicode display name (defaults to username)")
+			.option("--password-stdin", "read password from stdin; preserve spaces")
+			.option("--json", "print versioned JSON output");
+		if (command === "create") create.option("--role <role>", "account role: admin or user", "user");
+		create.action(
+			async (
+				loginName: string,
+				options: { displayName?: string; role?: ServerUser["role"]; passwordStdin?: boolean; json?: boolean },
+			) => {
+				const password = await readPassword(options);
+				const account =
+					command === "init-admin"
+						? await store().initializeAdmin(loginName, password, options.displayName)
+						: await store().createUser({
+								username: loginName,
+								password,
+								displayName: options.displayName,
+								role: options.role,
+							});
+				printUser(account, options.json);
+			},
+		);
+	}
+	addHelpSchema(users.command("list"), {
+		required: [dataDirectory],
+		optional: [jsonOption],
+		reads: "Accounts in server.sqlite",
+		writes: "None; does not create or upgrade the database",
+		output: "schemaVersion: 1, kind: server-user-list, users: array",
+		examples: ["backlog server --data-dir ./server-data user list --json"],
+	})
+		.description("list accounts without password summaries")
+		.option("--json", "print versioned JSON output")
+		.action((options: { json?: boolean }) => {
+			const records = store().listUsers();
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-user-list", users: records });
+			else if (!records.length) console.log("No server users configured.");
+			else for (const user of records) printUser(user);
+		});
+	addHelpSchema(users.command("view <id>"), {
+		required: [dataDirectory, userId],
+		optional: [jsonOption],
+		reads: "Account in server.sqlite",
+		writes: "None; does not create or upgrade the database",
+		output: userOutput,
+		examples: ["backlog server --data-dir ./server-data user view <id> --json"],
+	})
+		.description("view an account by permanent ID")
+		.option("--json", "print versioned JSON output")
+		.action((id: string, options: { json?: boolean }) => {
+			const user = store().loadUser(id);
+			if (!user) throw new Error(`Server user "${id}" was not found.`);
+			printUser(user, options.json);
+		});
+	addHelpSchema(users.command("edit <id>"), {
+		required: [dataDirectory, userId],
+		optional: [
+			jsonOption,
+			{ name: "--display-name", type: "String" },
+			{ name: "--role", type: "admin | user" },
+			{ name: "--active", type: "true | false" },
+		],
+		reads: "Account and active admin count in server.sqlite",
+		writes: "Display name, role or active state; deactivation revokes all sessions; last active admin is protected",
+		output: userOutput,
+		examples: ["backlog server --data-dir ./server-data user edit <id> --active false --json"],
+	})
+		.description("change display name, role or active state; username stays immutable")
+		.option("--display-name <name>", "Unicode display name")
+		.option("--role <role>", "admin or user")
+		.option("--active <boolean>", "true or false", booleanOption)
+		.option("--json", "print versioned JSON output")
+		.action(
+			(id: string, options: { displayName?: string; role?: ServerUser["role"]; active?: boolean; json?: boolean }) => {
+				printUser(store().editUser(id, options), options.json);
+			},
+		);
+	addHelpSchema(users.command("reset-password <id>"), {
+		required: [dataDirectory, userId],
+		optional: [jsonOption, passwordOption],
+		reads: "Account in server.sqlite; password from hidden terminal prompt or stdin",
+		writes: "Argon2id password summary; revoke all sessions and require password change",
+		output: userOutput,
+		examples: ["backlog server --data-dir ./server-data user reset-password <id> --password-stdin --json"],
+	})
+		.description("reset a password and revoke every existing session")
+		.option("--password-stdin", "read password from stdin; preserve spaces")
+		.option("--json", "print versioned JSON output")
+		.action(async (id: string, options: { passwordStdin?: boolean; json?: boolean }) => {
+			printUser(await store().resetPassword(id, await readPassword(options)), options.json);
+		});
+
+	const members = projects
+		.command("member")
+		.description("manage project membership and individual operation permissions");
+	const projectId = { name: "projectId", type: "Positive integer", description: "Persistent server project ID" };
+	const memberUserId = { name: "userId", type: "String", description: "Persistent user ID" };
+	addHelpSchema(members.command("list <projectId>"), {
+		required: [dataDirectory, projectId],
+		optional: [jsonOption],
+		reads: "Project members and permissions in server.sqlite; admin automatically accesses every project",
+		writes: "None; does not create or upgrade the database",
+		output: "schemaVersion: 1, kind: server-project-member-list, members: array",
+		examples: ["backlog server --data-dir ./server-data project member list 1 --json"],
+	})
+		.description("list explicit project memberships")
+		.option("--json", "print versioned JSON output")
+		.action((id: string, options: { json?: boolean }) => {
+			const records = store().listMembers(id);
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-project-member-list", members: records });
+			else if (!records.length) console.log("No explicit project members.");
+			else for (const member of records) printMember(member);
+		});
+	const permissionOptions = PERMISSION_NAMES.map((key) => ({
+		key,
+		option: key.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`),
+	}));
+	const set = addHelpSchema(members.command("set <projectId> <userId>"), {
+		required: [dataDirectory, projectId, memberUserId],
+		optional: [jsonOption, ...permissionOptions.map(({ option }) => ({ name: `--${option}`, type: "true | false" }))],
+		reads: "Existing membership in server.sqlite; omitted permissions keep existing values",
+		writes:
+			"Create or update membership; new defaults: task/doc/decision writing true, decision management/archive/delete false",
+		output: "schemaVersion: 1, kind: server-project-member, member: {projectId,userId,permissions}",
+		examples: ["backlog server --data-dir ./server-data project member set 1 <userId> --archive true --json"],
+	})
+		.description("grant project read access and create or update operation permissions")
+		.option("--json", "print versioned JSON output");
+	for (const { key, option } of permissionOptions)
+		set.option(`--${option} <boolean>`, `${key}: true or false`, booleanOption);
+	set.action((id: string, userId: string, options: Partial<ProjectPermissions> & { json?: boolean }) => {
+		const patch = Object.fromEntries(
+			PERMISSION_NAMES.filter((key) => options[key] !== undefined).map((key) => [key, options[key]]),
+		) as Partial<ProjectPermissions>;
+		printMember(store().setMember(id, userId, patch), options.json);
+	});
+	addHelpSchema(members.command("remove <projectId> <userId>"), {
+		required: [dataDirectory, projectId, memberUserId],
+		optional: [jsonOption],
+		reads: "Project and account in server.sqlite",
+		writes: "Remove explicit membership; admin access remains automatic",
+		output: "schemaVersion: 1, kind: server-project-member-remove, projectId, userId",
+		examples: ["backlog server --data-dir ./server-data project member remove 1 <userId> --json"],
+	})
+		.description("remove a normal user's project access")
+		.option("--json", "print versioned JSON output")
+		.action((projectId: string, userId: string, options: { json?: boolean }) => {
+			store().removeMember(projectId, userId);
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-project-member-remove", projectId, userId });
+			else console.log(`Removed ${userId} from project ${projectId}.`);
 		});
 }

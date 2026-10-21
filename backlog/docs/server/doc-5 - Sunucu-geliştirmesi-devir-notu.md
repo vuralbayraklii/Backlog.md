@@ -3,13 +3,40 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-21 11:16'
+updated_date: '2026-10-21 12:56'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not, Backlog.md fork’unda çoklu proje takip sistemi geliştirmesine yeni bir sohbetten devam etmek içindir. 21 Ekim 2026 güncellemesinde A-00 (BACK-785) ve A-01.1–A-01.3 (BACK-786–BACK-789) tamamlandı; A-01 proje bağlamı aşaması kapandı. Geliştirme hedefi, bağımsız Backlog.md uygulamasının kendi kullanıcı, yetki, çoklu proje ve tarihçe özelliklerini tamamlamaktır. Diğer projeler uygulama istenen seviyeye geldikten sonra “Proje kaydet” üzerinden bağlanacaktır. Güncel görev durumunu CLI’dan, dosyaların kalıcılık durumunu Git’ten tekrar kontrol et.
+Bu not, Backlog.md fork’unda çoklu proje takip sistemi geliştirmesine yeni bir sohbetten devam etmek içindir. 21 Ekim 2026 güncellemesinde A-00, A-01 ve A-02 hesap/yetki teslimi tamamlandı. Güncel A-02 kaynak ve kanıtları tasks/server-a02-accounts-authorization dalındadır; görevler BACK-790–BACK-793 Done. Sonraki aşama A-03 proje kayıt ekranı ve izinli klasörlerdir; bu teslimde başlatılmadı. Güncel HEAD ve temizliği Git ile doğrula. Aşağıdaki A-00–A-01 bölümleri tarihsel teslim kayıtlarıdır; güncel davranışta bu A-02 bölümü esas alınır.
+
+## Tamamlanan A-02 — Hesap ve yetki (21 Ekim 2026)
+
+Ana ajan `@codex` BACK-790 entegrasyonunu; üç alt ajan `@codex-accounts` BACK-791, `@codex-projects` BACK-792 ve `@codex-web` BACK-793 uygulamalarını aynı dalda dosya sahipliğiyle tamamladı. CLI allocator dört kimliği ayırdı; kaynak ve kayıtlar başlangıçta temiz `d13a31b2` başından açılan `tasks/server-a02-accounts-authorization` dalında yerel commit ile teslim edilir. Push/merge veya üretime kurulum bu isteğin kapsamında yapılmadı. Başlangıç kayıt yedeği `/tmp/backlog-a02-start.tar.gz`; ham kanıtlar `/tmp/backlog-a02-verification/`. Git yazarının mevcut olduğu tekrar doğrulandı; var olan repo kimliği kullanıldı. Son devir arşivi `/tmp/backlog-a02-handoff.tar.gz`, SHA-256 dosyası yanındadır; geçici alan kalıcı yedek sayılmaz.
+
+Kesin ürün kararları: admin tüm projelere ve işlemlere otomatik erişir; admin hesapları kullanıcı adı/parolayla oluşturur; normal kullanıcı proposed kararları decisionsWrite ile düzenler, her durum değişimi ve proposed dışı düzenleme ayrıca decisionsManage ister; üç kayıt türünde arşiv, geri getirme ve kalıcı silme bu teslimdedir. Bu kararlar aşağıdaki eski açık inceleme önerilerinin ilgili maddelerinin yerine geçer.
+
+- Ortak ServerDatabase A-01 server.sqlite kaydını ve proje kimliklerini yalnız başarılı yazma işlemi içinde eklemeli yükseltir. Okumalar dosya/şema oluşturmaz; bozuk veya tanınmayan, kısıtları eksik lookalike şemalar reddedilir. Hesap, üyelik, özetlenmiş oturum kimlikleri ve giriş sayaçları aynı SQLite dosyasındadır; görev/belge/karar Markdown’ı kendi örnek proje köklerindedir.
+- Argon2id memoryCost 19456/timeCost 2; 15–128 Unicode karakterli parolaların boşlukları korunur. Kullanıcı adı kalıcı ve benzersizdir; kırpılıp küçük harfe çevrilir. İlk giriş ve admin sıfırlaması parola değişimi ister; pasifleştirme/sıfırlama bütün oturumları, kendi değişimi eski oturumları iptal eder ve geçerli tarayıcıya yenisini verir. Son aktif admin eşzamanlı CLI süreçlerinde işlem içinde korunur.
+- Kanonik yerel komutlar: `server --data-dir <d> user init-admin/create/list/view/edit/reset-password`; `project member list/set/remove`. Parola gizli terminal veya `--password-stdin`; JSON schemaVersion 1. `init-admin` tekrar çalışmaz; yerel kurtarma reset-password ile yapılır. README ve komut yardımları günceldir.
+- `start` zorunlu `--public-url` ister, 127.0.0.1 dinleyicisi korunur. HTTPS reverse proxy kökeni kullanılır; HTTP yalnız açık `--allow-http-loopback` ile loopback kökeninde geliştirme içindir. İlk aktif admin olmadan başlamaz. Cookie HttpOnly/SameSite=Lax/Path=/ ve HTTPS’te Secure; Domain yok. Oturum mutlak 12 saat, idle 2 saat; arka plan/WS uzatmaz. Görünür trusted etkileşim en fazla dakikada bir korumalı activity yollar. Login JSON + tam Origin; oturumlu mutasyonlar session-bound CSRF ister. SQLite hız sınırı 5 başarısız/15 dakika/kullanıcı ve 60 deneme/dakika/hizmettir.
+- API proje üyeliğini okunabilirlikten önce denetler: gizli/olmayan proje 404, izinli ama okunamayan proje 503; oturum 401, işlem yetkisi 403. İzin adları tasksWrite, docsWrite, decisionsWrite, decisionsManage, archive, delete; ayarlar/üyelik/kimlik onarımı admin. Rota izni gerçek işleyici yanında tutulur; tanımsız merkezi işlem reddedilir. Her WS gönderimi güncel erişimi denetler; boş bağlantılar en geç 1 saniyede iptal edilir. Karar mutasyonları proje bazında sıraya alınır; kimlik tahsisi ve ham Markdown durum/yetki denetimi bekledikten sonra güncel kayıtla yapılır.
+- Görev/belge/karar archived GET, restore POST ve archived-only DELETE mevcut Core davranışını kullanır; alt görev engelleri ve referans/etkilenen kayıt alanları korunur. Dosya ekleri realpath sınırında kalır, aktif içerik sandboxed indirme olur, Markdown tehlikeli protokolleri engellenir.
+- Arayüz giriş, zorunlu/isteğe bağlı parola, kullanıcı ve proje üyeliği yönetimi ile üç tür arşiv ekranını içerir. İzin yüklenmeden proje görünümü/WS açılmaz. Ortak istemci CSRF’yi yalnız bellekte tutar ve mutasyonları yeniden denemez. Oturum dolunca aynı sayfadaki editör saklanır; aynı hesap metni sürdürür, farklı hesap eski state ve tercihleri ayırır. Doğrudan `/projects/1` girişinin sağlık sağlayıcısı, Unicode parola sınırı ve kirli belge/kararın arka plan yenilemesi de düzeltildi.
+
+| Son kaynak doğrulaması | Sonuç |
+|---|---|
+| Tam bun run test | 3689 başarılı / 13 atlanan / 0 başarısız, 3702 test, 329 dosya, 17906 beklenti; çıkış 0 |
+| Tip kontrolü | Başarılı; test geçici dosyaları kapandıktan sonra |
+| Yazmasız Biome | Başarılı; düzeltme uygulanmadı |
+| Native build ve test CLI paketi | Başarılı |
+| Mevcut derlenmiş CLI/web/MCP smoke | Başarılı |
+| Gerçek masaüstü Chromium/CDP | 31 başarılı iddia; 1440×1000, admin/normal kullanıcı, ayrı oturumlar, canlı izinler, üç tür arşiv, idle/metin ve yerel browser |
+
+[Makine okunur kabul raporu](../../../verification/server/a02-verification.json) komutları, sonuçları, kabul-test eşlemelerini, son kaynak ve günlük/screenshot/betik SHA-256 özetlerini korur. Tam test komutu `BACKLOG_TEST_CLI_BUNDLE=/tmp/backlog-a02-verification/test-cli/cli.js bun run test`; paket aynı son kaynaktan `BACKLOG_BUILD_OUTDIR=... bun scripts/build.ts` ile üretildi. İlk tamamlanan tam koşuda güvenli FTP autolink regresyonu nedeniyle tek hata vardı; düzeltme 30 ilgili test, son tam koşu ve Chromium ile geçti. Hata günlüğü full-tests-ftp-regression.log olarak korundu. Kaynak henüz değişirken başlamış bir önceki tam koşu bilerek durduruldu ve başarılı sayılmadı. Bir ara tip koşusu test geçici dosyasıyla çakıştı; son koşu temizlikten sonra geçti. Tarayıcı otomasyonunun veri/düğme bekleme düzeltmeleri ve nihai sonuç ayrı kanıtlarda korundu.
+
+Üç bağımsız inceleme tamamlandı: oturum/izin iptali, UI yetki aşma senaryoları, API/kullanıcı akışı tutarlılığı. Karar oluşturma yarışı, milestone silme izni ve kirli editör yenilemesi gibi bulgular giderildi. Sadelik incelemesi tek SQLite politikası, rota izin kaynağı, karar kuyruğu ve ortak tarayıcı istemcisiyle mevcut Core’u yeniden kullandı. Groma bu ortamda hâlâ yok; tarama veya yönettiği dosyalarda değişiklik yapılmadı. Bilinen upstream 10 görev kimliği çakışması onarılmadı. Yalnız Linux ve geçici örnek projeler doğrulandı; atlanan platform/PTY testleri geçmiş gibi gösterilmedi. `/tmp` ham kanıtları kalıcı depoya taşımadan uzun süreli yedek sayma. Tarihçe/çakışma/kesinti kurtarması A-04, sunucu bağlantılı agent modu A-05 kapsamındadır.
 
 ## Amaç ve esas plan
 
@@ -24,11 +51,11 @@ Kullanıcının başlangıç planı, tüm A-00–A-08 aşamaları ve zorunlu kab
 - Origin SSH adresi, kullanıcının `github-backlogmd` takma adını kullanıyor. Kullanıcı bu bağlantıyla klonlama ve `server` dalını gönderme işlemini tamamladı.
 - Kaynak etiketi: `v1.54.0`. Gerçek commit: `2225c4167234fd300b477cc3207689c8454abed1`.
 - Geliştirme tabanı: `server`. Kullanıcı bu dalı belirtilen commit’ten açıp `origin/server` olarak gönderdi.
-- Yerel çalışma dalı: `tasks/server-a013-open-project-board`; `origin/tasks/server-a013-open-project-board` dalını izler. Önceki kayıtlar korunarak açıldı; A-01.3 başlangıç yedeği `/tmp/backlog-a013-start.tar.gz`. Uygulama commit’i `ed051888e0dc8835956ae2079d454df682b3263b` uzak özellik dalına gönderildi. `origin/server` sabit kaynak commit’inde kaldı.
+- A-01.3 dalı (tarihsel): `tasks/server-a013-open-project-board`; `origin/tasks/server-a013-open-project-board` dalını izler. Önceki kayıtlar korunarak açıldı; A-01.3 başlangıç yedeği `/tmp/backlog-a013-start.tar.gz`. Uygulama commit’i `ed051888e0dc8835956ae2079d454df682b3263b` uzak özellik dalına gönderildi. `origin/server` sabit kaynak commit’inde kaldı.
 - Fork’un `main` dalı, ilk incelemede kaynak commit’in 12 commit ilerisindeydi. `main` kendiliğinden yeni geliştirme tabanı yapılmayacak.
 - Sabit commit’in `package.json` sürümü `1.53.0`. Bu mevcut upstream metaveri tutarsızlığı raporda kayıtlı; kaynak sabitlemesi commit üzerinden yapılıyor.
 - A-00–A-01.3 görevleri, raporları, plan/devir belgeleri ve kaynak değişiklikleri özellik dalında commit edilip GitHub’a gönderildi. Güncel dal başını `git status` ve `git log` ile doğrula; `server` dalına merge yapılmadı.
-- Git commit adı/e-postası henüz tanımlı değil. Kullanıcıya GitHub gizlilik e-postası seçeneği sunuldu, fakat yanıt verilmedi. Kimlik seçimini yapılmış sayma ve rastgele yazar bilgisi uydurma.
+- Önceki aşamalarda beklenen Git yazarı A-01.3 sırasında kullanıcı tarafından tanımlandı; A-02 başlangıç/kapanışında mevcut repo kimliği doğrulandı. Yeni bir yazar kimliği uydurulmadı.
 - Yeni oturumda `git status --short --branch` ile kontrol et. Yerel ve izlenmeyen dosyalar bu çalışmanın kayıtlarıdır; başka klon açmak, temizlemek veya dal değiştirmek devrin kayıtlarını taşımak anlamına gelmez.
 
 ## Tamamlanan A-00
@@ -141,14 +168,14 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-Önce bağımsız Backlog.md uygulamasının kullanıcı, yetki, çoklu proje, proje kaydetme ve tarihçe özellikleri geliştirilecek. Proje bağlamı ve API/UI çalışmaları bu ürünün kendi uygulama ayrıntılarıdır. Ürün hazır olduğunda diğer projelere uygulanmış Backlog.md dosya yapıları “Proje kaydet” ile otomatik olarak merkezi takibe alınacak. A-01.3 ve A-01 aşaması tamamlandı. Sıradaki ürün aşaması A-02 hesap ve yetkidir; uygulama görevi henüz açılmadı. Açık inceleme önerilerini onaylanmış ürün kararı sayma.
+A-00, A-01 ve A-02 tamamlandı. Sıradaki aşama A-03: proje kayıt ekranı, izinli klasör alanları ve güvenli proje bağlama. Bu teslim yalnız geçici örnek projelerle geliştirildi; gerçek projeleri veya Finbee’yi bağlama başlatılmadı. Tarihçe ve kesinti kurtarması A-04; agent sunucu CLI/MCP bağlantısı A-05’tedir.
 
 Devam sırası:
 
-1. MANIFESTO.md, AGENTS.md, doc-4 ve bu devir notuyla A-00–A-01.3 doğrulama raporlarını oku; BACK-785–BACK-789 görevlerini CLI ile doğrula.
-2. `git status --short --branch` ve `git log -2 --oneline` ile özellik dalını doğrula. Uygulama commit’i uzak özellik dalında; `server` dalına merge edilmedi. Dal değiştirmeden veya temizlikten önce yerel kanıt arşivini koru.
-3. Sonraki küçük A-02 hesap/yetki işinin ürün davranışını mevcut kullanıcı vuralbayraklii ile belirle. İnceleme önerilerini onaylanmış karar sayma ve A-01.3 yerel erişimini kalıcı yetkilendirme yerine kullanma.
-4. Yeni kapsamı CLI ile küçük görev olarak kaydet; kabul kanıtlarını ve devir notunu güncelle.
+1. MANIFESTO.md, AGENTS.md, doc-4, doc-5 ve A-00–A-02 doğrulama raporlarını oku; BACK-785–BACK-793 görevlerini CLI ile doğrula.
+2. Git durumunu ve A-02 özellik dalının HEAD’ini doğrula, yerel kayıtları koru. A-02’nin son kaynak özetleri a02-verification.json içindedir; origin/server kendiliğinden değiştirilmez.
+3. A-03 kapsamını mevcut kullanıcı vuralbayraklii ile ele al. A-02’nin yukarıdaki kesin kararlarını yeniden belirsiz sayma; diğer açık önerileri onaylanmış karar sayma.
+4. Yeni görevi yalnız kullanıcı yetkilendirdiğinde CLI allocator ile aç; Groma varsa yönergelerini, yoksa sınırlamayı kaydet. Kabul kanıtlarını ve bu devri güncelle.
 
 ## Karar bekleyen inceleme önerileri
 
@@ -158,17 +185,16 @@ Aşağıdakiler önceki plan incelemesinde önerildi; kullanıcı bunları ayrı
 - Doğrulama ve kullanıcı kabulünün hangi içerik/kod sürümüne ait olduğu; kapsam değişince yeniden inceleme gerekip gerekmediği; yeniden kullanılan görünen kimliği ayıran kalıcı kayıt kimliği.
 - Dosya ve SQLite arasındaki kesinti kurtarma karar tablosu; kısmen yazılmış çok dosyalı işlem; ortak kilide katılmayan dış yazıcılara karşı verilen eşzamanlılık garantisinin sınırı.
 - Tek işin birden fazla kayıt olayını kapsadığı durumda ortak operation_id ile tekilleştirme; aynı idempotency anahtarının farklı içerikle, sürerken veya tamamlandıktan sonra gönderilmesi.
-- Global adminin içerik erişimi, proje oluşturanın ilk yetkileri, doğrulama/kabul olaylarını kimin yazabileceği ve agent’ın kullanıcı adına kabul verebilmesi; agent anahtarının bağımsız mı kullanıcıya bağlı mı olduğu.
-- API’nin kabul edilmiş kararın ham Markdown düzenlemesini de önceki/sonraki içeriğe göre yetkilendirmesi; sonradan değişen sembolik bağlantılar ve zararlı Markdown HTML/URL senaryoları.
-- Yönetim tarihçesi, tarayıcı testleri ve yedek/geri yükleme provasının daha erken aşamalara alınması. Asıl planın aşama tablosu doc-4’te özgün haliyle duruyor.
+- A-02 ile global adminin tüm içeriğe erişimi kesinleşti. Açık kalan: proje oluşturanın ilk yetkileri, doğrulama/kabul olaylarını kimin yazabileceği ve agent’ın kullanıcı adına kabul verebilmesi; agent anahtarının bağımsız mı kullanıcıya bağlı mı olduğu.
+- A-02, ham karar Markdown’ında önceki/sonraki durum denetimini, ek realpath sınırını ve zararlı Markdown URL korumasını tamamladı. Açık kalan: A-03 izinli klasör bağlama politikası ve A-04 dış yazıcı/kurtarma sınırları.
+- A-02 tarayıcı testleri tamamlandı. Açık kalan: yönetim tarihçesi ve yedek/geri yükleme provası. Asıl planın aşama tablosu doc-4’te özgün haliyle duruyor.
 
 ## Yeni sohbete verilecek başlangıç mesajı
 
 ```text
 /home/vuralbayrakli/Backlog.md projesindeki çalışmaya devam ediyoruz.
-Önce MANIFESTO.md, AGENTS.md Server fork continuity, doc-4, doc-5 ve verification/server/a00-baseline.json ile a01-1, a01-2, a01-3a, a01-3b raporlarını; BACK-785–BACK-789 görevlerini CLI ile oku.
-A-00 ve A-01.1–A-01.3 tamamlandı. Tek yerel merkezi dinleyicide kayıtlı projeler seçiliyor ve mevcut pano proje kapsamlı çalışıyor; hesap/yetki ve tarihçe sonraki aşamalardır. A-02 görevi henüz açılmadı.
-Yerel dal tasks/server-a013-open-project-board, origin özellik dalını izliyor. A-00–A-01.3 uygulama commit’i ed051888e0dc8835956ae2079d454df682b3263b gönderildi; origin/server sabit kaynak commit’inde kaldı. Güncel HEAD ve temizliği Git ile doğrula. Son devir arşivi /tmp/backlog-a013-handoff.tar.gz.
-Tam bun run test son koşuda 3591 başarılı, 13 atlanan, 0 başarısız ve çıkış kodu 0 verdi. İlgili 121 API/DOM testi, Chromium, tip, yazmasız Biome, build ve compiled smoke de geçti; ayrıntılar a01-3b raporunda.
-Önce Git durumunu ve yerel kayıtları koru. Sonraki A-02 ürün davranışını mevcut kullanıcıyla netleştir; devirdeki çözülmemiş önerileri onaylı karar sayma.
+Önce MANIFESTO.md, AGENTS.md Server fork continuity, doc-4, doc-5, A-00–A-02 verification/server raporları ve BACK-785–BACK-793 görevlerini CLI ile oku.
+A-00, A-01 ve A-02 tamamlandı. A-02 dalı tasks/server-a02-accounts-authorization; HEAD/temizliği Git ile doğrula. Hesap, oturum, proje işlem izinleri, admin CLI/UI ve üç kayıt türünde arşiv yaşam döngüsü entegre; tarihçe ve agent server modu sonraki aşamalardır.
+Son tam test: 3689 başarılı, 13 atlanan, 0 başarısız; çıkış0. Tip, yazmasız Biome, build, compiled CLI/web/MCP smoke ve 31 masaüstü Chromium iddiası başarılı. Kanıt a02-verification.json, ham kayıtlar /tmp/backlog-a02-verification/.
+Git ve yerel kayıtları koru. Sıradaki A-03 proje kayıt ekranı/izinli klasörlerdir; kullanıcı yetkilendirmeden başlatma. A-02 kesin kararlarını ve kapsam dışı A-04/A-05 ayrımını koru; Groma bu ortamda bulunamadı.
 ```

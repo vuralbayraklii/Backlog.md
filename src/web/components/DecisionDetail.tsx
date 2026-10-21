@@ -1,3 +1,4 @@
+import { useAuth } from "../contexts/AuthContext";
 import { useState, useEffect, memo } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
@@ -89,6 +90,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 	const [isSaving, setIsSaving] = useState(false);
 	const [editRequested, setEditRequested] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
+	const [saveError, setSaveError] = useState<string | null>(null);
 	const [isNewDecision, setIsNewDecision] = useState(false);
 	const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 	// An archived decision is read-only: it shows the Archived label and no Archive button.
@@ -97,7 +99,9 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 	const isArchived = currentDecision?.archived === true;
 	// The editor opens on request (the Edit button, `?edit=true` in the URL, the new page), but never
 	// for an archived decision: the request can come before or after the record has loaded.
-	const isEditing = editRequested && !isArchived;
+	const { permissions, central } = useAuth();
+	const canWrite = permissions.decisionsWrite && (!currentDecision || currentDecision.status === "proposed" || permissions.decisionsManage);
+	const isEditing = editRequested && !isArchived && canWrite;
 	const hasChanges = content !== originalContent || decisionTitle !== originalDecisionTitle;
 	const clearUnsaved = useUnsavedChanges(isEditing && hasChanges);
 	const { archive, isArchiving, archiveError, dismissArchiveError } = useRecordArchive(
@@ -108,6 +112,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 	);
 
 	useEffect(() => {
+		if (editRequested && hasChanges && (id === "new" || currentDecision)) return;
 		let active = true;
 		if (id === 'new') {
 			// Handle new decision creation
@@ -196,6 +201,8 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 	};
 
 	const handleSave = async () => {
+		if (!canWrite) return;
+		setSaveError(null);
 		if (!decisionTitle.trim()) {
 			console.error('Decision title is required');
 			return;
@@ -217,7 +224,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 				setIsNewDecision(false);
 				const newId = stripIdPrefix(decision.id);
 				clearUnsaved();
-				navigate(`/decisions/${newId}/${sanitizeUrlTitle(decisionTitle)}`);
+				navigate(`/decisions/${newId}/${sanitizeUrlTitle(decisionTitle)}?edit=true`);
 			} else {
 				// Update existing decision
 				if (!id) return;
@@ -233,7 +240,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 				navigate(`/decisions/${id}/${sanitizeUrlTitle(decisionTitle)}`);
 			}
 		} catch (error) {
-			console.error('Failed to save decision:', error);
+			setSaveError(error instanceof Error ? error.message : String(error));
 		} finally {
 			setIsSaving(false);
 		}
@@ -351,7 +358,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 						</div>
 						<div className="flex items-center space-x-3">
 							{/* Temporarily hidden - decisions editing not ready */}
-								{false ? (
+								{central && !isEditing && !isArchived && canWrite ? (
 									<button
 										onClick={handleEdit}
 										className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors duration-200"
@@ -362,7 +369,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 										Edit
 								</button>
 							) : null}
-							{currentDecision && !isNewDecision && !isEditing && !isArchived && (
+							{currentDecision && !isNewDecision && !isEditing && !isArchived && permissions.archive && (
 								<ArchiveButton onClick={archive} disabled={isArchiving} />
 							)}
 							{isEditing && (
@@ -375,7 +382,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 										</button>
 									<button
 										onClick={handleSave}
-										disabled={!hasChanges || isSaving}
+										disabled={!canWrite || !hasChanges || isSaving}
 											className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors duration-200 ${
 												hasChanges && !isSaving
 													? 'bg-blue-600 dark:bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-700 focus:ring-blue-500 dark:focus:ring-blue-400'
@@ -392,17 +399,18 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 						</div>
 					</div>
 				</div>
+				{saveError && <ArchiveRefusal message={saveError} onDismiss={() => setSaveError(null)} />}
 				{archiveError && <ArchiveRefusal message={archiveError} onDismiss={dismissArchiveError} />}
 			</div>
 
 			{/* Content Section */}
 			<div className="flex-1 bg-gray-50 dark:bg-gray-800 transition-colors duration-200 flex flex-col">
 				<div className="flex-1 p-8 flex flex-col min-h-0">
-					<MarkdownEditor
+					{!isNewDecision && <MarkdownEditor
 						value={content}
 						onChange={(val) => setContent(val || '')}
 						isEditing={isEditing}
-					/>
+					/>}
 				</div>
 			</div>
 			</div>

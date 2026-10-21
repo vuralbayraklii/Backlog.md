@@ -269,7 +269,8 @@ Choose an explicit data directory for the server's `server.sqlite` database:
 backlog server --data-dir ./server-data project register /path/to/project --name "Example"
 backlog server --data-dir ./server-data project list --json
 backlog server --data-dir ./server-data project view 1
-backlog server --data-dir ./server-data start --port 6420
+backlog server --data-dir ./server-data user init-admin admin
+backlog server --data-dir ./server-data start --port 6420 --public-url https://backlog.example.com
 ```
 
 Registration records an existing Backlog project's directory without modifying its Markdown or configuration.
@@ -288,7 +289,68 @@ select a registered project; project switching reloads the page. The selected bo
 Central mode reads tasks only from each registered working directory. Its settings screen edits the default status,
 Definition of Done, date format, empty-column visibility, and maximum column width. Git fetch, cross-branch task merging,
 automatic commits, and status commands are disabled in this mode. The existing `backlog browser` command keeps its local
-behavior. Accounts, permissions, and browser-based project registration are later work.
+behavior. Browser-based project registration is planned for A-03.
+
+### Server accounts and permissions
+
+Create the first administrator locally with `user init-admin <username>`. Passwords come from a hidden terminal prompt,
+or from `--password-stdin` for automation; never pass a password in a command argument. Initial and reset passwords require
+replacement on the next login. Usernames are immutable, normalized to lowercase, and accept 3–64 characters from
+`a-z`, `0-9`, `.`, `_`, and `-`. Passwords accept 15–128 characters, preserving spaces, and use Bun Argon2id
+with 19456 KiB memory and two iterations. See [Bun hashing](https://bun.sh/docs/runtime/hashing) and the
+[OWASP password storage guidance](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html).
+
+```bash
+backlog server --data-dir ./server-data user create alice
+backlog server --data-dir ./server-data user list --json
+backlog server --data-dir ./server-data user view <userId> --json
+backlog server --data-dir ./server-data user edit <userId> --display-name "Alice" --active false
+backlog server --data-dir ./server-data user reset-password <userId>
+backlog server --data-dir ./server-data project member set 1 <userId>
+backlog server --data-dir ./server-data project member list 1 --json
+backlog server --data-dir ./server-data project member remove 1 <userId>
+```
+
+Use command help for role and individual permission flags. Management commands support versioned `schemaVersion: 1`
+JSON. Accounts are deactivated rather than deleted; the last active administrator cannot be deactivated or demoted.
+Administrators automatically access every project and operation. A membership gives a normal user read access and, by
+default, task/draft/milestone editing, document editing, and proposed-decision editing. Decision management, archive/restore,
+and permanent deletion require separate grants. All decision status changes and edits to decisions beyond `proposed`
+require decision management as well as decision editing. Settings, access management, and identity repair require admin.
+The Users and Project access screens expose the same management operations.
+
+The listener stays on `127.0.0.1`; place it behind an HTTPS reverse proxy and set `--public-url` to its exact public origin.
+The URL must contain no credentials, path, query, or fragment. For local development only, use an explicit loopback origin:
+
+```bash
+backlog server --data-dir ./server-data start --public-url http://127.0.0.1:6420 --allow-http-loopback
+```
+
+Startup requires an initialized admin. An existing A-01 SQLite database upgrades additively on its first mutation;
+read commands neither create files nor upgrade schemas. Project identities and Markdown records are preserved.
+Invalid databases fail clearly. Further recovery uses the local `user reset-password` command; `init-admin` cannot run again.
+
+Sessions live in SQLite with hashed identifiers and a 12-hour absolute / 2-hour idle limit. The browser carries its identifier
+only in an HttpOnly, SameSite=Lax cookie, with Secure on HTTPS, Path=/, and no Domain. Only visible user interactions send
+idle activity, at most once a minute; polling and WebSocket traffic do not extend the idle limit. Resetting a password or
+deactivating an account invalidates its sessions. Changing your own password invalidates old sessions and rotates the current
+browser's cookie. Login accepts JSON from the exact configured Origin; authenticated mutations require the session's
+in-memory `X-CSRF-Token`. Login is limited to five failures per username in 15 minutes and 60 service-wide attempts per minute,
+persisted across restarts; limited requests return 429 and Retry-After. See the
+[OWASP session guidance](https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html) and
+[CSRF guidance](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html).
+
+The API returns 401 for invalid sessions, 403 for denied operations, and 404 for unknown or unjoined projects. Permissions
+apply to searches, statistics, attachments, archive operations, and live connections. WebSockets recheck before every send
+and close within one second after revocation. API permission changes take effect on the next check. A write that already
+passed authorization may finish. Concurrent writes to the same decision serialize and recheck both current state and grants.
+
+Project archives list tasks, documents, and decisions and allow viewing, restoring, or permanently deleting an archived record.
+Deletion requires explicit confirmation naming the record and refuses active records or tasks with existing subtasks.
+Reference cleanup and affected-record information follow the existing CLI/Core behavior. The API exposes
+`GET /api/projects/:id/{tasks|docs|decisions}/archived`, `POST .../:recordId/restore`, and `DELETE .../:recordId`.
+Mutations are never automatically retried. On session expiry an open editor retains unsaved text in the current page's
+memory; logging in with the same account resumes it, while switching accounts clears the previous account's UI state.
 
 ---
 

@@ -108,7 +108,7 @@ describe.each([...KINDS])("POST archive route for a $kind", (kind) => {
 
 		const archived = await postArchive(kind.route(kind.id));
 
-		expect(archived).toEqual({ status: 200, body: { success: true } });
+		expect(archived).toEqual({ status: 200, body: { success: true, id: kind.id, listedAsDocumentationBy: [] } });
 		expect(await exists(folderPath(kind.file))).toBe(false);
 		expect((await readFile(archivePath(kind.file))).equals(before)).toBe(true);
 		expect(await git("log", "-1", "--format=%s")).toBe(`backlog: Archive ${kind.kind} ${kind.id}`);
@@ -189,13 +189,8 @@ describe.each([...KINDS])("POST archive route for a $kind", (kind) => {
 	});
 });
 
-describe("the web has no delete or restore route for documents and decisions", () => {
-	it.each([
-		"/api/docs/doc-1/delete",
-		"/api/docs/doc-1/restore",
-		"/api/decisions/decision-1/delete",
-		"/api/decisions/decision-1/restore",
-	])("POST %s changes nothing", async (path) => {
+describe("the web rejects noncanonical delete action routes", () => {
+	it.each(["/api/docs/doc-1/delete", "/api/decisions/decision-1/delete"])("POST %s changes nothing", async (path) => {
 		await startServer(false);
 		expect((await postArchive(path.replace(/\/(delete|restore)$/, "/archive"))).status).toBe(200);
 		const archivedFiles = await git("status", "--porcelain");
@@ -204,5 +199,33 @@ describe("the web has no delete or restore route for documents and decisions", (
 
 		expect(response.status).not.toBe(200);
 		expect(await git("status", "--porcelain")).toBe(archivedFiles);
+	});
+});
+
+describe("local browser archive routes", () => {
+	it("prefers archived list literals over record detail parameters for all three kinds", async () => {
+		const core = await startServer(false);
+		await core.createTask(
+			{
+				id: "TASK-1",
+				title: "Archived task",
+				status: "To Do",
+				assignee: [],
+				labels: [],
+				dependencies: [],
+				createdDate: "2026-10-21",
+			},
+			false,
+		);
+		for (const [kind, id] of [
+			["tasks", "TASK-1"],
+			["docs", "doc-1"],
+			["decisions", "decision-1"],
+		]) {
+			expect((await fetch(api(`/api/${kind}/${id}/archive`), { method: "POST" })).status).toBe(200);
+			const response = await fetch(api(`/api/${kind}/archived`));
+			expect(response.status).toBe(200);
+			expect(await response.json()).toEqual([expect.objectContaining({ id, archived: true })]);
+		}
 	});
 });

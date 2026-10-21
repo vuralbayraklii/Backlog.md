@@ -1,14 +1,23 @@
+import { realpath } from "node:fs/promises";
 import net from "node:net";
-import { dirname, isAbsolute, join } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import type { Server, ServerWebSocket } from "bun";
 import { DEFAULT_STATUSES } from "../constants/index.ts";
-import { CONTENT_RECORD_WORDS, Core, formatCleanupResult, RecordRefusedError } from "../core/backlog.ts";
+import {
+	ChangeNotCommittedError,
+	CONTENT_RECORD_WORDS,
+	Core,
+	formatCleanupResult,
+	RecordRefusedError,
+	TaskDeletionAppliedError,
+} from "../core/backlog.ts";
 import type { ContentStore } from "../core/content-store.ts";
 import { initializeProject } from "../core/init.ts";
 import type { SearchService } from "../core/search-service.ts";
 import { getTaskStatistics } from "../core/statistics.ts";
 import { loadTaskDetail } from "../core/task-detail.ts";
 import { isCreateLockError, isTaskLockError } from "../file-system/operations.ts";
+import { parseFrontmatter } from "../markdown/frontmatter.ts";
 import { BacklogToolError } from "../mcp/errors/mcp-errors.ts";
 import { MilestoneHandlers } from "../mcp/tools/milestones/handlers.ts";
 import {
@@ -37,6 +46,7 @@ import { formatValidStatuses, getCanonicalStatuses, getValidStatuses } from "../
 import { isValidTaskId } from "../utils/task-id.ts";
 import { isAmbiguousTaskIdError, LOCAL_TASK_LOOKUP_HINT, taskNotFoundMessage } from "../utils/task-path.ts";
 import { getVersion } from "../utils/version.ts";
+import type { ProjectAuthorization, ProjectPermission } from "./auth-types.ts";
 
 // Regex pattern to match any prefix (letters followed by dash)
 const PREFIX_PATTERN = /^[a-zA-Z]+-/i;
@@ -62,6 +72,10 @@ const WEB_TASK_LOOKUP_HINT =
 function formatErrorForWeb(message: string): string {
 	return message.replace(LOCAL_TASK_LOOKUP_HINT, WEB_TASK_LOOKUP_HINT);
 }
+
+type RecordRequest = Request & { params: { id: string } };
+type RoutePermission = ProjectPermission | "read" | "admin";
+type ProjectRouteHandler = ((req: Request) => Promise<Response>) & { permission?: RoutePermission };
 
 type DueDatePayloadResult = { ok: true; value: string | null | undefined } | { ok: false; error: string };
 
@@ -252,7 +266,8 @@ export class BacklogServer {
 	private server: Server<unknown> | null = null;
 	private runtimeWorkingDirectory: string | null = null;
 	private projectName = "Untitled Project";
-	private sockets = new Set<ServerWebSocket<unknown>>();
+	private sockets = new Map<ServerWebSocket<unknown>, (() => boolean) | undefined>();
+	private decisionWrite: Promise<Response> | null = null;
 	private contentStore: ContentStore | null = null;
 	private searchService: SearchService | null = null;
 	private servicesReadyPromise: Promise<void> | null = null;
@@ -359,154 +374,201 @@ export class BacklogServer {
 			this.taskBroadcastTimer = undefined;
 			const message = this.pendingDataBroadcastScope === "milestones" ? "milestones-updated" : "tasks-updated";
 			this.pendingDataBroadcastScope = "tasks";
-			for (const ws of this.sockets) {
-				try {
-					ws.send(message);
-				} catch {}
+			for (const ws of this.sockets.keys()) {
+				this.sendSocket(ws, message);
 			}
 		}, 75);
 	}
 
 	private broadcastConfigUpdated() {
-		for (const ws of this.sockets) {
-			try {
-				ws.send("config-updated");
-			} catch {}
+		for (const ws of this.sockets.keys()) {
+			this.sendSocket(ws, "config-updated");
 		}
 	}
 
 	private publishBrowserLoadingState(state: BrowserLoadingState) {
 		this.browserLoadingState = state;
 		const message = JSON.stringify(state);
-		for (const ws of this.sockets) {
-			try {
-				ws.send(message);
-			} catch {}
+		for (const ws of this.sockets.keys()) {
+			this.sendSocket(ws, message);
 		}
 	}
 
-	private apiRoutes() {
+	private apiRoutes(authorization?: ProjectAuthorization) {
+		// The operation's permission lives beside its handler on both HTTP surfaces.
+		const route = <T extends Request>(permission: RoutePermission, handler: (req: T) => Promise<Response>) =>
+			Object.assign(
+				async (req: T): Promise<Response> => {
+					if (this.centralMode && !authorization)
+						return Response.json({ error: "Authentication required" }, { status: 401 });
+					const denied = authorization?.check(permission);
+					return denied ?? (await handler(req));
+				},
+				{ permission },
+			);
+		const decisionRoute = <T extends Request>(permission: ProjectPermission, handler: (req: T) => Promise<Response>) =>
+			route(permission, (req: T) =>
+				this.withDecisionWrite(async () => {
+					const denied = authorization?.check(permission);
+					return denied ?? (await handler(req));
+				}),
+			);
 		return {
-			// API Routes using Bun's native route syntax
 			"/api/tasks": {
-				GET: async (req: Request) => await this.handleListTasks(req),
-				POST: async (req: Request) => await this.handleCreateTask(req),
+				GET: route("read", async (req: Request) => this.handleListTasks(req)),
+				POST: route("tasksWrite", async (req: Request) => this.handleCreateTask(req)),
+			},
+			"/api/tasks/archived": {
+				GET: route("read", async () => this.handleListArchived("task")),
 			},
 			"/api/task/:id": {
-				GET: async (req: Request & { params: { id: string } }) => await this.handleGetTask(req.params.id),
+				GET: route("read", async (req: RecordRequest) => this.handleGetTask(req.params.id)),
 			},
 			"/api/tasks/:id": {
-				GET: async (req: Request & { params: { id: string } }) => await this.handleGetTask(req.params.id),
-				PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateTask(req, req.params.id),
+				GET: route("read", async (req: RecordRequest) => this.handleGetTask(req.params.id)),
+				PUT: route("tasksWrite", async (req: RecordRequest) => this.handleUpdateTask(req, req.params.id)),
+				DELETE: route("delete", async (req: RecordRequest) =>
+					this.handleRecordLifecycle("task", req.params.id, "delete"),
+				),
 			},
 			"/api/tasks/:id/archive": {
-				POST: async (req: Request & { params: { id: string } }) => await this.handleArchiveTask(req.params.id),
+				POST: route("archive", async (req: RecordRequest) => this.handleArchiveTask(req.params.id)),
+			},
+			"/api/tasks/:id/restore": {
+				POST: route("archive", async (req: RecordRequest) =>
+					this.handleRecordLifecycle("task", req.params.id, "restore"),
+				),
 			},
 			"/api/tasks/:id/demote": {
-				POST: async (req: Request & { params: { id: string } }) => await this.handleDemoteTask(req.params.id),
+				POST: route("tasksWrite", async (req: RecordRequest) => this.handleDemoteTask(req.params.id)),
 			},
 			"/api/statuses": {
-				GET: async () => await this.handleGetStatuses(),
+				GET: route("read", async () => this.handleGetStatuses()),
 			},
 			"/api/config": {
-				GET: async () => await this.handleGetConfig(),
-				PUT: async (req: Request) => await this.handleUpdateConfig(req),
+				GET: route("read", async () => this.handleGetConfig()),
+				PUT: route("admin", async (req: Request) => this.handleUpdateConfig(req)),
 			},
 			"/api/docs": {
-				GET: async () => await this.handleListDocs(),
-				POST: async (req: Request) => await this.handleCreateDoc(req),
+				GET: route("read", async () => this.handleListDocs()),
+				POST: route("docsWrite", async (req: Request) => this.handleCreateDoc(req)),
+			},
+			"/api/docs/archived": {
+				GET: route("read", async () => this.handleListArchived("document")),
 			},
 			"/api/doc/:id": {
-				GET: async (req: Request & { params: { id: string } }) => await this.handleGetDoc(req.params.id),
+				GET: route("read", async (req: RecordRequest) => this.handleGetDoc(req.params.id)),
 			},
 			"/api/docs/:id": {
-				GET: async (req: Request & { params: { id: string } }) => await this.handleGetDoc(req.params.id),
-				PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateDoc(req, req.params.id),
+				GET: route("read", async (req: RecordRequest) => this.handleGetDoc(req.params.id)),
+				PUT: route("docsWrite", async (req: RecordRequest) => this.handleUpdateDoc(req, req.params.id)),
+				DELETE: route("delete", async (req: RecordRequest) =>
+					this.handleRecordLifecycle("document", req.params.id, "delete"),
+				),
 			},
 			"/api/docs/:id/archive": {
-				POST: async (req: Request & { params: { id: string } }) =>
-					await this.handleArchiveContentRecord("document", req.params.id),
+				POST: route("archive", async (req: RecordRequest) =>
+					this.handleArchiveContentRecord("document", req.params.id),
+				),
+			},
+			"/api/docs/:id/restore": {
+				POST: route("archive", async (req: RecordRequest) =>
+					this.handleRecordLifecycle("document", req.params.id, "restore"),
+				),
 			},
 			"/api/decisions": {
-				GET: async () => await this.handleListDecisions(),
-				POST: async (req: Request) => await this.handleCreateDecision(req),
+				GET: route("read", async () => this.handleListDecisions()),
+				POST: decisionRoute("decisionsWrite", async (req: Request) => this.handleCreateDecision(req)),
+			},
+			"/api/decisions/archived": {
+				GET: route("read", async () => this.handleListArchived("decision")),
 			},
 			"/api/decision/:id": {
-				GET: async (req: Request & { params: { id: string } }) => await this.handleGetDecision(req.params.id),
+				GET: route("read", async (req: RecordRequest) => this.handleGetDecision(req.params.id)),
 			},
 			"/api/decisions/:id": {
-				GET: async (req: Request & { params: { id: string } }) => await this.handleGetDecision(req.params.id),
-				PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateDecision(req, req.params.id),
+				GET: route("read", async (req: RecordRequest) => this.handleGetDecision(req.params.id)),
+				PUT: decisionRoute("decisionsWrite", async (req: RecordRequest) =>
+					this.handleUpdateDecision(req, req.params.id, authorization),
+				),
+				DELETE: decisionRoute("delete", async (req: RecordRequest) =>
+					this.handleRecordLifecycle("decision", req.params.id, "delete"),
+				),
 			},
 			"/api/decisions/:id/archive": {
-				POST: async (req: Request & { params: { id: string } }) =>
-					await this.handleArchiveContentRecord("decision", req.params.id),
+				POST: decisionRoute("archive", async (req: RecordRequest) =>
+					this.handleArchiveContentRecord("decision", req.params.id),
+				),
+			},
+			"/api/decisions/:id/restore": {
+				POST: decisionRoute("archive", async (req: RecordRequest) =>
+					this.handleRecordLifecycle("decision", req.params.id, "restore"),
+				),
 			},
 			"/api/drafts": {
-				GET: async () => await this.handleListDrafts(),
+				GET: route("read", async () => this.handleListDrafts()),
 			},
 			"/api/drafts/:id/promote": {
-				POST: async (req: Request & { params: { id: string } }) => await this.handlePromoteDraft(req.params.id),
+				POST: route("tasksWrite", async (req: RecordRequest) => this.handlePromoteDraft(req.params.id)),
 			},
 			"/api/milestones": {
-				GET: async () => await this.handleListMilestones(),
-				POST: async (req: Request) => await this.handleCreateMilestone(req),
+				GET: route("read", async () => this.handleListMilestones()),
+				POST: route("tasksWrite", async (req: Request) => this.handleCreateMilestone(req)),
 			},
 			"/api/milestones/archived": {
-				GET: async () => await this.handleListArchivedMilestones(),
+				GET: route("read", async () => this.handleListArchivedMilestones()),
 			},
 			"/api/milestones/:id": {
-				GET: async (req: Request & { params: { id: string } }) => await this.handleGetMilestone(req.params.id),
-				PUT: async (req: Request & { params: { id: string } }) => await this.handleUpdateMilestone(req, req.params.id),
-				DELETE: async (req: Request & { params: { id: string } }) =>
-					await this.handleRemoveMilestone(req, req.params.id),
+				GET: route("read", async (req: RecordRequest) => this.handleGetMilestone(req.params.id)),
+				PUT: route("tasksWrite", async (req: RecordRequest) => this.handleUpdateMilestone(req, req.params.id)),
+				DELETE: route("delete", async (req: RecordRequest) => this.handleRemoveMilestone(req, req.params.id)),
 			},
 			"/api/milestones/:id/archive": {
-				POST: async (req: Request & { params: { id: string } }) => await this.handleArchiveMilestone(req.params.id),
+				POST: route("archive", async (req: RecordRequest) => this.handleArchiveMilestone(req.params.id)),
 			},
 			"/api/tasks/reorder": {
-				POST: async (req: Request) => await this.handleReorderTask(req),
+				POST: route("tasksWrite", async (req: Request) => this.handleReorderTask(req)),
 			},
 			"/api/tasks/move": {
-				POST: async (req: Request) => await this.handleMoveTasks(req),
+				POST: route("tasksWrite", async (req: Request) => this.handleMoveTasks(req)),
 			},
 			"/api/tasks/cleanup": {
-				GET: async (req: Request) => await this.handleCleanupPreview(req),
+				GET: route("archive", async (req: Request) => this.handleCleanupPreview(req)),
 			},
 			"/api/tasks/duplicates": {
-				GET: async () => await this.handleGetDuplicateTasks(),
-				POST: async (req: Request) => await this.handleRepairDuplicateTasks(req),
+				GET: route("admin", async () => this.handleGetDuplicateTasks()),
+				POST: route("admin", async (req: Request) => this.handleRepairDuplicateTasks(req)),
 			},
 			"/api/tasks/cleanup/execute": {
-				POST: async (req: Request) => await this.handleCleanupExecute(req),
+				POST: route("archive", async (req: Request) => this.handleCleanupExecute(req)),
 			},
 			"/api/version": {
-				GET: async () => await this.handleGetVersion(),
+				GET: route("read", async () => this.handleGetVersion()),
 			},
 			"/api/statistics": {
-				GET: async () => await this.handleGetStatistics(),
+				GET: route("read", async () => this.handleGetStatistics()),
 			},
 			"/api/status": {
-				GET: async () => await this.handleGetStatus(),
+				GET: route("read", async () => this.handleGetStatus()),
 			},
 			"/api/init": {
-				POST: async (req: Request) => await this.handleInit(req),
+				POST: route("admin", async (req: Request) => this.handleInit(req)),
 			},
 			"/api/search": {
-				GET: async (req: Request) => await this.handleSearch(req),
+				GET: route("read", async (req: Request) => this.handleSearch(req)),
 			},
-			// Serve files placed under backlog/assets at /assets/<relative-path>
 			"/assets/*": {
-				GET: async (req: Request) => await this.handleAssetRequest(req),
+				GET: route("read", async (req: Request) => this.handleAssetRequest(req)),
 			},
 		};
 	}
 
-	async dispatchApi(req: Request, localPath: string): Promise<Response> {
+	async dispatchApi(req: Request, localPath: string, authorization?: ProjectAuthorization): Promise<Response> {
+		if (this.centralMode && !authorization) return Response.json({ error: "Authentication required" }, { status: 401 });
 		if (this.centralMode && localPath === "/api/init") return new Response("Not Found", { status: 404 });
 		const url = new URL(req.url);
 		url.pathname = localPath;
-		const routes = this.apiRoutes() as unknown as Record<string, Record<string, (req: Request) => Promise<Response>>>;
+		const routes = this.apiRoutes(authorization) as unknown as Record<string, Record<string, ProjectRouteHandler>>;
 		const patterns = Object.keys(routes).sort((left, right) => {
 			const dynamicCount = (path: string) => (path.match(/[:*]/g) ?? []).length;
 			return dynamicCount(left) - dynamicCount(right) || right.length - left.length;
@@ -516,6 +578,9 @@ export class BacklogServer {
 			if (!match) continue;
 			const handler = routes[path]?.[req.method];
 			if (!handler) return new Response("Not Found", { status: 404 });
+			if (this.centralMode && !handler.permission) {
+				return Response.json({ error: "Operation has no permission definition" }, { status: 403 });
+			}
 			const localRequest = new Request(url, req);
 			Object.defineProperty(localRequest, "params", { value: match.pathname.groups });
 			return await handler(localRequest);
@@ -523,14 +588,42 @@ export class BacklogServer {
 		return new Response("Not Found", { status: 404 });
 	}
 
-	acceptSocket(ws: ServerWebSocket<unknown>): void {
-		this.sockets.add(ws);
-		ws.send(JSON.stringify(this.browserLoadingState));
+	acceptSocket(ws: ServerWebSocket<unknown>, authorize?: () => boolean): void {
+		this.sockets.set(ws, authorize);
+		if (!this.sendSocket(ws, JSON.stringify(this.browserLoadingState))) return;
 		if (this.browserLoadingState.type === "loading") void this.ensureServicesReady().catch(() => {});
+	}
+
+	private sendSocket(ws: ServerWebSocket<unknown>, message: string): boolean {
+		try {
+			const authorize = this.sockets.get(ws);
+			if (!this.sockets.has(ws) || (this.centralMode && !authorize) || (authorize && !authorize())) {
+				this.removeSocket(ws);
+				ws.close(1008, "Authorization expired");
+				return false;
+			}
+			ws.send(message);
+			return true;
+		} catch {
+			this.removeSocket(ws);
+			ws.close(1008, "Authorization expired");
+			return false;
+		}
 	}
 
 	removeSocket(ws: ServerWebSocket<unknown>): void {
 		this.sockets.delete(ws);
+	}
+
+	private async withDecisionWrite(operation: () => Promise<Response>): Promise<Response> {
+		// One project-local queue also protects decision ID allocation during concurrent creates.
+		const current = (this.decisionWrite ?? Promise.resolve()).catch(() => {}).then(operation);
+		this.decisionWrite = current;
+		try {
+			return await current;
+		} finally {
+			if (this.decisionWrite === current) this.decisionWrite = null;
+		}
 	}
 
 	async start(port?: number, openBrowser = true): Promise<void> {
@@ -588,8 +681,8 @@ export class BacklogServer {
 					open: (ws: ServerWebSocket) => {
 						this.acceptSocket(ws);
 					},
-					message(ws: ServerWebSocket) {
-						ws.send("pong");
+					message: (ws: ServerWebSocket) => {
+						this.sendSocket(ws, "pong");
 					},
 					close: (ws: ServerWebSocket) => {
 						this.removeSocket(ws);
@@ -667,7 +760,7 @@ export class BacklogServer {
 		this.storeReadyBroadcasted = false;
 
 		// Proactively close WebSocket connections
-		for (const ws of this.sockets) {
+		for (const ws of this.sockets.keys()) {
 			try {
 				ws.close();
 			} catch {}
@@ -702,46 +795,54 @@ export class BacklogServer {
 
 	private async handleAssetRequest(req: Request): Promise<Response> {
 		try {
-			const url = new URL(req.url);
-			const pathname = decodeURIComponent(url.pathname || "");
-			const prefix = "/assets/";
-			if (!pathname.startsWith(prefix)) return new Response("Not Found", { status: 404 });
-
-			// Path relative to backlog/assets
-			const relPath = pathname.slice(prefix.length);
-
-			// disallow traversal
-			if (relPath.includes("..")) return new Response("Not Found", { status: 404 });
-
-			// derive backlog root from docsDir (parent of backlog/docs)
-			const docsDir = this.core.filesystem.docsDir;
-			const backlogRoot = dirname(docsDir);
-			const assetsRoot = join(backlogRoot, "assets");
-			const filePath = join(assetsRoot, relPath);
-
-			if (!filePath.startsWith(assetsRoot)) return new Response("Not Found", { status: 404 });
-
+			const pathname = decodeURIComponent(new URL(req.url).pathname);
+			if (!pathname.startsWith("/assets/")) return new Response("Not Found", { status: 404 });
+			const relPath = pathname.slice("/assets/".length);
+			if (relPath.includes("..") || relPath.includes("\\") || relPath.includes("\0")) {
+				return new Response("Not Found", { status: 404 });
+			}
+			const assetsRoot = join(dirname(this.core.filesystem.docsDir), "assets");
+			const [projectRoot, realAssetsRoot, filePath] = await Promise.all([
+				realpath(this.core.filesystem.rootDir),
+				realpath(assetsRoot),
+				realpath(join(assetsRoot, relPath)),
+			]);
+			const within = (root: string, path: string) => {
+				const rel = relative(root, path);
+				return rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+			};
+			if (!within(projectRoot, filePath) || !within(realAssetsRoot, filePath)) {
+				return new Response("Not Found", { status: 404 });
+			}
 			const file = Bun.file(filePath);
 			if (!(await file.exists())) return new Response("Not Found", { status: 404 });
-
 			const ext = (filePath.match(/\.([^./]+)$/) || [])[1]?.toLowerCase() || "";
 			const mimeMap: Record<string, string> = {
 				png: "image/png",
 				jpg: "image/jpeg",
 				jpeg: "image/jpeg",
 				gif: "image/gif",
-				svg: "image/svg+xml",
 				webp: "image/webp",
 				avif: "image/avif",
-				pdf: "application/pdf",
 				txt: "text/plain",
-				css: "text/css",
-				js: "application/javascript",
 			};
-
-			const mime = mimeMap[ext] ?? "application/octet-stream";
-			return new Response(file, { headers: { "Content-Type": mime } });
+			const headers = new Headers({
+				"Content-Type": mimeMap[ext] ?? "application/octet-stream",
+				"X-Content-Type-Options": "nosniff",
+				"Content-Security-Policy": "default-src 'none'; sandbox",
+			});
+			// SVG, HTML, scripts and other active formats must never execute on the application origin.
+			if (!mimeMap[ext])
+				headers.set("Content-Disposition", `attachment; filename="${basename(filePath).replace(/["\r\n]/g, "_")}"`);
+			return new Response(file, { headers });
 		} catch (error) {
+			if (
+				error instanceof URIError ||
+				(error as NodeJS.ErrnoException).code === "ENOENT" ||
+				(error as NodeJS.ErrnoException).code === "ENOTDIR"
+			) {
+				return new Response("Not Found", { status: 404 });
+			}
 			console.error("Error serving asset:", error);
 			return new Response("Internal Server Error", { status: 500 });
 		}
@@ -1112,7 +1213,10 @@ export class BacklogServer {
 		const resolved = await this.resolveDetailTask(taskId);
 		if (resolved instanceof Response) return resolved;
 		await this.ensureServicesReady();
-		return Response.json(await loadTaskDetail(this.core, resolved, { includeCrossBranch: !this.centralMode }));
+		return Response.json({
+			...(await loadTaskDetail(this.core, resolved, { includeCrossBranch: !this.centralMode })),
+			...(resolved.source === "archived" && { archived: true }),
+		});
 	}
 
 	private async handleUpdateTask(req: Request, taskId: string): Promise<Response> {
@@ -1266,11 +1370,12 @@ export class BacklogServer {
 	 */
 	private async handleArchiveContentRecord(kind: ContentRecordKind, id: string): Promise<Response> {
 		try {
-			if (!(await this.core.archiveContentRecord(kind, id))) {
+			const result = await this.core.archiveContentRecord(kind, id);
+			if (!result) {
 				return Response.json({ error: CONTENT_RECORD_WORDS[kind].notFound(id) }, { status: 404 });
 			}
 			this.broadcastDataUpdated();
-			return Response.json({ success: true });
+			return Response.json({ success: true, ...result });
 		} catch (error) {
 			if (isAmbiguousIdError(error)) {
 				return Response.json({ error: error.message }, { status: 409 });
@@ -1283,6 +1388,59 @@ export class BacklogServer {
 				this.broadcastDataUpdated();
 				console.error(`Error archiving ${kind} after it moved:`, error);
 				return Response.json({ error: (error as Error).message, archiveState }, { status: 500 });
+			}
+			throw error;
+		}
+	}
+
+	private async handleListArchived(kind: "task" | ContentRecordKind): Promise<Response> {
+		const records = await (kind === "task"
+			? this.core.filesystem.listArchivedTasks()
+			: kind === "document"
+				? this.core.filesystem.listArchivedDocuments()
+				: this.core.filesystem.listArchivedDecisions());
+		return Response.json(records.map((record) => ({ ...record, archived: true })));
+	}
+
+	private async handleRecordLifecycle(
+		kind: "task" | ContentRecordKind,
+		id: string,
+		operation: "restore" | "delete",
+	): Promise<Response> {
+		try {
+			const result =
+				kind === "task"
+					? operation === "restore"
+						? await this.core.restoreTask(id)
+						: await this.core.deleteTask(id)
+					: operation === "restore"
+						? await this.core.restoreContentRecord(kind, id)
+						: await this.core.deleteContentRecord(kind, id);
+			if (!result || (typeof result === "object" && "success" in result && !result.success)) {
+				return Response.json(
+					{ error: kind === "task" ? taskNotFoundMessage(id) : CONTENT_RECORD_WORDS[kind].notFound(id) },
+					{ status: 404 },
+				);
+			}
+			this.broadcastDataUpdated();
+			return Response.json({ success: true, ...(typeof result === "object" ? result : {}) });
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (
+				isAmbiguousIdError(error) ||
+				isAmbiguousTaskIdError(error) ||
+				isTaskLockError(error) ||
+				isCreateLockError(error)
+			) {
+				return Response.json({ error: message }, { status: 409 });
+			}
+			if (error instanceof RecordRefusedError) return Response.json({ error: message }, { status: 400 });
+			if (error instanceof ChangeNotCommittedError || error instanceof TaskDeletionAppliedError) {
+				this.broadcastDataUpdated();
+				return Response.json(
+					{ error: message, ...(operation === "restore" ? { restoreState: "moved" } : { deleteState: "applied" }) },
+					{ status: 500 },
+				);
 			}
 			throw error;
 		}
@@ -1533,10 +1691,24 @@ export class BacklogServer {
 		}
 	}
 
-	private async handleUpdateDecision(req: Request, decisionId: string): Promise<Response> {
+	private async handleUpdateDecision(
+		req: Request,
+		decisionId: string,
+		authorization?: ProjectAuthorization,
+	): Promise<Response> {
 		const content = await req.text();
 
 		try {
+			if (authorization) {
+				const current = await this.core.getDecision(decisionId);
+				if (!current) return Response.json({ error: "Decision not found" }, { status: 404 });
+				// Match Core's parser and fallback exactly; raw Markdown cannot hide a state change.
+				const nextStatus = parseFrontmatter(content).data.status || current.status;
+				if (current.status !== "proposed" || nextStatus !== current.status) {
+					const denied = authorization.check("decisionsManage");
+					if (denied) return denied;
+				}
+			}
 			await this.core.updateDecisionFromContent(decisionId, content);
 			return Response.json({ success: true });
 		} catch (error) {

@@ -1,3 +1,4 @@
+import { useAuth } from "../contexts/AuthContext";
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { type Milestone, type Task } from '../../types';
 import { apiClient, type ReorderTaskPayload } from '../lib/api';
@@ -81,6 +82,7 @@ const Board: React.FC<BoardProps> = ({
   hideEmptyColumns = false,
   dateFormat,
 }) => {
+  const { permissions } = useAuth();
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
@@ -667,6 +669,7 @@ const Board: React.FC<BoardProps> = ({
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 transition-colors duration-200">Kanban Board</h2>
           <button
             className="inline-flex items-center px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-blue-500 dark:focus:ring-offset-gray-800 transition-colors duration-200"
+            disabled={!permissions.tasksWrite}
             onClick={onNewTask}
           >
             + New Task
@@ -700,7 +703,7 @@ const Board: React.FC<BoardProps> = ({
             <button
               type="button"
               className={BOARD_FILTER_BUTTON_CLASS}
-              disabled={!batchMoveStatus}
+              disabled={!permissions.tasksWrite || !batchMoveStatus}
               onClick={() => handleBatchMove(batchMoveStatus)}
             >
               Move
@@ -899,7 +902,7 @@ const Board: React.FC<BoardProps> = ({
                             dateFormat={dateFormat}
                             onDragStart={handleColumnDragStart}
                             onDragEnd={handleColumnDragEnd}
-                            onCleanup={status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
+                            onCleanup={permissions.archive && status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
                             {...selectionProps}
                           />
                         </div>
@@ -931,7 +934,7 @@ const Board: React.FC<BoardProps> = ({
                   dateFormat={dateFormat}
                   onDragStart={handleColumnDragStart}
                   onDragEnd={handleColumnDragEnd}
-                  onCleanup={status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
+                  onCleanup={permissions.archive && status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
                   {...selectionProps}
                 />
               </div>

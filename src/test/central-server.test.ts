@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { chmod, mkdir, rename, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { Core } from "../core/backlog.ts";
+import { AuthStore } from "../server/auth-store.ts";
+import { ADMIN_PERMISSIONS } from "../server/auth-types.ts";
 import { CentralServer } from "../server/central.ts";
 import { findNextAvailablePort } from "../server/index.ts";
 import { ProjectStore } from "../server/project-store.ts";
@@ -12,6 +14,25 @@ describe("central project server", () => {
 	let dataDir: string;
 	let server: CentralServer;
 	let base: string;
+	let cookie: string;
+	let csrf: string;
+	const password = "central test password";
+	async function authenticate() {
+		if (cookie) return;
+		const auth = new AuthStore(dataDir);
+		const login = await auth.login("admin", password);
+		const result = await auth.changePassword(login.token, password, password);
+		cookie = `backlog_session=${result.token}`;
+		csrf = result.session.csrfToken;
+	}
+	async function request(input: string, init?: RequestInit) {
+		await authenticate();
+		const headers = new Headers(init?.headers);
+		headers.set("Cookie", cookie);
+		headers.set("Origin", base);
+		headers.set("X-CSRF-Token", csrf);
+		return fetch(input, { ...init, headers });
+	}
 
 	async function seed(name: string, directory?: string): Promise<string> {
 		const projectRoot = join(root, name);
@@ -62,6 +83,9 @@ describe("central project server", () => {
 	beforeEach(async () => {
 		root = createUniqueTestDir("central-server");
 		dataDir = join(root, "data");
+		await new AuthStore(dataDir).initializeAdmin("admin", password);
+		cookie = "";
+		csrf = "";
 		server = new CentralServer(dataDir);
 		const port = await findNextAvailablePort(18000);
 		if (!port) throw new Error("No test port available");
@@ -74,17 +98,17 @@ describe("central project server", () => {
 	});
 
 	it("starts with an empty selector and refuses corrupt databases", async () => {
-		await server.start(Number(new URL(base).port));
-		expect((await fetch(`${base}/api/projects`)).status).toBe(200);
-		expect(await (await fetch(`${base}/api/projects`)).json()).toEqual([]);
-		expect((await fetch(`${base}/`, { redirect: "manual" })).headers.get("location")).toBe(`${base}/projects`);
-		const html = await (await fetch(`${base}/projects`)).text();
+		await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
+		expect((await request(`${base}/api/projects`)).status).toBe(200);
+		expect(await (await request(`${base}/api/projects`)).json()).toEqual([]);
+		expect((await request(`${base}/`, { redirect: "manual" })).headers.get("location")).toBe(`${base}/projects`);
+		const html = await (await request(`${base}/projects`)).text();
 		const assets = [...html.matchAll(/(?:src|href)="(\/[^"]+\.(?:js|css)[^"]*)"/g)].map((match) => match[1]);
 		expect(assets.length).toBeGreaterThan(0);
-		for (const asset of assets) expect((await fetch(`${base}${asset}`)).status).toBe(200);
-		expect((await fetch(`${base}/api/tasks`)).status).toBe(404);
-		expect((await fetch(`${base}/api/version`)).status).toBe(200);
-		expect(await Bun.file(join(dataDir, "server.sqlite")).exists()).toBe(false);
+		for (const asset of assets) expect((await request(`${base}${asset}`)).status).toBe(200);
+		expect((await request(`${base}/api/tasks`)).status).toBe(404);
+		expect((await request(`${base}/api/version`)).status).toBe(200);
+		expect(await Bun.file(join(dataDir, "server.sqlite")).exists()).toBe(true);
 	});
 
 	it("fails clearly when the requested port is occupied or the database is damaged", async () => {
@@ -94,13 +118,17 @@ describe("central project server", () => {
 			fetch: () => new Response("occupied"),
 		});
 		try {
-			await expect(server.start(occupied.port)).rejects.toThrow(`Port ${occupied.port} is already in use`);
+			await expect(server.start(occupied.port, false, { publicUrl: base, allowHttpLoopback: true })).rejects.toThrow(
+				`Port ${occupied.port} is already in use`,
+			);
 		} finally {
 			await occupied.stop();
 		}
 		await mkdir(dataDir, { recursive: true });
 		await Bun.write(join(dataDir, "server.sqlite"), "damaged");
-		await expect(server.start(Number(new URL(base).port))).rejects.toThrow();
+		await expect(
+			server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true }),
+		).rejects.toThrow();
 	});
 
 	it("opens a browser only when requested", async () => {
@@ -111,12 +139,12 @@ describe("central project server", () => {
 		const previous = process.env.BROWSER;
 		process.env.BROWSER = executable;
 		try {
-			await server.start(Number(new URL(base).port));
+			await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
 			expect(await Bun.file(launched).exists()).toBe(false);
 			await server.stop();
 			const opened = new CentralServer(dataDir);
 			try {
-				await opened.start(Number(new URL(base).port), true);
+				await opened.start(Number(new URL(base).port), true, { publicUrl: base, allowHttpLoopback: true });
 				expect(await Bun.file(launched).text()).toBe(`${base}/projects`);
 			} finally {
 				await opened.stop();
@@ -133,48 +161,52 @@ describe("central project server", () => {
 		const store = new ProjectStore(dataDir);
 		await store.register("Shown Alpha", alpha);
 		await store.register("Shown Beta", beta);
-		await server.start(Number(new URL(base).port));
+		await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
 
-		expect(await (await fetch(`${base}/api/projects`)).json()).toEqual([
+		expect(await (await request(`${base}/api/projects`)).json()).toEqual([
 			{ id: "1", name: "Shown Alpha" },
 			{ id: "2", name: "Shown Beta" },
 		]);
-		expect(await (await fetch(`${base}/api/projects/1`)).json()).toEqual({ id: "1", name: "Shown Alpha" });
+		expect(await (await request(`${base}/api/projects/1`)).json()).toEqual({
+			id: "1",
+			name: "Shown Alpha",
+			permissions: ADMIN_PERMISSIONS,
+		});
 		for (const [id, name] of [
 			["1", "Alpha"],
 			["2", "Beta"],
 		] as const) {
-			const task = await (await fetch(`${base}/api/projects/${id}/task/TASK-1`)).json();
+			const task = await (await request(`${base}/api/projects/${id}/task/TASK-1`)).json();
 			expect(task.title).toBe(`${name} task`);
-			const doc = await (await fetch(`${base}/api/projects/${id}/doc/doc-1`)).json();
+			const doc = await (await request(`${base}/api/projects/${id}/doc/doc-1`)).json();
 			expect(doc.title).toBe(`${name} document`);
-			const decision = await (await fetch(`${base}/api/projects/${id}/decision/decision-1`)).json();
+			const decision = await (await request(`${base}/api/projects/${id}/decision/decision-1`)).json();
 			expect(decision.title).toBe(`${name} decision`);
-			const drafts = await (await fetch(`${base}/api/projects/${id}/drafts`)).json();
+			const drafts = await (await request(`${base}/api/projects/${id}/drafts`)).json();
 			expect(drafts[0].title).toBe(`${name} draft`);
-			const milestones = await (await fetch(`${base}/api/projects/${id}/milestones`)).json();
+			const milestones = await (await request(`${base}/api/projects/${id}/milestones`)).json();
 			expect(milestones[0].title).toBe(`${name} milestone`);
-			const search = await (await fetch(`${base}/api/projects/${id}/search?query=${name}`)).json();
+			const search = await (await request(`${base}/api/projects/${id}/search?query=${name}`)).json();
 			expect(JSON.stringify(search)).toContain(`${name} task`);
 			expect(JSON.stringify(search)).not.toContain(`${name === "Alpha" ? "Beta" : "Alpha"} task`);
-			expect(await (await fetch(`${base}/api/projects/${id}/assets/same.txt`)).text()).toBe(name);
-			expect((await fetch(`${base}/projects/${id}/board`)).status).toBe(200);
+			expect(await (await request(`${base}/api/projects/${id}/assets/same.txt`)).text()).toBe(name);
+			expect((await request(`${base}/projects/${id}/board`)).status).toBe(200);
 		}
-		expect((await fetch(`${base}/api/projects/3/tasks`)).status).toBe(404);
-		expect((await fetch(`${base}/projects/3/board`)).status).toBe(404);
+		expect((await request(`${base}/api/projects/3/tasks`)).status).toBe(404);
+		expect((await request(`${base}/projects/3/board`)).status).toBe(404);
 		await rename(alpha, `${alpha}-missing`);
-		expect((await fetch(`${base}/api/projects/1/tasks`)).status).toBe(503);
-		expect((await fetch(`${base}/api/projects/1`)).status).toBe(503);
-		expect((await fetch(`${base}/api/projects/2/tasks`)).status).toBe(200);
+		expect((await request(`${base}/api/projects/1/tasks`)).status).toBe(503);
+		expect((await request(`${base}/api/projects/1`)).status).toBe(503);
+		expect((await request(`${base}/api/projects/2/tasks`)).status).toBe(200);
 	});
 
 	it("does not recreate a missing custom Backlog directory", async () => {
 		const alpha = await seed("Alpha", "planning/records");
 		await new ProjectStore(dataDir).register("Alpha", alpha);
 		await rm(join(alpha, "planning", "records"), { recursive: true });
-		await server.start(Number(new URL(base).port));
-		expect((await fetch(`${base}/api/projects/1/tasks`)).status).toBe(503);
-		expect((await fetch(`${base}/projects/1/board`)).status).toBe(503);
+		await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
+		expect((await request(`${base}/api/projects/1/tasks`)).status).toBe(503);
+		expect((await request(`${base}/projects/1/board`)).status).toBe(503);
 		expect(await Bun.file(join(alpha, "planning", "records", "config.yml")).exists()).toBe(false);
 	});
 
@@ -182,9 +214,9 @@ describe("central project server", () => {
 		const alpha = await seed("Alpha");
 		const store = new ProjectStore(dataDir);
 		await store.register("Shown Alpha", alpha);
-		await server.start(Number(new URL(base).port));
+		await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
 		const put = (body: unknown) =>
-			fetch(`${base}/api/projects/1/config`, {
+			request(`${base}/api/projects/1/config`, {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(body),
@@ -216,11 +248,14 @@ describe("central project server", () => {
 			checkActiveBranches: true,
 			onStatusChange: `touch ${sentinel}`,
 		});
-		await server.start(Number(new URL(base).port));
+		await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
 
+		await authenticate();
 		const messages: string[][] = [[], []];
 		const sockets = [1, 2].map((id, index) => {
-			const socket = new WebSocket(`${base.replace("http", "ws")}/api/projects/${id}/ws`);
+			const socket = new WebSocket(`${base.replace("http", "ws")}/api/projects/${id}/ws`, {
+				headers: { Cookie: cookie, Origin: base },
+			} as never);
 			socket.addEventListener("message", (event) => messages[index]?.push(String(event.data)));
 			return socket;
 		});
@@ -237,15 +272,15 @@ describe("central project server", () => {
 			await Bun.sleep(250);
 			messages[0]?.splice(0);
 			messages[1]?.splice(0);
-			const response = await fetch(`${base}/api/projects/1/tasks/TASK-1`, {
+			const response = await request(`${base}/api/projects/1/tasks/TASK-1`, {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ title: "Alpha changed", status: "Done" }),
 			});
 			expect(response.status).toBe(200);
 			await Bun.sleep(300);
-			expect((await (await fetch(`${base}/api/projects/1/task/TASK-1`)).json()).title).toBe("Alpha changed");
-			expect((await (await fetch(`${base}/api/projects/2/task/TASK-1`)).json()).title).toBe("Beta task");
+			expect((await (await request(`${base}/api/projects/1/task/TASK-1`)).json()).title).toBe("Alpha changed");
+			expect((await (await request(`${base}/api/projects/2/task/TASK-1`)).json()).title).toBe("Beta task");
 			expect(messages[0]).toContain("tasks-updated");
 			expect(messages[1]).not.toContain("tasks-updated");
 			expect(await Bun.file(sentinel).exists()).toBe(false);
@@ -265,11 +300,11 @@ describe("central project server", () => {
 			return await Promise.all(paths.sort().map(async (path) => [path, await Bun.file(join(beta, path)).text()]));
 		};
 		const betaBefore = await snapshot();
-		await server.start(Number(new URL(base).port));
+		await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
 		const json = (body: unknown) => ({ headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 		expect(
 			(
-				await fetch(`${base}/api/projects/1/tasks`, {
+				await request(`${base}/api/projects/1/tasks`, {
 					method: "POST",
 					...json({ title: "Only Alpha" }),
 				})
@@ -277,26 +312,26 @@ describe("central project server", () => {
 		).toBe(201);
 		expect(
 			(
-				await fetch(`${base}/api/projects/1/docs/doc-1`, {
+				await request(`${base}/api/projects/1/docs/doc-1`, {
 					method: "PUT",
 					...json({ content: "Changed only in Alpha" }),
 				})
 			).status,
 		).toBe(200);
-		expect((await fetch(`${base}/api/projects/1/decisions/decision-1/archive`, { method: "POST" })).status).toBe(200);
-		expect((await fetch(`${base}/api/projects/1/tasks/TASK-1/archive`, { method: "POST" })).status).toBe(200);
+		expect((await request(`${base}/api/projects/1/decisions/decision-1/archive`, { method: "POST" })).status).toBe(200);
+		expect((await request(`${base}/api/projects/1/tasks/TASK-1/archive`, { method: "POST" })).status).toBe(200);
 		expect(await snapshot()).toEqual(betaBefore);
-		expect((await (await fetch(`${base}/api/projects/2/task/TASK-1`)).json()).title).toBe("Beta task");
+		expect((await (await request(`${base}/api/projects/2/task/TASK-1`)).json()).title).toBe("Beta task");
 	});
 
 	it("drains project contexts and can restart after concurrent stop calls", async () => {
 		const alpha = await seed("Alpha");
 		await new ProjectStore(dataDir).register("Alpha", alpha);
-		await server.start(Number(new URL(base).port));
-		expect((await fetch(`${base}/api/projects/1/tasks`)).status).toBe(200);
+		await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
+		expect((await request(`${base}/api/projects/1/tasks`)).status).toBe(200);
 		await Promise.all([server.stop(), server.stop()]);
 		expect(server.getPort()).toBeNull();
-		await server.start(Number(new URL(base).port));
-		expect((await fetch(`${base}/api/projects/1/tasks`)).status).toBe(200);
+		await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
+		expect((await request(`${base}/api/projects/1/tasks`)).status).toBe(200);
 	});
 });

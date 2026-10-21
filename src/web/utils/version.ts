@@ -1,7 +1,8 @@
+import { sessionFetch } from "../lib/request";
 // Version utility for web UI
 export async function getWebVersion(): Promise<string> {
 	try {
-		const response = await fetch("/api/version");
+		const response = await sessionFetch("/api/version");
 		const data = await response.json();
 		return data.version;
 	} catch {
