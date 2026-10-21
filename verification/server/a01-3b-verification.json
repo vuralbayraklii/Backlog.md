@@ -89,5 +89,12 @@
 			"bytes": 63494,
 			"sha256": "700b8c04b9f195b27598b42620f2179e8742e51e9d64f0890f07c60b537ff327"
 		}
-	]
+	],
+	"git_delivery": {
+		"implementation_commit": "ed051888e0dc8835956ae2079d454df682b3263b",
+		"remote_branch": "origin/tasks/server-a013-open-project-board",
+		"base_branch": "origin/server",
+		"base_commit": "2225c4167234fd300b477cc3207689c8454abed1",
+		"state": "implementation pushed; handoff status recorded in a follow-up commit on the same branch"
+	}
 }

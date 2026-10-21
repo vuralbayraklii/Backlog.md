@@ -3,7 +3,7 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-21 11:14'
+updated_date: '2026-10-21 11:16'
 tags:
   - server
   - handoff
@@ -24,10 +24,10 @@ Kullanıcının başlangıç planı, tüm A-00–A-08 aşamaları ve zorunlu kab
 - Origin SSH adresi, kullanıcının `github-backlogmd` takma adını kullanıyor. Kullanıcı bu bağlantıyla klonlama ve `server` dalını gönderme işlemini tamamladı.
 - Kaynak etiketi: `v1.54.0`. Gerçek commit: `2225c4167234fd300b477cc3207689c8454abed1`.
 - Geliştirme tabanı: `server`. Kullanıcı bu dalı belirtilen commit’ten açıp `origin/server` olarak gönderdi.
-- Yerel çalışma dalı: `tasks/server-a013-open-project-board`. Önceki kayıtlar korunarak bu dal açıldı; A-01.3 başlangıç yedeği `/tmp/backlog-a013-start.tar.gz`. HEAD hâlâ sabit kaynak commit’idir; uygulama ve kayıtlar commit edilmedi.
+- Yerel çalışma dalı: `tasks/server-a013-open-project-board`; `origin/tasks/server-a013-open-project-board` dalını izler. Önceki kayıtlar korunarak açıldı; A-01.3 başlangıç yedeği `/tmp/backlog-a013-start.tar.gz`. Uygulama commit’i `ed051888e0dc8835956ae2079d454df682b3263b` uzak özellik dalına gönderildi. `origin/server` sabit kaynak commit’inde kaldı.
 - Fork’un `main` dalı, ilk incelemede kaynak commit’in 12 commit ilerisindeydi. `main` kendiliğinden yeni geliştirme tabanı yapılmayacak.
 - Sabit commit’in `package.json` sürümü `1.53.0`. Bu mevcut upstream metaveri tutarsızlığı raporda kayıtlı; kaynak sabitlemesi commit üzerinden yapılıyor.
-- Görevler, üç rapor, plan/devir belgeleri, AGENTS.md devir bağlantısı, A-01.1/A-01.2 kaynak dosyaları ve CLI/README değişiklikleri yereldir. Henüz commit/push yapılmadı; bunların GitHub’da mevcut olduğunu varsayma.
+- A-00–A-01.3 görevleri, raporları, plan/devir belgeleri ve kaynak değişiklikleri özellik dalında commit edilip GitHub’a gönderildi. Güncel dal başını `git status` ve `git log` ile doğrula; `server` dalına merge yapılmadı.
 - Git commit adı/e-postası henüz tanımlı değil. Kullanıcıya GitHub gizlilik e-postası seçeneği sunuldu, fakat yanıt verilmedi. Kimlik seçimini yapılmış sayma ve rastgele yazar bilgisi uydurma.
 - Yeni oturumda `git status --short --branch` ile kontrol et. Yerel ve izlenmeyen dosyalar bu çalışmanın kayıtlarıdır; başka klon açmak, temizlemek veya dal değiştirmek devrin kayıtlarını taşımak anlamına gelmez.
 
@@ -137,7 +137,7 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 - Tarayıcıda sabit proje rota/API/WebSocket tabanı, Markdown görev/doküman bağlantıları ve ek URL’leri, proje bazlı pano/belge gezgini tercihleri ve kaydedilmemiş görev, belge, yeni karar, kilometre taşı ve ayar taslağında ayrılma uyarısı tamamlandı. Seçicide WebSocket açılmıyor.
 - `verification/server/a01-3a-central-api.json`: 9 API testi / 62 beklenti. `verification/server/a01-3b-verification.json`: yedi ilgili API/DOM dosyasında 121/121 test / 1215 beklenti; DEBUG çapraz test düzeltmesiyle üç dosyada 74/74; 550 dosyada tip kontrolü, 474 dosyada yazmasız Biome, build ve derlenen CLI/web/MCP smoke geçti. Derlenmiş `dist/backlog` ve gerçek Chromium ile 23 iddia doğrulandı: iki sekme/WebSocket, seçici, pano/düzenleme, taslak, belge, karar, kilometre taşı, arama, ayar, geri/ileri, doğrudan bağlantı, Markdown ekleri, 404/503 ve yerel browser. Ham günlük, ortam özel tarayıcı betiği ve masaüstü ekran görüntüleri rapor manifestinde SHA-256 ile korunuyor.
 - Tam `bun run test` ilk koşusunda `offline-mode.test.ts` yok olan `DEBUG` değişkenini yanlış geri yüklediği için 18 CLI çıktı testi başarısızdı. İkinci koşuda 3591 başarılı / 13 atlanan / 0 başarısız vardı fakat `list-window.test.ts` yok olan `process.exitCode` değerini `undefined` atamasıyla geri yüklediği için Bun çıkış kodu 1 kaldı. İki test temizliği düzeltildi. Son tam koşu 3604 test / 322 dosyada 3591 başarılı, 13 atlanan, 0 başarısız, 17361 beklenti ve çıkış kodu 0 ile tamamlandı; ham günlük SHA-256 özeti `a01-3b-verification.json` içindedir.
-- Git durumu: `tasks/server-a013-open-project-board`, HEAD `2225c4167234fd300b477cc3207689c8454abed1`; A-00–A-01.3 kodu, görevler ve raporlar yerel, değişmiş veya izlenmeyen dosyalardır. Commit/push yapılmadı. Git yazar adı/e-postası hâlâ tanımlı değil; kendiliğinden kimlik uydurma. Groma komutu bu ortamda bulunamadı; Groma taraması yapılmadı ve yönettiği dosyalara dokunulmadı. En güncel devir arşivi `/tmp/backlog-a013-handoff.tar.gz`; SHA-256 dosyası yanındadır. Geçici alandan taşınmadan kalıcı yedek sayılmamalıdır.
+- Git durumu: A-00–A-01.3 uygulama ve kanıtları `ed051888e0dc8835956ae2079d454df682b3263b` commit’iyle `origin/tasks/server-a013-open-project-board` dalına gönderildi; `origin/server` `2225c4167234fd300b477cc3207689c8454abed1` commit’inde kaldı. Yazar bu depoda `vuralbayraklii` ve kullanıcının seçtiği GitHub gizli adresi olarak tanımlı. Groma komutu bu ortamda bulunamadı; Groma taraması yapılmadı ve yönettiği dosyalara dokunulmadı. En güncel devir arşivi `/tmp/backlog-a013-handoff.tar.gz`; SHA-256 dosyası yanındadır. Geçici alandan taşınmadan kalıcı yedek sayılmamalıdır.
 
 ## Geliştirmenin yönü
 
@@ -146,7 +146,7 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 Devam sırası:
 
 1. MANIFESTO.md, AGENTS.md, doc-4 ve bu devir notuyla A-00–A-01.3 doğrulama raporlarını oku; BACK-785–BACK-789 görevlerini CLI ile doğrula.
-2. `git status --short --branch` ile yerel kayıtları doğrula. HEAD sabit kaynak commit’idir; tüm A-00–A-01.3 dosyaları commit/push edilmedi. Dal değiştirmeden veya temizlikten önce kayıtları koru.
+2. `git status --short --branch` ve `git log -2 --oneline` ile özellik dalını doğrula. Uygulama commit’i uzak özellik dalında; `server` dalına merge edilmedi. Dal değiştirmeden veya temizlikten önce yerel kanıt arşivini koru.
 3. Sonraki küçük A-02 hesap/yetki işinin ürün davranışını mevcut kullanıcı vuralbayraklii ile belirle. İnceleme önerilerini onaylanmış karar sayma ve A-01.3 yerel erişimini kalıcı yetkilendirme yerine kullanma.
 4. Yeni kapsamı CLI ile küçük görev olarak kaydet; kabul kanıtlarını ve devir notunu güncelle.
 
@@ -168,7 +168,7 @@ Aşağıdakiler önceki plan incelemesinde önerildi; kullanıcı bunları ayrı
 /home/vuralbayrakli/Backlog.md projesindeki çalışmaya devam ediyoruz.
 Önce MANIFESTO.md, AGENTS.md Server fork continuity, doc-4, doc-5 ve verification/server/a00-baseline.json ile a01-1, a01-2, a01-3a, a01-3b raporlarını; BACK-785–BACK-789 görevlerini CLI ile oku.
 A-00 ve A-01.1–A-01.3 tamamlandı. Tek yerel merkezi dinleyicide kayıtlı projeler seçiliyor ve mevcut pano proje kapsamlı çalışıyor; hesap/yetki ve tarihçe sonraki aşamalardır. A-02 görevi henüz açılmadı.
-Yerel dal tasks/server-a013-open-project-board, HEAD 2225c4167234fd300b477cc3207689c8454abed1. Kod, görevler ve raporlar commit/push edilmedi; Git yazar kimliği seçilmedi. Başlangıç yedeği /tmp/backlog-a013-start.tar.gz.
+Yerel dal tasks/server-a013-open-project-board, origin özellik dalını izliyor. A-00–A-01.3 uygulama commit’i ed051888e0dc8835956ae2079d454df682b3263b gönderildi; origin/server sabit kaynak commit’inde kaldı. Güncel HEAD ve temizliği Git ile doğrula. Son devir arşivi /tmp/backlog-a013-handoff.tar.gz.
 Tam bun run test son koşuda 3591 başarılı, 13 atlanan, 0 başarısız ve çıkış kodu 0 verdi. İlgili 121 API/DOM testi, Chromium, tip, yazmasız Biome, build ve compiled smoke de geçti; ayrıntılar a01-3b raporunda.
 Önce Git durumunu ve yerel kayıtları koru. Sonraki A-02 ürün davranışını mevcut kullanıcıyla netleştir; devirdeki çözülmemiş önerileri onaylı karar sayma.
 ```
