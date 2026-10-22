@@ -10,6 +10,8 @@ import { getPriorityOptions, normalizePriorityValue } from '../../utils/priority
 import { getProjectValues, matchesProjectFilter } from '../../utils/project-config';
 import { getTaskTypeValues, matchesTaskTypeFilter } from '../../utils/task-type-config';
 import { resolveTaskById } from '../../utils/task-id';
+import { projectScope } from '../lib/project-scope';
+import { MutationConflictNotice, isMutationConflict } from './MutationConflictNotice';
 import TaskColumn from './TaskColumn';
 import { BoardLoadingSkeleton } from './BoardLoadingSkeleton';
 import CleanupModal from './CleanupModal';
@@ -21,8 +23,9 @@ interface BoardProps {
   onNewTask: () => void;
   highlightTaskId?: string | null;
   tasks: Task[];
+  tasksRevision?: string | null;
   onRefreshData?: () => Promise<void>;
-  onTasksUpdated?: (tasks: Task[], requestTask: Task) => void;
+  onTasksUpdated?: (tasks: Task[], requestTask: Task, tasksRevision?: string | null) => void;
   statuses: string[];
   isLoading: boolean;
   loadingMessage?: string | null;
@@ -58,6 +61,7 @@ const Board: React.FC<BoardProps> = ({
   onNewTask,
   highlightTaskId,
   tasks,
+  tasksRevision,
   onRefreshData,
   onTasksUpdated,
   statuses,
@@ -82,8 +86,10 @@ const Board: React.FC<BoardProps> = ({
   hideEmptyColumns = false,
   dateFormat,
 }) => {
-  const { permissions } = useAuth();
+  const { permissions, writeState } = useAuth();
+  const canWrite = permissions.tasksWrite && writeState === 'ready';
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateConflict, setUpdateConflict] = useState<unknown>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null);
   // True while a drag that moves the whole selection is in flight, so every selected card can
@@ -350,7 +356,7 @@ const Board: React.FC<BoardProps> = ({
   // targetMilestone is only supplied by a drop into a milestone lane; the toolbar moves the
   // selection between columns and leaves every task's milestone alone.
   const handleBatchMove = async (targetStatus: string, targetMilestone?: string | null) => {
-    if (selectedTaskIds.length === 0 || !targetStatus) return;
+    if (!canWrite || selectedTaskIds.length === 0 || !targetStatus) return;
     const resolutions = selectedTaskIds.map((taskId) => {
       const resolution = resolveTaskById(tasks, taskId);
       return { taskId, task: resolution.status === 'found' ? resolution.task : undefined };
@@ -387,11 +393,16 @@ const Board: React.FC<BoardProps> = ({
     clearSelection();
     setBatchMoveStatus('');
     try {
+      const expectedRevisions = Object.fromEntries(
+        selectedTasks.flatMap((task) => task.recordKey && task.revision ? [[task.recordKey, task.revision]] : []),
+      );
       const result = await apiClient.moveTasks({
         taskIds,
         targetStatus,
         ...(targetMilestone !== undefined ? { targetMilestone } : {}),
+        ...(projectScope.id ? { expectedRevisions } : {}),
       });
+      setUpdateConflict(null);
       setUpdateError(
         result.failures.length > 0
           ? `Could not move ${result.failures.length} of ${taskIds.length} tasks. ${result.failures
@@ -403,37 +414,55 @@ const Board: React.FC<BoardProps> = ({
       // reorder does. Reloading every board resource instead remounts the whole view.
       const movedTasks = result.changedTasks ?? result.tasks;
       if (requestTask && onTasksUpdated && movedTasks.length > 0) {
-        onTasksUpdated(movedTasks, requestTask);
+        onTasksUpdated(movedTasks, requestTask, result.tasksRevision);
       } else if (onRefreshData) await onRefreshData();
     } catch (err) {
       setUpdateError(err instanceof Error ? err.message : 'Failed to move tasks');
+      setUpdateConflict(isMutationConflict(err) ? err : null);
+      if (isMutationConflict(err) && onRefreshData) await onRefreshData();
     }
   };
 
   const handleTaskUpdate = async (taskId: string, updates: Partial<Task>) => {
+    if (!canWrite) return;
     try {
-      await apiClient.updateTask(taskId, updates);
+      const resolution = resolveTaskById(tasks, taskId);
+      await apiClient.updateTask(taskId, updates, resolution.status === 'found' ? resolution.task : null);
       // Refresh data to reflect the changes
       if (onRefreshData) {
         await onRefreshData();
       }
       setUpdateError(null);
+      setUpdateConflict(null);
     } catch (err) {
       setUpdateError(err instanceof Error ? err.message : 'Failed to update task');
+      setUpdateConflict(isMutationConflict(err) ? err : null);
+      if (isMutationConflict(err) && onRefreshData) await onRefreshData();
     }
   };
 
   const handleTaskReorder = async (payload: ReorderTaskPayload) => {
+    if (!canWrite) return;
     try {
       const requestResolution = resolveTaskById(tasks, payload.taskId);
       const requestTask = requestResolution.status === 'found' ? requestResolution.task : undefined;
-      const result = await apiClient.reorderTask(payload);
+      const affectedIds = new Set([payload.taskId, ...payload.orderedTaskIds]);
+      const expectedRevisions = Object.fromEntries(
+        tasks.flatMap((task) => affectedIds.has(task.id) && task.recordKey && task.revision ? [[task.recordKey, task.revision]] : []),
+      );
+      const result = await apiClient.reorderTask(
+        projectScope.id ? { ...payload, expectedRevisions } : payload,
+        tasksRevision,
+      );
       if (requestTask && onTasksUpdated) {
-        onTasksUpdated(result.changedTasks ?? [result.task], requestTask);
+        onTasksUpdated(result.changedTasks ?? [result.task], requestTask, result.tasksRevision);
       } else if (onRefreshData) await onRefreshData();
       setUpdateError(null);
+      setUpdateConflict(null);
     } catch (err) {
       setUpdateError(err instanceof Error ? err.message : 'Failed to reorder task');
+      setUpdateConflict(isMutationConflict(err) ? err : null);
+      if (isMutationConflict(err) && onRefreshData) await onRefreshData();
     }
   };
 
@@ -659,7 +688,21 @@ const Board: React.FC<BoardProps> = ({
         if (selectedTaskIds.length > 0 && event.target === event.currentTarget) clearSelection();
       }}
     >
-      {updateError && (
+      {Boolean(updateConflict) && (
+        <div className="mb-4">
+          <MutationConflictNotice
+            error={updateConflict}
+            draft={false}
+            onOpenCurrent={() => {
+              void onRefreshData?.();
+              setUpdateConflict(null);
+              setUpdateError(null);
+            }}
+            onDismiss={() => setUpdateConflict(null)}
+          />
+        </div>
+      )}
+      {updateError && !updateConflict && (
         <div className="mb-4 rounded-md bg-red-100 px-4 py-3 text-sm text-red-700 dark:bg-red-900/40 dark:text-red-200 transition-colors duration-200">
           {updateError}
         </div>
@@ -669,7 +712,7 @@ const Board: React.FC<BoardProps> = ({
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 transition-colors duration-200">Kanban Board</h2>
           <button
             className="inline-flex items-center px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-blue-500 dark:focus:ring-offset-gray-800 transition-colors duration-200"
-            disabled={!permissions.tasksWrite}
+            disabled={!canWrite}
             onClick={onNewTask}
           >
             + New Task
@@ -703,7 +746,7 @@ const Board: React.FC<BoardProps> = ({
             <button
               type="button"
               className={BOARD_FILTER_BUTTON_CLASS}
-              disabled={!permissions.tasksWrite || !batchMoveStatus}
+              disabled={!canWrite || !batchMoveStatus}
               onClick={() => handleBatchMove(batchMoveStatus)}
             >
               Move
@@ -902,7 +945,7 @@ const Board: React.FC<BoardProps> = ({
                             dateFormat={dateFormat}
                             onDragStart={handleColumnDragStart}
                             onDragEnd={handleColumnDragEnd}
-                            onCleanup={permissions.archive && status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
+                            onCleanup={permissions.archive && writeState === 'ready' && status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
                             {...selectionProps}
                           />
                         </div>
@@ -934,7 +977,7 @@ const Board: React.FC<BoardProps> = ({
                   dateFormat={dateFormat}
                   onDragStart={handleColumnDragStart}
                   onDragEnd={handleColumnDragEnd}
-                  onCleanup={permissions.archive && status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
+                  onCleanup={permissions.archive && writeState === 'ready' && status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
                   {...selectionProps}
                 />
               </div>

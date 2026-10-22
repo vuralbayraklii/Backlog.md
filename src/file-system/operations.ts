@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { Dirent } from "node:fs";
 import { lstat, mkdir, readdir, readFile, realpath, rename, stat, unlink, writeFile } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -71,6 +72,15 @@ import {
 } from "../utils/task-path.ts";
 import { sortByTaskId } from "../utils/task-sorting.ts";
 import { matchesTaskTypeFilter } from "../utils/task-type-config.ts";
+import {
+	attachRecordFileSnapshot,
+	type PreparedAfterFile,
+	PreparedFileCapture,
+	type PreparedFileChange,
+	type PreparedPathGuard,
+	type PreparedRecordIdentity,
+	type PreparedRecordKeyResolver,
+} from "./prepared-change.ts";
 
 // Interface for task path resolution context
 interface TaskPathContext {
@@ -443,6 +453,7 @@ function replaceDecisionStatus(content: string, status: string): string | null {
 }
 
 export class FileSystem {
+	private readonly preparedCapture = new AsyncLocalStorage<PreparedFileCapture>();
 	private resolvedBacklogDir: string;
 	private resolvedBacklogDirName: string;
 	private resolvedConfigPath: string;
@@ -469,13 +480,118 @@ export class FileSystem {
 		this.configSource = resolution.configSource ?? "folder";
 	}
 
+	/** Stage only physical effects. The caller owns the project lock, durable intent, and publication. */
+	async capturePreparedChanges<T>(
+		guard: PreparedPathGuard,
+		resolveRecordKey: PreparedRecordKeyResolver | undefined,
+		operation: () => Promise<T>,
+	): Promise<{
+		result: T;
+		files: PreparedFileChange[];
+		apply: (afterFile?: PreparedAfterFile) => Promise<void>;
+		releaseLocks: () => Promise<void>;
+	}> {
+		const capture = new PreparedFileCapture(guard, resolveRecordKey);
+		try {
+			const result = await this.preparedCapture.run(capture, operation);
+			return {
+				result,
+				files: capture.changes(),
+				apply: (afterFile) => capture.apply(afterFile),
+				releaseLocks: () => capture.releaseLocks(),
+			};
+		} catch (error) {
+			await capture.releaseLocks();
+			throw error;
+		}
+	}
+
+	isCapturingPreparedChanges(): boolean {
+		return this.preparedCapture.getStore() !== undefined;
+	}
+
+	async stageRecordMove(sourcePath: string, targetPath: string, record: PreparedRecordIdentity): Promise<boolean> {
+		const capture = this.preparedCapture.getStore();
+		if (!capture) return false;
+		await capture.move(sourcePath, targetPath, record);
+		return true;
+	}
+
+	async stageRecordRemoval(path: string, record: PreparedRecordIdentity): Promise<boolean> {
+		const capture = this.preparedCapture.getStore();
+		if (!capture) return false;
+		await capture.remove(path, record);
+		return true;
+	}
+
+	async stageRecordWrite(
+		path: string,
+		content: string | Uint8Array,
+		loadedFromPath: string | undefined,
+		record: PreparedRecordIdentity,
+	): Promise<boolean> {
+		const capture = this.preparedCapture.getStore();
+		if (!capture) return false;
+		await capture.write(path, typeof content === "string" ? Buffer.from(content) : content, loadedFromPath, record);
+		return true;
+	}
+
+	async stageIdentityTransition(newPath: string, formerPath: string): Promise<void> {
+		await this.preparedCapture.getStore()?.linkIdentity(newPath, formerPath);
+	}
+
+	preparedMilestone(id: string): Milestone | null {
+		const changes = this.preparedCapture.getStore()?.changes() ?? [];
+		const change = changes.findLast(
+			(file) => file.record.kind === "milestone" && file.record.visibleId === id && file.after?.type === "file",
+		);
+		if (change?.after?.type !== "file") return null;
+		return attachRecordFileSnapshot(
+			parseMilestone(new TextDecoder().decode(change.after.bytes)),
+			change.record.recordPath ?? change.path,
+			change.after.bytes,
+		);
+	}
+
 	/** Central mode supplies an opened-file reader; local commands retain Bun text semantics. */
 	async readText(path: string): Promise<string> {
+		const capture = this.preparedCapture.getStore();
+		if (capture) {
+			const bytes = await capture.bytes(path, () =>
+				this.fileReader ? Promise.resolve(this.fileReader(path)) : readFile(path),
+			);
+			return new TextDecoder().decode(bytes);
+		}
 		return this.fileReader ? new TextDecoder().decode(this.fileReader(path)) : await Bun.file(path).text();
 	}
 
 	async readBytes(path: string): Promise<Buffer> {
+		const capture = this.preparedCapture.getStore();
+		if (capture)
+			return await capture.bytes(path, () =>
+				this.fileReader ? Promise.resolve(this.fileReader(path)) : readFile(path),
+			);
 		return this.fileReader ? this.fileReader(path) : await readFile(path);
+	}
+
+	private async readRecordText(path: string): Promise<{ content: string; bytes: Buffer }> {
+		const bytes = await this.readBytes(path);
+		return { content: new TextDecoder().decode(bytes), bytes };
+	}
+
+	async readRecordSnapshot(kind: "task", path: string): Promise<Task>;
+	async readRecordSnapshot(kind: "document", path: string): Promise<Document>;
+	async readRecordSnapshot(kind: "decision", path: string): Promise<Decision>;
+	async readRecordSnapshot(kind: "task" | ContentRecordKind, path: string): Promise<Task | Document | Decision> {
+		const { content, bytes } = await this.readRecordText(path);
+		switch (kind) {
+			case "task":
+				return attachRecordFileSnapshot(normalizeTaskIdentity(parseTask(content)), path, bytes);
+			case "document":
+				return attachRecordFileSnapshot(parseDocument(content), path, bytes);
+			case "decision":
+				return attachRecordFileSnapshot(parseDecision(content), path, bytes);
+		}
 	}
 
 	private async getBacklogDir(): Promise<string> {
@@ -896,6 +1012,10 @@ export class FileSystem {
 		toError: (error: unknown) => Error,
 		fn: () => Promise<T>,
 	): Promise<T> {
+		const capture = this.preparedCapture.getStore();
+		// A multi-record prepared operation may revisit its allocator lock. It already owns that
+		// lock until finalize, so reacquiring it here would only contend with itself.
+		if (capture?.holdsLock(lockDir)) return await fn();
 		await mkdir(dirname(lockDir), { recursive: true });
 
 		let release: (() => Promise<void>) | undefined;
@@ -915,17 +1035,31 @@ export class FileSystem {
 		} catch (error) {
 			throw toError(error);
 		}
+		capture?.markLockHeld(lockDir);
 
+		let deferred = false;
 		try {
 			const result = await fn();
-			try {
-				await release?.();
-			} catch (error) {
-				throw toError(error);
+			if (capture && release) {
+				capture.deferLockRelease(lockDir, async () => {
+					try {
+						await release();
+					} catch (error) {
+						throw toError(error);
+					}
+				});
+				deferred = true;
+			} else {
+				try {
+					await release?.();
+				} catch (error) {
+					throw toError(error);
+				}
 			}
 			return result;
 		} catch (error) {
-			if (release) {
+			if (release && !deferred) {
+				capture?.forgetLock(lockDir);
 				try {
 					await release();
 				} catch {
@@ -991,7 +1125,12 @@ export class FileSystem {
 		};
 		const content = serializeTask(normalizedTask);
 
-		await this.writeRecordFile(filepath, content, loadedFromPath);
+		await this.writeRecordFile(filepath, content, loadedFromPath, {
+			kind: "task",
+			visibleId: normalizedTask.id,
+			lifecycle: task.source === "archived" ? "archived" : "active",
+			recordPath: filepath,
+		});
 		return filepath;
 	}
 
@@ -1013,7 +1152,10 @@ export class FileSystem {
 		targetPath: string,
 		content: string,
 		loadedFromPath: string | undefined,
+		record: PreparedRecordIdentity,
 	): Promise<string | undefined> {
+		const capture = this.preparedCapture.getStore();
+		if (capture) return await capture.write(targetPath, Buffer.from(content), loadedFromPath, record);
 		await this.ensureDirectoryExists(dirname(targetPath));
 
 		if (!loadedFromPath) {
@@ -1062,9 +1204,9 @@ export class FileSystem {
 
 			if (!filepath) return null;
 
-			const content = await this.readText(filepath);
+			const { content, bytes } = await this.readRecordText(filepath);
 			const task = normalizeTaskIdentity(parseTask(content));
-			return { ...task, filePath: filepath };
+			return attachRecordFileSnapshot({ ...task, filePath: filepath }, filepath, bytes);
 		} catch (error) {
 			if (isAmbiguousTaskIdError(error) || error instanceof TaskDependenciesParseError) throw error;
 			return null;
@@ -1098,10 +1240,10 @@ export class FileSystem {
 		if (cacheEpoch === this.taskParseCacheEpoch) {
 			this.taskFileReadGenerations.set(cacheKey, generation);
 		}
-		const content = await this.withTaskFileReadSlot(async () => await this.readText(filepath));
+		const { content, bytes } = await this.withTaskFileReadSlot(async () => await this.readRecordText(filepath));
 		const cached = this.parsedTaskFiles.get(cacheKey);
 		if (cached?.content === content) {
-			return structuredClone(cached.task);
+			return attachRecordFileSnapshot(structuredClone(cached.task), filepath, bytes);
 		}
 
 		const parsed = parseTask(content);
@@ -1109,7 +1251,7 @@ export class FileSystem {
 			this.parsedTaskFiles.set(cacheKey, { content, task: parsed });
 		}
 		// Task consumers mutate nested lists while preparing edits and branch metadata.
-		return structuredClone(parsed);
+		return attachRecordFileSnapshot(structuredClone(parsed), filepath, bytes);
 	}
 
 	private async readTaskFiles(
@@ -1268,10 +1410,26 @@ export class FileSystem {
 			const targetPath = join(archiveDraftsDir, filename);
 
 			const content = await this.readText(sourcePath);
-			await this.ensureDirectoryExists(dirname(targetPath));
-			await Bun.write(targetPath, content);
-
-			await unlink(sourcePath);
+			const capture = this.preparedCapture.getStore();
+			if (capture) {
+				await capture.write(targetPath, Buffer.from(content), undefined, {
+					kind: "task",
+					visibleId: canonicalId,
+					lifecycle: "archived",
+					recordPath: targetPath,
+				});
+				await capture.linkIdentity(targetPath, sourcePath);
+				await capture.remove(sourcePath, {
+					kind: "task",
+					visibleId: canonicalId,
+					lifecycle: "deleted",
+					recordPath: sourcePath,
+				});
+			} else {
+				await this.ensureDirectoryExists(dirname(targetPath));
+				await Bun.write(targetPath, content);
+				await unlink(sourcePath);
+			}
 
 			return { sourcePath, targetPath };
 		});
@@ -1283,8 +1441,9 @@ export class FileSystem {
 	 */
 	async loadDraftFromFile(filePath: string): Promise<Task | null> {
 		try {
-			const task = normalizeTaskIdentity(parseTask(await this.readText(filePath)));
-			return { ...task, filePath };
+			const { content, bytes } = await this.readRecordText(filePath);
+			const task = normalizeTaskIdentity(parseTask(content));
+			return attachRecordFileSnapshot({ ...task, filePath }, filePath, bytes);
 		} catch {
 			return null;
 		}
@@ -1330,9 +1489,18 @@ export class FileSystem {
 				};
 
 				await this.saveTask(promotedTask);
+				await this.stageIdentityTransition(await this.getTaskWritePath(promotedTask), sourcePath);
 
 				// Delete old draft file
-				await unlink(sourcePath);
+				if (
+					!(await this.stageRecordRemoval(sourcePath, {
+						kind: "task",
+						visibleId: draft.id,
+						lifecycle: "deleted",
+						recordPath: sourcePath,
+					}))
+				)
+					await unlink(sourcePath);
 
 				return true;
 			});
@@ -1368,14 +1536,23 @@ export class FileSystem {
 		};
 
 		const savedPath = await this.saveDraft(demotedDraft);
+		await this.stageIdentityTransition(savedPath, task.filePath);
 
 		// Delete old task file. If that fails, remove the newly written draft so a retry cannot
 		// encounter two copies of the task.
 		try {
-			await unlink(task.filePath);
+			if (
+				!(await this.stageRecordRemoval(task.filePath, {
+					kind: "task",
+					visibleId: task.id,
+					lifecycle: "deleted",
+					recordPath: task.filePath,
+				}))
+			)
+				await unlink(task.filePath);
 		} catch (error) {
 			try {
-				await unlink(savedPath);
+				if (!this.isCapturingPreparedChanges()) await unlink(savedPath);
 			} catch (cleanupError) {
 				const failure = error instanceof Error ? error : new Error(String(error));
 				(failure as Error & { demotionState?: string }).demotionState = "partial";
@@ -1395,7 +1572,12 @@ export class FileSystem {
 		// Normalize the draft ID to uppercase before serialization
 		const content = serializeTask({ ...task, id: draftId });
 
-		await this.writeRecordFile(filepath, content, loadedFromPath);
+		await this.writeRecordFile(filepath, content, loadedFromPath, {
+			kind: "task",
+			visibleId: draftId,
+			lifecycle: "draft",
+			recordPath: filepath,
+		});
 		return filepath;
 	}
 
@@ -1420,9 +1602,9 @@ export class FileSystem {
 			const tasks: Task[] = [];
 			for (const file of taskFiles) {
 				const filepath = join(draftsDir, file);
-				const content = await this.readText(filepath);
+				const { content, bytes } = await this.readRecordText(filepath);
 				const task = normalizeTaskIdentity(parseTask(content));
-				tasks.push({ ...task, filePath: filepath });
+				tasks.push(attachRecordFileSnapshot({ ...task, filePath: filepath }, filepath, bytes));
 			}
 
 			return sortByTaskId(tasks);
@@ -1446,9 +1628,9 @@ export class FileSystem {
 			for (const file of taskFiles) {
 				try {
 					const filepath = join(draftsDir, file);
-					const content = await this.readText(filepath);
+					const { content, bytes } = await this.readRecordText(filepath);
 					const task = normalizeTaskIdentity(parseTask(content));
-					tasks.push({ ...task, filePath: filepath });
+					tasks.push(attachRecordFileSnapshot({ ...task, filePath: filepath }, filepath, bytes));
 				} catch {}
 			}
 
@@ -1467,7 +1649,8 @@ export class FileSystem {
 		const filename = basename(filePath);
 		let task: Task;
 		try {
-			task = normalizeTaskIdentity(parseTask(await this.readText(filePath)));
+			const { content, bytes } = await this.readRecordText(filePath);
+			task = attachRecordFileSnapshot(normalizeTaskIdentity(parseTask(content)), filePath, bytes);
 		} catch {
 			throw new DraftParseError(filename);
 		}
@@ -1597,7 +1780,12 @@ export class FileSystem {
 		const filepath = join(decisionsDir, filename);
 		const loadedFromPath = decision.path ? this.contentRecordFilePath("decision", decision) : undefined;
 
-		const movedFrom = await this.writeRecordFile(filepath, serializeDecision(decision), loadedFromPath);
+		const movedFrom = await this.writeRecordFile(filepath, serializeDecision(decision), loadedFromPath, {
+			kind: "decision",
+			visibleId: decision.id,
+			lifecycle: "active",
+			recordPath: filepath,
+		});
 
 		return { filepath, movedFrom };
 	}
@@ -1634,7 +1822,17 @@ export class FileSystem {
 			);
 		}
 
-		await Bun.write(filepath, updated);
+		const capture = this.preparedCapture.getStore();
+		if (capture) {
+			await capture.write(filepath, Buffer.from(updated), filepath, {
+				kind: "decision",
+				visibleId: decision.id,
+				lifecycle: "active",
+				recordPath: filepath,
+			});
+		} else {
+			await Bun.write(filepath, updated);
+		}
 		return filepath;
 	}
 
@@ -1663,7 +1861,12 @@ export class FileSystem {
 		const filepath = join(docsDir, ...relativePath.split("/"));
 		const loadedFromPath = document.path ? this.contentRecordFilePath("document", document) : undefined;
 
-		const movedFrom = await this.writeRecordFile(filepath, serializeDocument(document), loadedFromPath);
+		const movedFrom = await this.writeRecordFile(filepath, serializeDocument(document), loadedFromPath, {
+			kind: "document",
+			visibleId: document.id,
+			lifecycle: "active",
+			recordPath: filepath,
+		});
 
 		document.path = relativePath;
 		return { relativePath, movedFrom };
@@ -1696,8 +1899,9 @@ export class FileSystem {
 			const decisions: Decision[] = [];
 			for (const file of decisionFiles) {
 				try {
-					const content = await this.readText(join(directory, file));
-					decisions.push({ ...parseDecision(content), path: file });
+					const filepath = join(directory, file);
+					const { content, bytes } = await this.readRecordText(filepath);
+					decisions.push(attachRecordFileSnapshot({ ...parseDecision(content), path: file }, filepath, bytes));
 				} catch {
 					// One malformed file must not hide every other decision from lookups.
 					unreadable?.push(file);
@@ -1741,8 +1945,9 @@ export class FileSystem {
 		for (const relativePath of await this.findDocumentFiles(directory, otherDocumentsDir, unreadable)) {
 			if (basename(relativePath).toLowerCase() === "readme.md") continue;
 			try {
-				const content = await this.readText(join(directory, ...relativePath.split("/")));
-				docs.push({ ...parseDocument(content), path: relativePath });
+				const filepath = join(directory, ...relativePath.split("/"));
+				const { content, bytes } = await this.readRecordText(filepath);
+				docs.push(attachRecordFileSnapshot({ ...parseDocument(content), path: relativePath }, filepath, bytes));
 			} catch {
 				// One malformed file must not hide every other document from lookups.
 				unreadable?.push(relativePath);
@@ -1909,7 +2114,16 @@ export class FileSystem {
 		if (!storage.idsEqual(storedId, record.id)) {
 			throw refuse(`${projectPath} is the file of ${storedId}.`);
 		}
-		await unlink(filePath);
+		if (
+			!(await this.stageRecordRemoval(filePath, {
+				kind,
+				visibleId: record.id,
+				lifecycle: "deleted",
+				recordPath: filePath,
+			}))
+		) {
+			await unlink(filePath);
+		}
 		return filePath;
 	}
 
@@ -2024,10 +2238,10 @@ ${rawContent.trim()}
 				continue;
 			}
 			const filepath = join(milestonesDir, file);
-			const content = await this.readText(filepath);
+			const { content, bytes } = await this.readRecordText(filepath);
 			let milestone: Milestone;
 			try {
-				milestone = parseMilestone(content);
+				milestone = attachRecordFileSnapshot(parseMilestone(content), filepath, bytes);
 			} catch {
 				continue;
 			}
@@ -2090,8 +2304,9 @@ ${rawContent.trim()}
 		for (const file of milestoneFiles) {
 			if (file.toLowerCase() === "readme.md") continue;
 			try {
-				const content = await this.readText(join(milestonesDir, file));
-				milestones.push(parseMilestone(content));
+				const filepath = join(milestonesDir, file);
+				const { content, bytes } = await this.readRecordText(filepath);
+				milestones.push(attachRecordFileSnapshot(parseMilestone(content), filepath, bytes));
 			} catch {
 				// Match task loading: one malformed file must not hide every valid item.
 			}
@@ -2133,16 +2348,26 @@ ${rawContent.trim()}
 		const normalizedDueDate = normalizeDueDate(dueDate, "Due date");
 		return await this.withCreateLock(async () => {
 			const milestonesDir = await this.getMilestonesDir();
+			const prepared = this.isCapturingPreparedChanges();
 
 			// Ensure milestones directory exists
-			await mkdir(milestonesDir, { recursive: true });
+			if (!prepared) await mkdir(milestonesDir, { recursive: true });
 
 			// Find next available milestone ID
 			const archiveMilestonesDir = await this.getArchiveMilestonesDir();
-			await mkdir(archiveMilestonesDir, { recursive: true });
+			if (!prepared) await mkdir(archiveMilestonesDir, { recursive: true });
+			const scanMilestones = async (directory: string): Promise<string[]> => {
+				try {
+					await stat(directory);
+				} catch (error) {
+					if (prepared && (error as NodeJS.ErrnoException).code === "ENOENT") return [];
+					throw error;
+				}
+				return await Array.fromAsync(new Bun.Glob("m-*.md").scan({ cwd: directory, followSymlinks: true }));
+			};
 			const [existingFiles, archivedFiles] = await Promise.all([
-				Array.fromAsync(new Bun.Glob("m-*.md").scan({ cwd: milestonesDir, followSymlinks: true })),
-				Array.fromAsync(new Bun.Glob("m-*.md").scan({ cwd: archiveMilestonesDir, followSymlinks: true })),
+				scanMilestones(milestonesDir),
+				scanMilestones(archiveMilestonesDir),
 			]);
 			const parseMilestoneId = async (dir: string, file: string): Promise<number | null> => {
 				if (file.toLowerCase() === "readme.md") {
@@ -2186,7 +2411,15 @@ ${description || `Milestone: ${title}`}`,
 			);
 
 			const filepath = join(milestonesDir, filename);
-			await Bun.write(filepath, content);
+			if (
+				!(await this.stageRecordWrite(filepath, content, undefined, {
+					kind: "milestone",
+					visibleId: id,
+					lifecycle: "active",
+					recordPath: filepath,
+				}))
+			)
+				await Bun.write(filepath, content);
 
 			return parseMilestone(content);
 		});
@@ -2235,14 +2468,23 @@ ${description || `Milestone: ${title}`}`,
 			const nextDueDate = dueDate === undefined ? milestone.dueDate : normalizedDueDate;
 			const updatedContent = this.serializeMilestoneContent(milestone.id, normalizedTitle, nextRawContent, nextDueDate);
 
-			if (sourcePath !== targetPath) {
-				if (await Bun.file(targetPath).exists()) {
-					return { success: false };
+			if (
+				!(await this.stageRecordWrite(targetPath, updatedContent, sourcePath, {
+					kind: "milestone",
+					visibleId: milestone.id,
+					lifecycle: "active",
+					recordPath: targetPath,
+				}))
+			) {
+				if (sourcePath !== targetPath) {
+					if (await Bun.file(targetPath).exists()) {
+						return { success: false };
+					}
+					await rename(sourcePath, targetPath);
+					movedFile = true;
 				}
-				await rename(sourcePath, targetPath);
-				movedFile = true;
+				await Bun.write(targetPath, updatedContent);
 			}
-			await Bun.write(targetPath, updatedContent);
 
 			return {
 				success: true,
@@ -2253,6 +2495,7 @@ ${description || `Milestone: ${title}`}`,
 				previousDueDate: milestone.dueDate,
 			};
 		} catch {
+			if (this.isCapturingPreparedChanges()) return { success: false };
 			try {
 				if (movedFile && sourcePath && targetPath && sourcePath !== targetPath) {
 					await rename(targetPath, sourcePath);
@@ -2291,8 +2534,17 @@ ${description || `Milestone: ${title}`}`,
 
 			const archiveDir = await this.getArchiveMilestonesDir();
 			const targetPath = join(archiveDir, milestoneMatch.file);
-			await this.ensureDirectoryExists(dirname(targetPath));
-			await rename(milestoneMatch.filepath, targetPath);
+			if (
+				!(await this.stageRecordMove(milestoneMatch.filepath, targetPath, {
+					kind: "milestone",
+					visibleId: milestoneMatch.milestone.id,
+					lifecycle: "archived",
+					recordPath: targetPath,
+				}))
+			) {
+				await this.ensureDirectoryExists(dirname(targetPath));
+				await rename(milestoneMatch.filepath, targetPath);
+			}
 
 			return {
 				success: true,
@@ -2344,6 +2596,21 @@ ${description || `Milestone: ${title}`}`,
 		}
 		const configPath = this.resolvedConfigPath;
 		const content = this.serializeConfig(normalizedConfig);
+		const capture = this.preparedCapture.getStore();
+		if (capture) {
+			await capture.write(
+				configPath,
+				Buffer.from(content),
+				(await capture.entry(configPath)) ? configPath : undefined,
+				{
+					kind: "config",
+					visibleId: "config",
+					lifecycle: "active",
+					recordPath: configPath,
+				},
+			);
+			return;
+		}
 		await Bun.write(configPath, content);
 		this.cachedConfig = normalizedConfig;
 		this.cachedConfigSnapshot = { path: configPath, content };

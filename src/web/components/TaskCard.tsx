@@ -76,7 +76,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   isSelectionDragging = false,
   onSelectionDragChange,
 }) => {
-  const { permissions } = useAuth();
+  const { permissions, writeState } = useAuth();
   const [isDragging, setIsDragging] = React.useState(false);
   const [showBranchTooltip, setShowBranchTooltip] = React.useState(false);
 
@@ -190,7 +190,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
             : ''
         }`}
         aria-selected={isSelected}
-        draggable={!isFromOtherBranch && permissions.tasksWrite}
+        draggable={!isFromOtherBranch && permissions.tasksWrite && writeState === 'ready'}
 		role="button"
 		tabIndex={0}
 		aria-label={accessibleLabel}

@@ -85,7 +85,7 @@ describe("personal folder areas and additive server migration", () => {
 			expect(inserted.lastInsertRowid).toBe(43);
 			expect(() => db.query("UPDATE projects SET tracking=2 WHERE id=7").run()).toThrow("CHECK");
 		});
-		expect(database.read(-1, (_db, version) => version)).toBe(3);
+		expect(database.read(-1, (_db, version) => version)).toBe(4);
 	});
 
 	it("reads A-02 accounts and sessions without migration, then atomically preserves them through an upgrade", async () => {
@@ -96,7 +96,9 @@ describe("personal folder areas and additive server migration", () => {
 		);
 		const member = store.setMember("7", alice.id, { archive: true });
 		const old = new Database(store.databasePath);
-		old.exec("DROP TABLE folder_areas; ALTER TABLE projects DROP COLUMN tracking; PRAGMA user_version=2");
+		old.exec(
+			"DROP TABLE history_events; DROP TABLE operation_files; DROP TABLE operations; DROP TABLE records; DROP TABLE folder_areas; ALTER TABLE projects DROP COLUMN tracking; PRAGMA user_version=2",
+		);
 		old.close();
 		const before = await Bun.file(store.databasePath).arrayBuffer();
 		expect(store.hasAdmin()).toBe(true);
@@ -129,7 +131,7 @@ describe("personal folder areas and additive server migration", () => {
 		expect(store.loadSession(login.token)).toEqual(login.session);
 		expect(store.listMembers("7")).toEqual([member]);
 		expect(store.permissions(alice, "7")).toEqual(member.permissions);
-		expect(database.read(-1, (_db, version) => version)).toBe(3);
+		expect(database.read(-1, (_db, version) => version)).toBe(4);
 	});
 
 	it.each(["tracking constraint", "area uniqueness", "unknown version", "added view"])(
@@ -145,7 +147,7 @@ describe("personal folder areas and additive server migration", () => {
 				raw.exec(
 					"DROP TABLE folder_areas; CREATE TABLE folder_areas(id TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),root_path TEXT NOT NULL,created_at TEXT NOT NULL) STRICT",
 				);
-			if (change === "unknown version") raw.exec("PRAGMA user_version=4");
+			if (change === "unknown version") raw.exec("PRAGMA user_version=5");
 			if (change === "added view") raw.exec("CREATE VIEW unexpected AS SELECT id FROM users");
 			raw.close();
 			const before = await Bun.file(store.databasePath).arrayBuffer();

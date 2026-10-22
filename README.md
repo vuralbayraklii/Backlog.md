@@ -394,8 +394,8 @@ persisted across restarts; limited requests return 429 and Retry-After. See the
 
 The API returns 401 for invalid sessions, 403 for denied operations, and 404 for unknown or unjoined projects. Permissions
 apply to searches, statistics, attachments, archive operations, and live connections. WebSockets recheck before every send
-and close within one second after revocation. API permission changes take effect on the next check. A write that already
-passed authorization may finish. Concurrent writes to the same decision serialize and recheck both current state and grants.
+and close within one second after revocation. API permission changes take effect on the next check. Writes recheck current
+grants immediately before durable intent; an operation already past that point may finish.
 
 Project archives list tasks, documents, and decisions and allow viewing, restoring, or permanently deleting an archived record.
 Deletion requires explicit confirmation naming the record and refuses active records or tasks with existing subtasks.
@@ -403,6 +403,73 @@ Reference cleanup and affected-record information follow the existing CLI/Core b
 `GET /api/projects/:id/{tasks|docs|decisions}/archived`, `POST .../:recordId/restore`, and `DELETE .../:recordId`.
 Mutations are never automatically retried. On session expiry an open editor retains unsaved text in the current page's
 memory; logging in with the same account resumes it, while switching accounts clears the previous account's UI state.
+
+### Server writes and history
+
+Markdown remains the source of record content. The same `server.sqlite` stores stable internal record keys, durable write
+intent, safe operation results, and immutable history. Initial attachment records one inventory event and preserves source
+dates; it does not infer when an old completed task was finished. New event times are UTC.
+
+Central task, draft, document, decision and milestone responses carry `recordKey` and an opaque `revision` bound to the
+same content snapshot. These values are not written to frontmatter. Configuration uses an `ETag`; task list/search responses
+also carry `X-Backlog-Tasks-Revision` for the full active task collection, including ordering. Local `backlog browser` retains
+its existing protocol.
+
+After the initial inventory, a guarded read can register a newly discovered local file path with a new record key, so CLI/MCP
+additions remain readable. Unmatched external moves also receive a new key. These identity entries do not invent history
+events; external move recognition and continuous external-change history remain in the next stage. Discovery is paused
+while that project has pending recovery.
+
+Central content writes and non-password management writes require a client-generated UUID `Idempotency-Key`. Updates,
+archive/restore, and deletes also send the revision they read as `If-Match`; creates need only the operation key. Bulk move
+and reorder send `expectedRevisions` keyed by `recordKey`; reorder additionally sends the collection revision as `If-Match`.
+Cleanup and duplicate repair retain their preview fingerprint checks. Folder-area upsert creates a grant or returns the same
+existing grant, so it needs no revision; removal does. The server uses the existing Core validation and serializers and
+records the complete file plan before applying it. Result and history finalize before success or live publication.
+
+Repeating the same key, actor, scope and request returns the stored result. Reusing a key for another request fails. The browser
+preserves a dirty editor's starting revision through background refresh, and queries `GET /api/operations/:operationId` after
+an uncertain network result. This endpoint requires the operation owner or an administrator and current project/admin access.
+It reports `pending`, `completed`, `not_applied`, or `recovery_required` and a safe result when available. Mutations are not
+automatically retried. Password-bearing user creation, reset and change retain their session behavior and receive safe audit
+only; password bytes and password request hashes never enter operation history. Login/logout/activity are outside replay.
+
+Mutation errors add a machine-readable `code` to `{error}`:
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| 428 | `PRECONDITION_REQUIRED` | Missing operation key or required revision |
+| 409 | `REVISION_CONFLICT` | The edit snapshot is stale; the user's draft is preserved |
+| 409 | `AMBIGUOUS_ID` / `WRITE_LOCKED` | Identity is ambiguous or the shared file lock is held |
+| 409 | `IDEMPOTENCY_KEY_REUSED` | This key belongs to a different request, actor, or scope |
+| 409 | `OPERATION_IN_PROGRESS` / `OPERATION_NOT_APPLIED` | Check the recorded operation before another action |
+| 409 | `OPERATION_RESOLVED` | An interrupted operation was resolved separately; review current data before another action |
+| 503 | `RECOVERY_REQUIRED` | The project is temporarily read-only pending inspection |
+
+Project history is available at `GET /api/projects/:id/history?recordKey=&kind=&cursor=&limit=`. Administrators read management
+history at `GET /api/admin/history` (`scope=registration` selects registration audit). Pages contain `{items,nextCursor}`;
+limits are 1–100. One logical write produces one event containing all record changes; a no-op can store its result without
+adding a change event. Project history excludes private management paths and permissions. CLI management changes record an
+unknown local operator with source `server-cli` rather than claiming a web identity.
+
+```bash
+backlog server --data-dir ./server-data history list --project 1 --json
+backlog server --data-dir ./server-data operation view <operationId> --json
+backlog server --data-dir ./server-data recovery list --json
+backlog server --data-dir ./server-data recovery view <operationId> --json
+backlog server --data-dir ./server-data recovery resolve <operationId> --accept-observed --expected-fingerprint <hash> --json
+```
+
+Startup compares pending intent with the files. All-before becomes `not_applied`; all-after finalizes its recorded result and
+single event. Mixed or unreadable state blocks that project's central writes while healthy projects continue. Recovery reports
+show paths, hashes and a current fingerprint. Accepting the observed state rechecks the fingerprint, parsers, identities and
+path boundaries, then adds a separate recovery event; the original operation remains unsuccessful and links to `resolvedBy`.
+There is no automatic partial replay or rollback. The project response exposes `writeState: ready | recovery_required`, and
+the browser shows the read-only state.
+
+The first server version supports one Linux application instance. Shared locks and revision checks protect cooperating
+writers; a writer that ignores those locks can race a physical write. Continuous external-change attribution and server-connected
+agent credentials belong to the next stage; full history and user acceptance screens follow separately.
 
 ---
 

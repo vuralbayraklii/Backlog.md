@@ -12,8 +12,9 @@ interface BoardPageProps {
 	onEditTask: (task: Task) => void;
 	onNewTask: () => void;
 	tasks: Task[];
+	tasksRevision?: string | null;
 	onRefreshData?: () => Promise<void>;
-	onTasksUpdated?: (tasks: Task[], requestTask: Task) => void;
+	onTasksUpdated?: (tasks: Task[], requestTask: Task, tasksRevision?: string | null) => void;
 	statuses: string[];
 	milestones: string[];
 	availableLabels: string[];
@@ -33,6 +34,7 @@ export default function BoardPage({
 	onEditTask,
 	onNewTask,
 	tasks,
+	tasksRevision,
 	onRefreshData,
 	onTasksUpdated,
 	statuses,
@@ -196,6 +198,7 @@ export default function BoardPage({
 				onNewTask={onNewTask}
 				highlightTaskId={highlightTaskId}
 				tasks={tasks}
+				tasksRevision={tasksRevision}
 				onRefreshData={onRefreshData}
 				onTasksUpdated={onTasksUpdated}
 				statuses={statuses}

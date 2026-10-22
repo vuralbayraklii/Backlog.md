@@ -1,0 +1,1677 @@
+{
+	"schemaVersion": 1,
+	"stage": "A-04",
+	"result": "passed",
+	"recordedAt": "2026-10-22T10:44:55.748114+00:00",
+	"baselineEvidence": "verification/server/a00-baseline.json",
+	"plan": "backlog/docs/server/doc-6 - A-04-kod-incelemesi-ve-ortak-yazma-tarihçe-planı.md",
+	"source": {
+		"head": "adb84179c3e639140c270504e75841f96cb4f4d0",
+		"branch": "tasks/server-a04-write-history",
+		"fileCount": 632,
+		"snapshotSha256": "c53431ce1c370f25366f06cbad9215b5e084d99e2251d11735132b22406b126c",
+		"aggregateEncoding": "SHA-256 of UTF-8 compact JSON mapping each path to its file SHA-256, sorted keys",
+		"inventory": "rg --files src scripts plus README.md, package.json, bun.lock, biome.json, tsconfig.json when present",
+		"unchangedAfterChecks": true,
+		"changedFiles": [
+			{
+				"path": "README.md",
+				"sha256": "71d39d178c1e51925ba59566d20e01176e2cb979505be70023fbca64826f1152"
+			},
+			{
+				"path": "src/commands/server.ts",
+				"sha256": "e91661dfde0fbe76d8929bea0568d409e87318fdea554af01c7edd8fa361ef14"
+			},
+			{
+				"path": "src/core/backlog.ts",
+				"sha256": "5adb7ad5469b18c866ae40c9efc0fb42f82fd6e10d2b1d4ab066b74823f27748"
+			},
+			{
+				"path": "src/core/content-store.ts",
+				"sha256": "c48db48ac8c34ac403d54718daa6c729652f4fafa903c4403d14be500a83c4e2"
+			},
+			{
+				"path": "src/core/duplicate-task-repair.ts",
+				"sha256": "c7c8dc5a6e1419f7610daf7e36595c7ccdbc04090a08fde74646ae0f9c6a0a66"
+			},
+			{
+				"path": "src/file-system/operations.ts",
+				"sha256": "2074d1e40159d04be281557eb7a3f73ceccb5c47363c5c6e15d97c679081d456"
+			},
+			{
+				"path": "src/file-system/prepared-change.ts",
+				"sha256": "2cafe3106b2c8829ec6fb6b0ee1efd2ff34119e12457d487384c4507cfe64486"
+			},
+			{
+				"path": "src/mcp/tools/milestones/handlers.ts",
+				"sha256": "22c05673ba2e8afa290a5ef759c098f778bddd02596ba1f88cb9c0003f65c2cc"
+			},
+			{
+				"path": "src/server/auth-store.ts",
+				"sha256": "b9971097f981c4c3656963ce2191e5cb61a4621140f18abad0f3d5ba7a980c31"
+			},
+			{
+				"path": "src/server/central.ts",
+				"sha256": "3a2e29caebe6f4c9d19c8a04b8494029abdf5c6eac93edb786065faed000adef"
+			},
+			{
+				"path": "src/server/database.ts",
+				"sha256": "528c29480998179ff778649a3f6c6b29df2172b799b1265ddf257dac261b1ee3"
+			},
+			{
+				"path": "src/server/folder-areas.ts",
+				"sha256": "5906b021f967e335d4c09fc67a5d502c9c26f18ab49d97f4e79ebe070cc6ed79"
+			},
+			{
+				"path": "src/server/index.ts",
+				"sha256": "9cbe574015f0a1f93d2b721bcf55418443e9bf71bf2dd1f90acbbc67446c4548"
+			},
+			{
+				"path": "src/server/mutation-store.ts",
+				"sha256": "8a197674cab29f0a59cef3d156a67ba97d96c34d19e51730adfe89992499768c"
+			},
+			{
+				"path": "src/server/mutation-types.ts",
+				"sha256": "f8c92902d23a2064bed9f03a9dc9cbe1a9d6281bd34a9ce4626cb33ccd969e47"
+			},
+			{
+				"path": "src/server/mutations.ts",
+				"sha256": "c797ac0a71f26ef183e29f6fdc751ab2a6647c7a213ba596c0ab6b7a7d93b67b"
+			},
+			{
+				"path": "src/server/project-store.ts",
+				"sha256": "06cf56af7d38a058f5a46518bf2a60c8a339e7f472c75acd4580a510231f1054"
+			},
+			{
+				"path": "src/server/recovery.ts",
+				"sha256": "4b61c4018b7c519fc580b33e852c50a10a8dda021176d653bf73682090c9fd71"
+			},
+			{
+				"path": "src/test/central-auth.test.ts",
+				"sha256": "2d37bb73d7233f1415f604feee240f854350def06e3a0f4ffbaa37a65308fca8"
+			},
+			{
+				"path": "src/test/central-intent-auth-race.test.ts",
+				"sha256": "0a3d7807596099d5082c48a1906092974a2a870ebb7c5d4cb11b70d48439a41e"
+			},
+			{
+				"path": "src/test/central-prepared-repair.test.ts",
+				"sha256": "5880cd62db3f80120e40632b8aee25797002f8941d40cf065821b9cb7b6e3c7b"
+			},
+			{
+				"path": "src/test/central-prepared-write.test.ts",
+				"sha256": "163d59e0005fee9d676a369054a0a059d3989d7332e050beaaf7678dad1a6f0d"
+			},
+			{
+				"path": "src/test/central-project-registration.test.ts",
+				"sha256": "c455ca1d7fd503a61b9693dcc5920b1ed8f59f5061b9ef136489ff233f4412e9"
+			},
+			{
+				"path": "src/test/central-registration-admin-race.test.ts",
+				"sha256": "fcf9be77150b5d7e528a298f742444eac5ab88a765294aebc8b3f2d12961af66"
+			},
+			{
+				"path": "src/test/central-server.test.ts",
+				"sha256": "ebc13efb87a6956533659cdd15a9ad5a7c6261598f6e264ab80e5adfa239fb18"
+			},
+			{
+				"path": "src/test/central-test-client.ts",
+				"sha256": "ad63c7d7c4bd9376faf3ffa84bd7948e75a40ed222f26757a14b2b0b55f232d1"
+			},
+			{
+				"path": "src/test/cli-server-history-recovery.test.ts",
+				"sha256": "53ca71a0756b3cbfc222314d2a43fb98dbe8a6c991cd099dc90c9912071177c8"
+			},
+			{
+				"path": "src/test/filesystem-task-cache.test.ts",
+				"sha256": "6accd4a2c38e12265f8009676fce2fbdbd8e8ab95282a5747ee7ee91228aa14d"
+			},
+			{
+				"path": "src/test/prepared-change.test.ts",
+				"sha256": "42440a457a090435a6c86f57d31e9ab43bfccf5bc348ea6a4899a24964b6b8c9"
+			},
+			{
+				"path": "src/test/prepared-core-write.test.ts",
+				"sha256": "36b5f3bec391e4c7d5c1bed43b855781d31b13d2f6c7b8d5859c925bfeb3c438"
+			},
+			{
+				"path": "src/test/server-auth-store.test.ts",
+				"sha256": "6da4169d2bb6ef12f09477c2f3f0066cea7d10d138e2a7143a2cd70cd547958a"
+			},
+			{
+				"path": "src/test/server-baseline-history.test.ts",
+				"sha256": "d76616588ebcaf61af25789af62c20e86f775422ecbbb6f1c2c486fc2007b966"
+			},
+			{
+				"path": "src/test/server-folder-areas.test.ts",
+				"sha256": "852f8f8251a8ce469dcbaa0cbec16b242bfbe99c6d0121d48b3d61107f5ed48c"
+			},
+			{
+				"path": "src/test/server-management-audit.test.ts",
+				"sha256": "260277a2da402dd247b4463fb2537c1b0e6100fe3d3b652819009620eee707d1"
+			},
+			{
+				"path": "src/test/server-mutation-finalize-error.test.ts",
+				"sha256": "ec20790ba74028dbb35bff6847738c5ee6aada17e51afc1c0cbea639aff715a8"
+			},
+			{
+				"path": "src/test/server-mutation-sigkill.test.ts",
+				"sha256": "a6b51d671ecb861eff88e6e446c7754db37bceacb45bfc00f5b0f867f078d509"
+			},
+			{
+				"path": "src/test/server-mutation-store.test.ts",
+				"sha256": "f990b10c91d3a8f082620c9829034af7aef6e5107bdd8dca8530f2d2e3be3c27"
+			},
+			{
+				"path": "src/test/server-mutations.test.ts",
+				"sha256": "770312cf4bc997a8e6042b32205c7fef7a108a3fb40cc9f75bf43fff3e54d42f"
+			},
+			{
+				"path": "src/test/server-project-boundary.test.ts",
+				"sha256": "b18c9efce623ec5033d2fe543aa6f5d5b7123ee6e27d8bc00e65b559cbec7e47"
+			},
+			{
+				"path": "src/test/server-project-permissions.test.ts",
+				"sha256": "16c5be56ba42a6ce84613bd8a8e2033b6ff3fa2c19fac8fbb630f71539c6983e"
+			},
+			{
+				"path": "src/test/server-recovery.test.ts",
+				"sha256": "6f1bac918b39f76e976ce61a510884cb00e62e1d69d2f818e7356341be1eb3b6"
+			},
+			{
+				"path": "src/test/web-api-error.test.ts",
+				"sha256": "62eecc727ac5a0065827ff07cdd990ff9ca32a54ddcd2da7e45b4f5efae2bbb4"
+			},
+			{
+				"path": "src/test/web-app-open-detail-refresh.test.tsx",
+				"sha256": "73516a5c3c7b595517b6bc387642ea5eecc96ffd941bbdc81d4a2265b94e909e"
+			},
+			{
+				"path": "src/test/web-archive-page.test.tsx",
+				"sha256": "599d96281f42a9691db354419a8ec50c03e11fbdfdabc708507383b1b6635be1"
+			},
+			{
+				"path": "src/test/web-auth.test.tsx",
+				"sha256": "0456808d96eb371b94d57e88bb4e7ac92aeb3206200985263d9a962cb8a1cc66"
+			},
+			{
+				"path": "src/test/web-board-batch-move.test.tsx",
+				"sha256": "2f765c3416d84750542b806519280f103f3b9ee297daf4629fec7d7271bba0a9"
+			},
+			{
+				"path": "src/test/web-mutation-request.test.ts",
+				"sha256": "3dd350060733190e2ff86aa1cc1a425f2c00e115c39626ceb2ad7676b4b50f42"
+			},
+			{
+				"path": "src/test/web-project-registration.test.tsx",
+				"sha256": "9ac144a0cfe1f0283e650e7203d8f5ff6999f8736e8a8c968a42c2083cd1805b"
+			},
+			{
+				"path": "src/test/web-task-details-modal-final-summary.test.tsx",
+				"sha256": "9010f87bddb59b695d31bc14d61e4d616f95246ae2be9be58adb022ba6efe211"
+			},
+			{
+				"path": "src/test/web-task-list-labels-menu.test.tsx",
+				"sha256": "53d508dab38c37e1fd89710b630d8b692fb13f2c9250519b0e21b85edd792024"
+			},
+			{
+				"path": "src/types/index.ts",
+				"sha256": "ec3b37e4a045a3c3e1ba0304185e63b38ae5c41663966531d4b941443bf3d25d"
+			},
+			{
+				"path": "src/web/App.tsx",
+				"sha256": "721ce8857d7cd20adec59d1002f3f5e1055220140353cd88ee90a5bcd4c49ae4"
+			},
+			{
+				"path": "src/web/components/AdminProjectRegistration.tsx",
+				"sha256": "31486529cadd4ab14841dd1e86998a774c2451e0db1b1d0aa16ddb661d134c44"
+			},
+			{
+				"path": "src/web/components/AdminUsers.tsx",
+				"sha256": "38e587e973073be0e666ba8e57dddd6c03f8a57e9932e97ae23557dcbd125f6c"
+			},
+			{
+				"path": "src/web/components/ArchivePage.tsx",
+				"sha256": "04f9f9677a401865ad3200e8239e151e95549b3d0aaee59d63ffc9c6ca5e2bbf"
+			},
+			{
+				"path": "src/web/components/Board.tsx",
+				"sha256": "9a8188c0ed6a233149d162a2cbb87023be1379fa20db31ab44dc5d060a7dccac"
+			},
+			{
+				"path": "src/web/components/BoardPage.tsx",
+				"sha256": "2e715a4e375e36b936d236359f2bf1de226870b39773916d8d00ab141afb311f"
+			},
+			{
+				"path": "src/web/components/CleanupModal.tsx",
+				"sha256": "226df3428e9d888f32cab792a9bdecb29506fe4e5fc6d07f29991d92cd941096"
+			},
+			{
+				"path": "src/web/components/DecisionDetail.tsx",
+				"sha256": "2d75744c20f51a44897fa6cd26128ded5c4a43a0ff615ef75dea8d2ec95eb661"
+			},
+			{
+				"path": "src/web/components/DocumentationDetail.tsx",
+				"sha256": "82b3c846abd941a54e9dce6a58bf46a614676f9d7fdb357f629b8f8ac183a272"
+			},
+			{
+				"path": "src/web/components/DraftsList.tsx",
+				"sha256": "21463dd454dc9d9c69e0bf5532b82b6a8dfc8bd7574e398b68f037a32e346de6"
+			},
+			{
+				"path": "src/web/components/DuplicateIdRepairModal.tsx",
+				"sha256": "085630cce86b2a7361ecb806e8aae1b81232ce07e40612282b288319be95be4f"
+			},
+			{
+				"path": "src/web/components/MilestonesPage.tsx",
+				"sha256": "3481966a331dcf4c6ebedd9b1c893dc7238b3e20be5276b33346585cf88f7c59"
+			},
+			{
+				"path": "src/web/components/MutationConflictNotice.tsx",
+				"sha256": "62140f6214dbca972f73b7dae3b06439846de9746208d15ba07280de3796b788"
+			},
+			{
+				"path": "src/web/components/ProjectMembers.tsx",
+				"sha256": "61dce05632745b2bd4dd98886e73a0b5b960b7f0eeb25789c6fba96434cbaff2"
+			},
+			{
+				"path": "src/web/components/ProjectWriteNotice.tsx",
+				"sha256": "0a8e311a45fb7541fea2e1f0e35da6cd899b2f91c9009667504466e7d4eee940"
+			},
+			{
+				"path": "src/web/components/RecordArchive.tsx",
+				"sha256": "84f3651f7da56ce564864e878d13e419ba86ac5a9e0cbf4457eee4f0b4d4a4ad"
+			},
+			{
+				"path": "src/web/components/Settings.tsx",
+				"sha256": "b5001820a671915a4bfa1b6064aef277f7f9b335590d85badbe618e37425552a"
+			},
+			{
+				"path": "src/web/components/SideNavigation.tsx",
+				"sha256": "94653288ba2ac544e92c52cb74e078e9a8cbd59b6da01f120421318777b031b1"
+			},
+			{
+				"path": "src/web/components/TaskCard.tsx",
+				"sha256": "00ffe2eb9b791dab49c5dcb3bd6c344ed4751ae8fda94c104e5799731e0431f4"
+			},
+			{
+				"path": "src/web/components/TaskDetailsModal.tsx",
+				"sha256": "3e0664d22edbb26d88f8a40a10b133312f8d03295f1128d43dd4d2bdcef72575"
+			},
+			{
+				"path": "src/web/components/TaskList.tsx",
+				"sha256": "c774e7cf07a80cb866d9fd999e1ae08859c95b877fc9b30694be94f97e79e37e"
+			},
+			{
+				"path": "src/web/contexts/AuthContext.tsx",
+				"sha256": "7a92d9291d2490e671902b7eb278c97457ac1f47d4db7002f73b5ebd1376c184"
+			},
+			{
+				"path": "src/web/lib/api.ts",
+				"sha256": "1b066694172b2335b3ce6d5850fb97437fdaeed3c690b268d280c94192934d46"
+			},
+			{
+				"path": "src/web/lib/request.ts",
+				"sha256": "5814eb12ca2018122fff4f14cc80709e0803f7f3c9a46f44d5b3e2dd7f012d16"
+			}
+		],
+		"testFileHashes": {
+			"src/test/atomic-task-edit.test.ts": "e5fd60f231e8215362b58a9a0efab9bf7449dff94a1cc7e523caab8dc61f686e",
+			"src/test/central-auth.test.ts": "2d37bb73d7233f1415f604feee240f854350def06e3a0f4ffbaa37a65308fca8",
+			"src/test/central-intent-auth-race.test.ts": "0a3d7807596099d5082c48a1906092974a2a870ebb7c5d4cb11b70d48439a41e",
+			"src/test/central-prepared-repair.test.ts": "5880cd62db3f80120e40632b8aee25797002f8941d40cf065821b9cb7b6e3c7b",
+			"src/test/central-prepared-write.test.ts": "163d59e0005fee9d676a369054a0a059d3989d7332e050beaaf7678dad1a6f0d",
+			"src/test/central-project-registration.test.ts": "c455ca1d7fd503a61b9693dcc5920b1ed8f59f5061b9ef136489ff233f4412e9",
+			"src/test/cli-server-history-recovery.test.ts": "53ca71a0756b3cbfc222314d2a43fb98dbe8a6c991cd099dc90c9912071177c8",
+			"src/test/cli-server-project.test.ts": "f31b23e7799b8b0f1b61f12fd5be5de9e6491f233c1d92c25f0eedc44315a2e0",
+			"src/test/cli-server-registration.test.ts": "6ad9055bd7bc01ea4e9d3c3acc576b27ac980f9653a9275a836d1f1de41cd61d",
+			"src/test/cli-server-user.test.ts": "ebac76840d632705cfcc8b580126501a020295af70a8f5f2d559854e88c7e548",
+			"src/test/prepared-change.test.ts": "42440a457a090435a6c86f57d31e9ab43bfccf5bc348ea6a4899a24964b6b8c9",
+			"src/test/prepared-core-write.test.ts": "36b5f3bec391e4c7d5c1bed43b855781d31b13d2f6c7b8d5859c925bfeb3c438",
+			"src/test/server-baseline-history.test.ts": "d76616588ebcaf61af25789af62c20e86f775422ecbbb6f1c2c486fc2007b966",
+			"src/test/server-management-audit.test.ts": "260277a2da402dd247b4463fb2537c1b0e6100fe3d3b652819009620eee707d1",
+			"src/test/server-mutation-finalize-error.test.ts": "ec20790ba74028dbb35bff6847738c5ee6aada17e51afc1c0cbea639aff715a8",
+			"src/test/server-mutation-sigkill.test.ts": "a6b51d671ecb861eff88e6e446c7754db37bceacb45bfc00f5b0f867f078d509",
+			"src/test/server-mutation-store.test.ts": "f990b10c91d3a8f082620c9829034af7aef6e5107bdd8dca8530f2d2e3be3c27",
+			"src/test/server-mutations.test.ts": "770312cf4bc997a8e6042b32205c7fef7a108a3fb40cc9f75bf43fff3e54d42f",
+			"src/test/server-project-permissions.test.ts": "16c5be56ba42a6ce84613bd8a8e2033b6ff3fa2c19fac8fbb630f71539c6983e",
+			"src/test/server-recovery.test.ts": "6f1bac918b39f76e976ce61a510884cb00e62e1d69d2f818e7356341be1eb3b6",
+			"src/test/server-reorder-publication.test.ts": "4c48833bd1537b0732ce12d2b0b077edf8fb958ecceeff5c70d96f541885eb92",
+			"src/test/web-mutation-request.test.ts": "3dd350060733190e2ff86aa1cc1a425f2c00e115c39626ceb2ad7676b4b50f42"
+		},
+		"nativeExecutableSha256": "7c31abcfba77c124853fe5f179b6bf2420e7e21c991b820dc14f995f1bac0693",
+		"testCliSha256": "3c5d50c09ab1a3e2d61b987d7ffd23656b4314c16a7ce25a9357c8fc23e7d303"
+	},
+	"approvedDecisions": [
+		"One logical operation produces one immutable event envelope containing all record changes; preserve existing bulk input partial success.",
+		"All-before becomes not_applied; all-after finalizes the saved result/event; mixed or unknown blocks only that project and requires fingerprinted explicit accept-observed.",
+		"Guarantees cover central writes and cooperating locks; external writers without common locks do not gain full atomicity.",
+		"A-04 covers existing content/milestone/config/non-secret management writes and safe password audit; continuous external/agent tracking is A-05 and review/user acceptance is A-06.",
+		"Additional user decision: guarded reads give new local paths new record keys without inventing external history events; unmatched external moves get new keys until A-05 move recognition."
+	],
+	"scope": {
+		"sqlite": "Existing server.sqlite additive v4; read-only commands do not migrate.",
+		"writeFlow": "Current actor/access -> project queue -> guarded prepared existing Core operation -> persistent intent -> physical effects -> result/history finalize -> cache/search/WS publication.",
+		"identityDiscovery": "An authorized guarded read may persist a new key for a newly observed local path while the project is ready. Unmatched external moves receive a new key. This derived index update creates no content history or actor attribution; pending/recovery projects do not adopt paths.",
+		"operationRead": "GET /api/operations/:operationId with owner/admin and current scope access.",
+		"historyRead": [
+			"GET /api/projects/:id/history",
+			"GET /api/admin/history",
+			"server history list",
+			"server operation view"
+		],
+		"recovery": [
+			"server recovery list",
+			"server recovery view",
+			"server recovery resolve --accept-observed --expected-fingerprint"
+		]
+	},
+	"checks": {
+		"types": {
+			"command": "bun run check:types",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "/tmp/backlog-a04-final/types.log"
+		},
+		"biome": {
+			"command": "bun run check .",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "/tmp/backlog-a04-final/biome.log"
+		},
+		"build": {
+			"command": "bun run build",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "/tmp/backlog-a04-final/build.log"
+		},
+		"testBundle": {
+			"command": "BACKLOG_BUILD_OUTDIR=/tmp/backlog-a04-final/test-cli bun scripts/build.ts",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "/tmp/backlog-a04-final/test-cli-build.log"
+		},
+		"compiledSmoke": {
+			"command": "bun scripts/smoke-compiled-build.ts ./dist/backlog 1.53.0",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "/tmp/backlog-a04-final/smoke.log"
+		},
+		"diffCheck": {
+			"command": "git diff --check",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "/tmp/backlog-a04-final/diff-check.log"
+		},
+		"biomeTsx": {
+			"command": "See /tmp/backlog-a04-final/biome-tsx.final.command.txt; inherited repository rules with changed TSX files included, without writes",
+			"result": "completed_with_preexisting_diagnostics",
+			"rawExitCode": 1,
+			"baseline": {
+				"changed": 0,
+				"unchanged": 27,
+				"matches": 0,
+				"duration": 44528012,
+				"errors": 171,
+				"warnings": 52,
+				"infos": 5,
+				"skipped": 0,
+				"suggestedFixesSkipped": 0,
+				"diagnosticsNotPrinted": 0,
+				"scannerDuration": 471277
+			},
+			"current": {
+				"changed": 0,
+				"unchanged": 29,
+				"matches": 0,
+				"duration": 46774057,
+				"errors": 166,
+				"warnings": 50,
+				"infos": 5,
+				"skipped": 0,
+				"suggestedFixesSkipped": 0,
+				"diagnosticsNotPrinted": 0,
+				"scannerDuration": 178327
+			},
+			"delta": {
+				"errors": -5,
+				"warnings": -2,
+				"infos": 0
+			},
+			"differentialGatePassed": true,
+			"introducedDiagnostics": 0,
+			"baselineRef": "adb84179c3e639140c270504e75841f96cb4f4d0",
+			"derivedConfiguration": {
+				"$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+				"extends": ["/home/vuralbayrakli/Backlog.md/biome.json"],
+				"vcs": {
+					"enabled": false
+				},
+				"files": {
+					"includes": ["**/*.tsx"]
+				}
+			},
+			"checkedPaths": [
+				"src/test/web-app-open-detail-refresh.test.tsx",
+				"src/test/web-archive-page.test.tsx",
+				"src/test/web-auth.test.tsx",
+				"src/test/web-board-batch-move.test.tsx",
+				"src/test/web-project-registration.test.tsx",
+				"src/test/web-task-details-modal-final-summary.test.tsx",
+				"src/test/web-task-list-labels-menu.test.tsx",
+				"src/web/App.tsx",
+				"src/web/components/AdminProjectRegistration.tsx",
+				"src/web/components/AdminUsers.tsx",
+				"src/web/components/ArchivePage.tsx",
+				"src/web/components/Board.tsx",
+				"src/web/components/BoardPage.tsx",
+				"src/web/components/CleanupModal.tsx",
+				"src/web/components/DecisionDetail.tsx",
+				"src/web/components/DocumentationDetail.tsx",
+				"src/web/components/DraftsList.tsx",
+				"src/web/components/DuplicateIdRepairModal.tsx",
+				"src/web/components/MilestonesPage.tsx",
+				"src/web/components/MutationConflictNotice.tsx",
+				"src/web/components/ProjectMembers.tsx",
+				"src/web/components/ProjectWriteNotice.tsx",
+				"src/web/components/RecordArchive.tsx",
+				"src/web/components/Settings.tsx",
+				"src/web/components/SideNavigation.tsx",
+				"src/web/components/TaskCard.tsx",
+				"src/web/components/TaskDetailsModal.tsx",
+				"src/web/components/TaskList.tsx",
+				"src/web/contexts/AuthContext.tsx"
+			],
+			"commandText": "bunx biome check --max-diagnostics=1000 --config-path=/tmp/backlog-a04-final/biome-tsx.json 'src/test/web-app-open-detail-refresh.test.tsx' 'src/test/web-archive-page.test.tsx' 'src/test/web-auth.test.tsx' 'src/test/web-board-batch-move.test.tsx' 'src/test/web-project-registration.test.tsx' 'src/test/web-task-details-modal-final-summary.test.tsx' 'src/test/web-task-list-labels-menu.test.tsx' 'src/web/App.tsx' 'src/web/components/AdminProjectRegistration.tsx' 'src/web/components/AdminUsers.tsx' 'src/web/components/ArchivePage.tsx' 'src/web/components/Board.tsx' 'src/web/components/BoardPage.tsx' 'src/web/components/CleanupModal.tsx' 'src/web/components/DecisionDetail.tsx' 'src/web/components/DocumentationDetail.tsx' 'src/web/components/DraftsList.tsx' 'src/web/components/DuplicateIdRepairModal.tsx' 'src/web/components/MilestonesPage.tsx' 'src/web/components/MutationConflictNotice.tsx' 'src/web/components/ProjectMembers.tsx' 'src/web/components/ProjectWriteNotice.tsx' 'src/web/components/RecordArchive.tsx' 'src/web/components/Settings.tsx' 'src/web/components/SideNavigation.tsx' 'src/web/components/TaskCard.tsx' 'src/web/components/TaskDetailsModal.tsx' 'src/web/components/TaskList.tsx' 'src/web/contexts/AuthContext.tsx'\nbunx biome check --reporter=json --max-diagnostics=none --config-path=/tmp/backlog-a04-final/biome-tsx.json 'src/test/web-app-open-detail-refresh.test.tsx' 'src/test/web-archive-page.test.tsx' 'src/test/web-auth.test.tsx' 'src/test/web-board-batch-move.test.tsx' 'src/test/web-project-registration.test.tsx' 'src/test/web-task-details-modal-final-summary.test.tsx' 'src/test/web-task-list-labels-menu.test.tsx' 'src/web/App.tsx' 'src/web/components/AdminProjectRegistration.tsx' 'src/web/components/AdminUsers.tsx' 'src/web/components/ArchivePage.tsx' 'src/web/components/Board.tsx' 'src/web/components/BoardPage.tsx' 'src/web/components/CleanupModal.tsx' 'src/web/components/DecisionDetail.tsx' 'src/web/components/DocumentationDetail.tsx' 'src/web/components/DraftsList.tsx' 'src/web/components/DuplicateIdRepairModal.tsx' 'src/web/components/MilestonesPage.tsx' 'src/web/components/MutationConflictNotice.tsx' 'src/web/components/ProjectMembers.tsx' 'src/web/components/ProjectWriteNotice.tsx' 'src/web/components/RecordArchive.tsx' 'src/web/components/Settings.tsx' 'src/web/components/SideNavigation.tsx' 'src/web/components/TaskCard.tsx' 'src/web/components/TaskDetailsModal.tsx' 'src/web/components/TaskList.tsx' 'src/web/contexts/AuthContext.tsx'\n",
+			"comparison": {
+				"result": "completed_with_preexisting_diagnostics",
+				"rawExitCode": 1,
+				"differentialGatePassed": true,
+				"current": {
+					"changed": 0,
+					"unchanged": 29,
+					"matches": 0,
+					"duration": 46774057,
+					"errors": 166,
+					"warnings": 50,
+					"infos": 5,
+					"skipped": 0,
+					"suggestedFixesSkipped": 0,
+					"diagnosticsNotPrinted": 0,
+					"scannerDuration": 178327
+				},
+				"baseline": {
+					"changed": 0,
+					"unchanged": 27,
+					"matches": 0,
+					"duration": 44528012,
+					"errors": 171,
+					"warnings": 52,
+					"infos": 5,
+					"skipped": 0,
+					"suggestedFixesSkipped": 0,
+					"diagnosticsNotPrinted": 0,
+					"scannerDuration": 471277
+				},
+				"delta": {
+					"errors": -5,
+					"warnings": -2,
+					"infos": 0
+				},
+				"perFileCategoryDeltas": [
+					{
+						"key": "src/test/web-auth.test.tsx|error|format",
+						"baseline": 1,
+						"current": 0
+					},
+					{
+						"key": "src/test/web-board-batch-move.test.tsx|error|format",
+						"baseline": 1,
+						"current": 0
+					},
+					{
+						"key": "src/test/web-task-details-modal-final-summary.test.tsx|error|format",
+						"baseline": 1,
+						"current": 0
+					},
+					{
+						"key": "src/test/web-task-details-modal-final-summary.test.tsx|warning|lint/style/noNonNullAssertion",
+						"baseline": 6,
+						"current": 4
+					},
+					{
+						"key": "src/web/components/DuplicateIdRepairModal.tsx|error|format",
+						"baseline": 1,
+						"current": 0
+					},
+					{
+						"key": "src/web/components/RecordArchive.tsx|error|format",
+						"baseline": 1,
+						"current": 0
+					}
+				],
+				"changedLineDiagnostics": [
+					{
+						"severity": "info",
+						"message": "This fragment is unnecessary.",
+						"category": "lint/complexity/noUselessFragments",
+						"location": {
+							"path": "src/web/components/CleanupModal.tsx",
+							"start": {
+								"line": 200,
+								"column": 7
+							},
+							"end": {
+								"line": 218,
+								"column": 10
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "warning",
+						"message": "Forbidden non-null assertion.",
+						"category": "lint/style/noNonNullAssertion",
+						"location": {
+							"path": "src/test/web-auth.test.tsx",
+							"start": {
+								"line": 521,
+								"column": 5
+							},
+							"end": {
+								"line": 521,
+								"column": 102
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Sort these imports.",
+						"category": "assist/source/organizeImports",
+						"location": {
+							"path": "src/web/App.tsx",
+							"start": {
+								"line": 1,
+								"column": 1
+							},
+							"end": {
+								"line": 50,
+								"column": 82
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Provide an explicit type prop for the button element.",
+						"category": "lint/a11y/useButtonType",
+						"location": {
+							"path": "src/web/components/Board.tsx",
+							"start": {
+								"line": 713,
+								"column": 11
+							},
+							"end": {
+								"line": 717,
+								"column": 12
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Sort these imports.",
+						"category": "assist/source/organizeImports",
+						"location": {
+							"path": "src/web/components/Board.tsx",
+							"start": {
+								"line": 1,
+								"column": 1
+							},
+							"end": {
+								"line": 19,
+								"column": 47
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Sort these imports.",
+						"category": "assist/source/organizeImports",
+						"location": {
+							"path": "src/web/components/CleanupModal.tsx",
+							"start": {
+								"line": 1,
+								"column": 1
+							},
+							"end": {
+								"line": 5,
+								"column": 51
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Provide an explicit type prop for the button element.",
+						"category": "lint/a11y/useButtonType",
+						"location": {
+							"path": "src/web/components/CleanupModal.tsx",
+							"start": {
+								"line": 210,
+								"column": 10
+							},
+							"end": {
+								"line": 214,
+								"column": 11
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Sort these imports.",
+						"category": "assist/source/organizeImports",
+						"location": {
+							"path": "src/web/components/DecisionDetail.tsx",
+							"start": {
+								"line": 1,
+								"column": 1
+							},
+							"end": {
+								"line": 17,
+								"column": 87
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Provide an explicit type prop for the button element.",
+						"category": "lint/a11y/useButtonType",
+						"location": {
+							"path": "src/web/components/DocumentationDetail.tsx",
+							"start": {
+								"line": 421,
+								"column": 37
+							},
+							"end": {
+								"line": 425,
+								"column": 38
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Sort these imports.",
+						"category": "assist/source/organizeImports",
+						"location": {
+							"path": "src/web/components/DocumentationDetail.tsx",
+							"start": {
+								"line": 1,
+								"column": 1
+							},
+							"end": {
+								"line": 17,
+								"column": 87
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Provide an explicit type prop for the button element.",
+						"category": "lint/a11y/useButtonType",
+						"location": {
+							"path": "src/web/components/DocumentationDetail.tsx",
+							"start": {
+								"line": 445,
+								"column": 41
+							},
+							"end": {
+								"line": 453,
+								"column": 43
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Provide an explicit type prop for the button element.",
+						"category": "lint/a11y/useButtonType",
+						"location": {
+							"path": "src/web/components/DraftsList.tsx",
+							"start": {
+								"line": 117,
+								"column": 14
+							},
+							"end": {
+								"line": 121,
+								"column": 15
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Provide an explicit type prop for the button element.",
+						"category": "lint/a11y/useButtonType",
+						"location": {
+							"path": "src/web/components/DraftsList.tsx",
+							"start": {
+								"line": 182,
+								"column": 21
+							},
+							"end": {
+								"line": 189,
+								"column": 22
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Sort these imports.",
+						"category": "assist/source/organizeImports",
+						"location": {
+							"path": "src/web/components/DraftsList.tsx",
+							"start": {
+								"line": 1,
+								"column": 1
+							},
+							"end": {
+								"line": 7,
+								"column": 53
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Sort these imports.",
+						"category": "assist/source/organizeImports",
+						"location": {
+							"path": "src/web/components/MilestonesPage.tsx",
+							"start": {
+								"line": 1,
+								"column": 1
+							},
+							"end": {
+								"line": 12,
+								"column": 87
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Sort these imports.",
+						"category": "assist/source/organizeImports",
+						"location": {
+							"path": "src/web/components/Settings.tsx",
+							"start": {
+								"line": 1,
+								"column": 1
+							},
+							"end": {
+								"line": 8,
+								"column": 87
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Provide an explicit type prop for the button element.",
+						"category": "lint/a11y/useButtonType",
+						"location": {
+							"path": "src/web/components/Settings.tsx",
+							"start": {
+								"line": 545,
+								"column": 8
+							},
+							"end": {
+								"line": 549,
+								"column": 9
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Provide an explicit type prop for the button element.",
+						"category": "lint/a11y/useButtonType",
+						"location": {
+							"path": "src/web/components/SideNavigation.tsx",
+							"start": {
+								"line": 750,
+								"column": 10
+							},
+							"end": {
+								"line": 755,
+								"column": 11
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "The ARIA attribute 'aria-selected' is not supported by this element.",
+						"category": "lint/a11y/useAriaPropsSupportedByRole",
+						"location": {
+							"path": "src/web/components/TaskCard.tsx",
+							"start": {
+								"line": 180,
+								"column": 7
+							},
+							"end": {
+								"line": 219,
+								"column": 8
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Sort these imports.",
+						"category": "assist/source/organizeImports",
+						"location": {
+							"path": "src/web/components/TaskDetailsModal.tsx",
+							"start": {
+								"line": 1,
+								"column": 1
+							},
+							"end": {
+								"line": 25,
+								"column": 57
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Provide an explicit type prop for the button element.",
+						"category": "lint/a11y/useButtonType",
+						"location": {
+							"path": "src/web/components/TaskDetailsModal.tsx",
+							"start": {
+								"line": 1245,
+								"column": 15
+							},
+							"end": {
+								"line": 1250,
+								"column": 16
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Provide an explicit type prop for the button element.",
+						"category": "lint/a11y/useButtonType",
+						"location": {
+							"path": "src/web/components/TaskList.tsx",
+							"start": {
+								"line": 736,
+								"column": 7
+							},
+							"end": {
+								"line": 740,
+								"column": 8
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					},
+					{
+						"severity": "error",
+						"message": "Sort these imports.",
+						"category": "assist/source/organizeImports",
+						"location": {
+							"path": "src/web/contexts/AuthContext.tsx",
+							"start": {
+								"line": 1,
+								"column": 1
+							},
+							"end": {
+								"line": 7,
+								"column": 71
+							}
+						},
+						"advices": [],
+						"newFile": false,
+						"overlapsChanged": true
+					}
+				],
+				"newFileDiagnostics": [],
+				"introducedBySignature": []
+			},
+			"evidence": "/tmp/backlog-a04-final/biome-tsx.final.compare.json",
+			"note": "The normal repository check excludes TSX. The additional scan explicitly checks these files; inherited formatter/accessibility/style diagnostics are retained and reported against HEAD, rather than silenced or counted as a clean raw scan."
+		},
+		"fullBun": {
+			"command": "BACKLOG_TEST_CLI_BUNDLE=/tmp/backlog-a04-final/test-cli/cli.js bun run test",
+			"exitCode": 0,
+			"result": "passed",
+			"passed": 3908,
+			"failed": 0,
+			"skipped": 13,
+			"total": 3921,
+			"files": 351,
+			"duration": "626.02s",
+			"expectations": 19407,
+			"evidence": "/tmp/backlog-a04-final/full-tests.log"
+		}
+	},
+	"skippedTests": [
+		{
+			"file": "src/test/cli-draft-edit.test.ts",
+			"test": "(skip) interactive draft picker collision guard > renders unrelated healthy drafts beside an unparsable twin"
+		},
+		{
+			"file": "src/test/tui-interactive-editor-handoff.test.ts",
+			"test": "(skip) interactive TUI editor handoff > shows a CLI mutation in the open board within a bounded time"
+		},
+		{
+			"file": "src/test/tui-interactive-editor-handoff.test.ts",
+			"test": "(skip) interactive TUI editor handoff > selects the next neighbor when the open task is removed"
+		},
+		{
+			"file": "src/test/tui-interactive-editor-handoff.test.ts",
+			"test": "(skip) interactive TUI editor handoff > launches terminal editor from board view and marks task updated"
+		},
+		{
+			"file": "src/test/tui-interactive-editor-handoff.test.ts",
+			"test": "(skip) interactive TUI editor handoff > launches terminal editor from task list view and marks task updated"
+		},
+		{
+			"file": "src/test/tui-interactive-editor-handoff.test.ts",
+			"test": "(skip) interactive TUI editor handoff > keeps j and k moving the task list selection after each of two editor sessions"
+		},
+		{
+			"file": "src/test/tui-ready-filter-pty.test.ts",
+			"test": "(skip) interactive task list --ready > filters blocked tasks out of the very first render"
+		},
+		{
+			"file": "src/test/cli-init-cursor-pty.test.ts",
+			"test": "(skip) Cursor init PTY behavior > uses AGENTS.md and completes without opening an editor"
+		},
+		{
+			"file": "src/test/tui-task-list-order-pty.test.ts",
+			"test": "(skip) interactive task list order > shows the rows --plain prints, in the same order, for the default order and every option"
+		},
+		{
+			"file": "src/test/tui-task-list-order-pty.test.ts",
+			"test": "(skip) interactive task list order > shows the default order when the list is reached from the board, a task view, or search"
+		},
+		{
+			"file": "src/test/tui-task-list-order-pty.test.ts",
+			"test": "(skip) interactive task list order > keeps an open list sorted and its selection on the same task when tasks change on disk"
+		},
+		{
+			"file": "src/test/tui-task-list-order-pty.test.ts",
+			"test": "(skip) interactive task list order > marks each configured priority with an arrow, and with an ASCII arrow without Unicode"
+		},
+		{
+			"file": "src/test/board-tui-multi-move-pty.test.ts",
+			"test": "(skip) interactive board multi-select move > walks the highlight with real xterm shift-arrows and recruits the task the fallback cannot reach"
+		}
+	],
+	"crashRecovery": {
+		"test": "src/test/server-mutation-sigkill.test.ts",
+		"actualProcessSignal": "SIGKILL",
+		"checkpoints": [
+			{
+				"checkpoint": "before_intent",
+				"expected": "No durable operation or event; all source bytes unchanged."
+			},
+			{
+				"checkpoint": "after_intent",
+				"expected": "All-before -> not_applied; no change event."
+			},
+			{
+				"checkpoint": "after_file:0",
+				"expected": "Mixed -> recovery_required; affected project blocks and healthy project writes."
+			},
+			{
+				"checkpoint": "after_file:1",
+				"expected": "All-after -> completed; one event and replayed saved result."
+			},
+			{
+				"checkpoint": "before_finalize",
+				"expected": "All-after -> completed; one event and replayed saved result."
+			},
+			{
+				"checkpoint": "after_finalize",
+				"expected": "Completed remains completed; replay never adds an event."
+			}
+		],
+		"manualResolution": "Separate completed recovery operation; original recovery_required retains its bytes and links resolvedBy. Original replay is 409 OPERATION_RESOLVED. Live server consumes resolution; shared advisory locks are honored until stale.",
+		"sameProcessExceptionIsSeparate": "server-mutation-finalize-error.test.ts verifies an all-after exception can finalize and publish without claiming process termination."
+	},
+	"chromium": {
+		"result": "passed",
+		"browser": "HeadlessChrome/153.0.8010.12",
+		"runDirectory": "/tmp/backlog-a04-web-browser/final-b8JPF6",
+		"assertions": [
+			"task conflict preserves Alice draft",
+			"task conflict preserves Bob disk content",
+			"document conflict preserves Alice draft",
+			"document conflict preserves Bob disk content",
+			"decision conflict preserves Alice draft",
+			"decision conflict preserves Bob disk content",
+			"second actor changed task before stale board move",
+			"stale board move reports revision conflict",
+			"lost response queried durable operation",
+			"lost response caused one task create",
+			"manual retry reused the same logical create",
+			"same-key retry produced one history event",
+			"archive and restore used real versioned task routes",
+			"admin list exposes user revision",
+			"admin UI sent successful versioned update",
+			"document draft is dirty before expiry",
+			"session revoked by real auth endpoint",
+			"same account login retained unsaved document draft",
+			"real project endpoint reports recovery and operation ID",
+			"board disables task create during recovery",
+			"no unhandled browser runtime errors"
+		],
+		"runtimeErrors": 0,
+		"networkResponsesMocked": false,
+		"networkInterference": "Real requests reach the compiled server; selected response promises are dropped or background reads held to reproduce uncertainty and races. Successful API responses are not fabricated.",
+		"evidence": "/tmp/backlog-a04-web-browser/final-b8JPF6/browser-result.json",
+		"resultDetails": {
+			"projectId": "1",
+			"runDir": "/tmp/backlog-a04-web-browser/final-b8JPF6",
+			"dialogs": [
+				{
+					"message": "",
+					"accepted": true,
+					"sessionId": "936D300FDD7CB2EC49BDBD291131A651"
+				},
+				{
+					"message": "",
+					"accepted": true,
+					"sessionId": "936D300FDD7CB2EC49BDBD291131A651"
+				},
+				{
+					"message": "",
+					"accepted": true,
+					"sessionId": "936D300FDD7CB2EC49BDBD291131A651"
+				},
+				{
+					"message": "",
+					"accepted": true,
+					"sessionId": "936D300FDD7CB2EC49BDBD291131A651"
+				},
+				{
+					"message": "Archive \"A04 browser task\"? It moves off the board. Its ID, record, dependencies, and references are kept.",
+					"accepted": true,
+					"sessionId": "936D300FDD7CB2EC49BDBD291131A651"
+				},
+				{
+					"message": "",
+					"accepted": true,
+					"sessionId": "936D300FDD7CB2EC49BDBD291131A651"
+				}
+			],
+			"networkResponsesMocked": false,
+			"networkResponsesDropped": true,
+			"recoveryFixture": {
+				"operationId": "3c012729-d1d4-409e-b964-3ebfc164d563",
+				"kind": "durable mixed prepared intent",
+				"realCrashEvidence": "separate SIGKILL process suite"
+			}
+		}
+	},
+	"acceptanceEvidence": [
+		{
+			"requirement": "Stable record identity and revisions from exact guarded bytes; no second CRUD or parser implementation",
+			"tasks": ["BACK-800", "BACK-801"],
+			"tests": [
+				"prepared-change.test.ts",
+				"prepared-core-write.test.ts",
+				"central-prepared-write.test.ts",
+				"server-mutation-store.test.ts"
+			],
+			"proof": "Task/draft/document/decision lifecycle identity, symlink referents, preserved file modes, bound raw bytes, cache/search/HTTP publication after finalize."
+		},
+		{
+			"requirement": "Existing bulk and maintenance writes persist one intent/event and retain existing partial-success behavior",
+			"tasks": ["BACK-802"],
+			"tests": ["central-prepared-write.test.ts", "central-prepared-repair.test.ts"],
+			"proof": "Nested task revisions and collection headers; bulk partial result; stale cleanup and repair; two-task cleanup; milestone cascade abort; config successive ETags; repair exact before/after snapshots."
+		},
+		{
+			"requirement": "Two users, same/different idempotency bodies, lost response, current authorization and separate project identities",
+			"tasks": ["BACK-803", "BACK-804", "BACK-805"],
+			"tests": [
+				"central-auth.test.ts",
+				"central-intent-auth-race.test.ts",
+				"central-project-registration.test.ts",
+				"central-prepared-write.test.ts",
+				"server-mutations.test.ts",
+				"web-mutation-request.test.ts"
+			],
+			"proof": "Actor/scope/hash replay ownership, request bytes including non-JSON BOM/invalid UTF-8, current route permission and recheck after BEGIN IMMEDIATE wait, separate projects with the same visible ID; actual compiled UI lost-response and retry checks."
+		},
+		{
+			"requirement": "Real interruption and restart follow the approved all-before/all-after/mixed decision table",
+			"tasks": ["BACK-804", "BACK-805"],
+			"tests": [
+				"server-mutation-sigkill.test.ts",
+				"server-mutation-finalize-error.test.ts",
+				"server-baseline-history.test.ts"
+			],
+			"proof": "Actual child SIGKILL at six checkpoints, replacement process checks disk/operation/event/writeState; distinct same-process exception test is not counted as a kill."
+		},
+		{
+			"requirement": "Explicit reviewed recovery preserves original failed intent and protects project boundaries",
+			"tasks": ["BACK-804", "BACK-805"],
+			"tests": ["server-recovery.test.ts", "server-mutation-sigkill.test.ts", "cli-server-history-recovery.test.ts"],
+			"proof": "Fingerprint/Markdown/symlink/duplicate/pending validation; separate recovery event and resolvedBy; live handler refresh; original key OPERATION_RESOLVED; fresh killed-process advisory lock WRITE_LOCKED without bypass; other project still writes."
+		},
+		{
+			"requirement": "Management audit is atomic and secret-free; shared authorized API/CLI reads",
+			"tasks": ["BACK-800", "BACK-804", "BACK-805"],
+			"tests": [
+				"server-management-audit.test.ts",
+				"server-mutation-store.test.ts",
+				"central-auth.test.ts",
+				"cli-server-history-recovery.test.ts",
+				"cli-server-user.test.ts",
+				"cli-server-project.test.ts",
+				"cli-server-registration.test.ts"
+			],
+			"proof": "Same SQLite transaction for user/membership/area/tracking/registration; no-op event suppression; safe password audit without password-derived request hash or stored cookie/session; unknown CLI actor; UTC JSON/Europe-Istanbul text; project history excludes management records/paths."
+		},
+		{
+			"requirement": "Existing local CLI, MCP, browser and atomic behavior remains supported",
+			"tasks": ["BACK-801", "BACK-802", "BACK-805"],
+			"tests": ["atomic-task-edit.test.ts", "server-reorder-publication.test.ts", "server-project-permissions.test.ts"],
+			"proof": "Final full Bun suite and compiled CLI/web/MCP smoke; local project files and existing parsers/allocators remain the domain source of truth."
+		}
+	],
+	"diagnosticRun": {
+		"result": "failed, excluded from acceptance counts",
+		"counts": {
+			"exitCode": 1,
+			"passed": 3874,
+			"skipped": 13,
+			"failed": 32,
+			"total": 3919,
+			"files": 351,
+			"duration": "612.41s",
+			"expectations": 19291,
+			"acceptance": false
+		},
+		"evidence": "/tmp/backlog-a04-final/diagnostic-full-tests.log",
+		"fixes": [
+			"ContentStore watcher readers now publish the same bound raw-byte snapshot used by direct FileSystem/Core reads for task, document and decision versions.",
+			"A user-approved follow-up fixes new CLI file/path reads after baseline by adopting guarded identity metadata, without manufacturing external events.",
+			"Legacy search fetch mocks now return actual Response objects with Headers.",
+			"Registration/archive mocks follow current revision and uncertain-outcome semantics; test cleanup clears retained pending operations by changing the test account.",
+			"App refresh tests stub the current searchSnapshot interface and finish their asynchronous work before restoring DOM globals.",
+			"FileSystem cache tests defer raw-byte reads through the existing readBytes seam rather than mocking Bun.file.text.",
+			"The admin revocation race wrapper forwards the existing audit argument."
+		],
+		"note": "Only the later zero-failure frozen-source full run supplies acceptance totals."
+	},
+	"simplificationReview": [
+		"One ServerDatabase/BEGIN IMMEDIATE policy and one transaction finalizer serve project history and management audit.",
+		"Core/FileSystem reuses existing parsers, serializer, allocator, domain handlers and locks through one prepared physical effect implementation.",
+		"One revision/snapshot implementation covers edits, lifecycle and multi-file operations; duplicate repair shares its existing preview/parser and result shape.",
+		"One operation read endpoint covers project, administration and pre-project registration with explicit scope/current-access checks.",
+		"One browser request client owns UUID/outcome handling; the existing editors and board add only conflict/recovery notices and retain their normal data paths.",
+		"Recovery uses existing boundary/inventory/MutationStore and a resolved_by link; no automatic rollback or second CRUD implementation."
+	],
+	"taskStatuses": {
+		"BACK-799": "Status: ✔ Done",
+		"BACK-800": "Status: ✔ Done",
+		"BACK-801": "Status: ✔ Done",
+		"BACK-802": "Status: ✔ Done",
+		"BACK-803": "Status: ✔ Done",
+		"BACK-804": "Status: ✔ Done",
+		"BACK-805": "Status: ✔ Done"
+	},
+	"limitations": [
+		"Linux and isolated temporary projects only; skipped platform/PTY tests are not counted as passed.",
+		"No real project or Finbee was registered or changed; MANIFESTO.md was not edited.",
+		"Non-cooperating external writers are outside the common-lock atomicity guarantee; continuous external tracking remains A-05.",
+		"History/review/user acceptance pages and agent identity workflows remain A-05/A-06.",
+		"Raw logs, browser screenshots and temporary data under /tmp are ephemeral; this repository JSON records results, mappings and hashes, not a durable backup of those files.",
+		"The additional TSX scan retains preexisting HEAD diagnostics. Its raw exit code and baseline/current totals are recorded separately from the passing default Biome check and the zero-new-diagnostics gate.",
+		"Groma executable was unavailable; no architecture scan or Groma-owned file edit was performed."
+	],
+	"evidenceFiles": [
+		{
+			"path": "/tmp/backlog-a04-final/admin-race-recheck.log",
+			"bytes": 592,
+			"sha256": "594d125d673789197562e0d1fe8642b5cd52273ac2ea9c7c88bb09bfdc656d5f"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.classification.json",
+			"bytes": 112389,
+			"sha256": "10e8ea17b8e179a794d8b04ec414c96dc859b092468f89bce6fb8902e6fefb2d"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.command.txt",
+			"bytes": 2324,
+			"sha256": "3d5b8fd24f18a3e1fc34bfbc0a2ca8e363c566b3c0b18ecd86e5d81443284104"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.commands-v2.txt",
+			"bytes": 2494,
+			"sha256": "c7aa582cd55114079f058498f295a8f018099629f040b17097081feeba746981"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.compare.json",
+			"bytes": 22675,
+			"sha256": "005377ad783d82c55cd6352fba2307568e738855c95ce39440eeb882574dcf7f"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.current.json",
+			"bytes": 65166,
+			"sha256": "c4534bc6cc3428a6cbd3815d4631f09dfa49f70a8911288c8dd4a0297e6f9fe6"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.current.log",
+			"bytes": 453224,
+			"sha256": "bb9010ac168b2fd00489a745f50cd659b36feaf73adc3ffa0ca8132668ad375f"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.final.command.txt",
+			"bytes": 2494,
+			"sha256": "c7aa582cd55114079f058498f295a8f018099629f040b17097081feeba746981"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.final.compare.json",
+			"bytes": 12003,
+			"sha256": "20a150432da839cbaa4c59d07bee669ed05a3e7c147790b21f5c74598ac8c41d"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.final.json",
+			"bytes": 56991,
+			"sha256": "7fe5075c989ab51340bbf6b78df30a22dc8cbe657b967249098f5bd18ecbc201"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.final.log",
+			"bytes": 388635,
+			"sha256": "d32eb27310b8f360f4a157850f19b24db55abcfffac1f0013a6d78f7c37f5414"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.head.command.txt",
+			"bytes": 4362,
+			"sha256": "9fd6452459f8847fce1790de7f1f076c2438ea85ecb3511e7d4df8375762a1f9"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.head.json",
+			"bytes": 67362,
+			"sha256": "eddbaf3e9b29b5aa2fd62cd35a15721f7cd0548f5639bca67b61275910788f14"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.head.log",
+			"bytes": 396293,
+			"sha256": "b693a1c6c3f852fd8058097127f3ade778fb0c5e9043fa5197835f93ccd94626"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.json",
+			"bytes": 197,
+			"sha256": "415c5272e0247a789e7e12a2bedeb3e4e815d73b6e87d43fd3d0b70f99e81878"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.log",
+			"bytes": 445445,
+			"sha256": "b094411df4afd90ef7575761cd084de07c15388478c2aaa5549333c7b71865e6"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome-tsx.report.json",
+			"bytes": 63488,
+			"sha256": "75b52fc9cbb260134ad2152f7926e8d9a384e7fc87395b8f98a5f48bd43c895c"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/biome.log",
+			"bytes": 64,
+			"sha256": "75ae7993f5aa552857494a48ca0b9f39a0b7c95204b36065cc7590a9001c6d19"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/build.log",
+			"bytes": 23,
+			"sha256": "a20e7a648db258ad689394e88df95db8b5e00f446c7b9e47b6e9878838cf4db6"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/candidate-build.log",
+			"bytes": 23,
+			"sha256": "a20e7a648db258ad689394e88df95db8b5e00f446c7b9e47b6e9878838cf4db6"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/diagnostic-full-tests-exit.json",
+			"bytes": 177,
+			"sha256": "92476e3d606b49ade997306d9d1ae208d23d03f04c597bf89499b8e644482e67"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/diagnostic-full-tests.log",
+			"bytes": 595555,
+			"sha256": "be0b2595ee5528a8be14f7ef9497a195118904246539611eb1cc4b3a44593e47"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/diagnostic-source-manifest.json",
+			"bytes": 69090,
+			"sha256": "6fca51ff0e31909d3645c9c4017b7d6dfff3454965cb84ae0e30c9f3c4413f76"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/diff-check.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/doc-5-final-update.log",
+			"bytes": 92,
+			"sha256": "fed7c0d0d46c258c84be074cf997d216ca0ca233b49663b7540d367fca2b5d8d"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/doc-6-final-update.log",
+			"bytes": 111,
+			"sha256": "ce9d10fd4fe8a2466467cbead1b4b0451b7e70086c5fc7e714c1976f31551278"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/doc-6-read-decision.log",
+			"bytes": 111,
+			"sha256": "ce9d10fd4fe8a2466467cbead1b4b0451b7e70086c5fc7e714c1976f31551278"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/external-read-fixed.log",
+			"bytes": 409,
+			"sha256": "386207a0af6e973ddbbcd017dc4dec79d78a167559a3cb0499aba1ec25db7389"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/external-read.log",
+			"bytes": 927,
+			"sha256": "998168ceec3adc73b821661131b20c09a709299980706585726710f80b5c4803"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/final-central-scoped.log",
+			"bytes": 5052,
+			"sha256": "2a0f7cee2c0732f3612036c41fc25e4cb3310fecad4e06cff20e08b1bd025de8"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/full-tests-exit.json",
+			"bytes": 206,
+			"sha256": "79c1a4443511865e177084a8dbde26a9dace2988a25c27e90820e874ab33d56f"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/full-tests-skips.txt",
+			"bytes": 1456,
+			"sha256": "fe2b5425602bd308056686f54446db4a37000fc39af7034204c5e89993e1ab82"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/full-tests.log",
+			"bytes": 553522,
+			"sha256": "e351ac2b0a6c13ad69beb19cd3c0fb1bf60469f656cb5dbe2a2387363dd2dabe"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/make-report.py",
+			"bytes": 18928,
+			"sha256": "317ea04e674ccc4f76155db0bfbe18a7184344ccea838206721f40c27aac99ae"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/read-decision-biome.log",
+			"bytes": 2377,
+			"sha256": "8d599c381672d23852d029292b61151e65733c9786ebe1b880aec7e6fb6b030d"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/read-decision-types.log",
+			"bytes": 57,
+			"sha256": "0aadf1c710631f443356a60987f5a058016681094ea0f412259f56eef36e4f49"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/record-biome.log",
+			"bytes": 64,
+			"sha256": "08d01ef3b3d2318da7b957752efaac09be31fc1f9e9c16c9918d284896a4543c"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/record-diff-check.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/smoke.log",
+			"bytes": 84,
+			"sha256": "ab6cb6de71650a7ba106e06d9b35a721b2a0161859ab25746ecc2c6cf73cc95f"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/source-manifest.json",
+			"bytes": 69090,
+			"sha256": "dc1222d9f98e22814a2334c9da84a288a01a20901f958a2f5ea6dc149bfac584"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-799-final.txt",
+			"bytes": 8526,
+			"sha256": "1d19597e8ebc807b568ef431e4620ecd2bc9b6cf66d20888eba2a365ead5466c"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-800-final.txt",
+			"bytes": 10419,
+			"sha256": "69a25e6a22e10f0836dc6d7a03e81b5f74fa7f4b971955f5622261a4a351f947"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-801-final.txt",
+			"bytes": 9263,
+			"sha256": "d56992f398985009d552ddf953c0ce8d97d35fd0678ea149e53920527ef1b423"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-802-final.txt",
+			"bytes": 11267,
+			"sha256": "16e97f29d5bb98c4e83028df7d71fbc8239205ba0495b4a29810d38104daf1e6"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-803-final.txt",
+			"bytes": 9877,
+			"sha256": "aee8514c5ed2dd2b61425ee87b5f03766a4296f9caac64bfe7dfcdd99663997f"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-804-final-acceptance.log",
+			"bytes": 22,
+			"sha256": "ab04437be913d033c2d81f674ee20213c905a18e924bc670d2eb00e5a7685748"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-804-final.txt",
+			"bytes": 11257,
+			"sha256": "4280a8efdb652960354869f460160086797381ad1f3370073480ffbbaa268a6e"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-804-finalize.log",
+			"bytes": 22,
+			"sha256": "ab04437be913d033c2d81f674ee20213c905a18e924bc670d2eb00e5a7685748"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-804-read-decision.log",
+			"bytes": 22,
+			"sha256": "ab04437be913d033c2d81f674ee20213c905a18e924bc670d2eb00e5a7685748"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-805-final.txt",
+			"bytes": 10295,
+			"sha256": "a963043f7fde3ec21a604ed9fe11bbc99687bff5b7d25a73f5907d2b17102545"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-805-finalize.log",
+			"bytes": 22,
+			"sha256": "9ff7e2b9713027c6755dbcdef704d72f957784ba50e9a3a1bcfa0b1a004cbd50"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/task-805-start.log",
+			"bytes": 22,
+			"sha256": "9ff7e2b9713027c6755dbcdef704d72f957784ba50e9a3a1bcfa0b1a004cbd50"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/test-cli-build.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/types.log",
+			"bytes": 57,
+			"sha256": "eaa36889806d8511c385360899757f701d40dd32f9ae2fa177749fc6d28ef1b9"
+		},
+		{
+			"path": "/tmp/backlog-a04-final/update-records.py",
+			"bytes": 11269,
+			"sha256": "7aaf8f9625d208b45e2f5376cc03c45fd4589e6106bfb231db5cbe3ee1de036a"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/admin-users.png",
+			"bytes": 71554,
+			"sha256": "dbea821f9c60d8df251bfa34a074f19d0ec6dc65d1909d43f84ed31e49a7e9f5"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/archive-restore.png",
+			"bytes": 57839,
+			"sha256": "3b558e594eac71e99dc8d6c3692bf575b1d2b4041e90fa13de280148542be084"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/board-conflict.png",
+			"bytes": 82161,
+			"sha256": "eb61dccaaf1dbee9cba67ccf269d021e85dbf357e6c3e1e9addf58a8e090e17a"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/browser-result.json",
+			"bytes": 61986,
+			"sha256": "a0f65eed35b97b1f24a9dd770cb0aca10ca4ee670df12fdd61ff8908fd861ea4"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/chromium.log",
+			"bytes": 710,
+			"sha256": "a44e139dc9f1b9031fad6d1badbc677f86a7c54368582094affa1fc759abd545"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/coverage.md",
+			"bytes": 2743,
+			"sha256": "8c64205e63e306533db3704074cd408d8bcde70848958fcba0bb282001e73157"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/decision-conflict.png",
+			"bytes": 86690,
+			"sha256": "931f2952d3fdb8d1817aefcc09428cd7758d0c0c285011ee6899a2df04b23834"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/document-conflict.png",
+			"bytes": 85168,
+			"sha256": "85a5a7de61e4626388038e7f80ff55deb15953a98f00aa721a7cd252c5c69c67"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/fixture.log",
+			"bytes": 3092,
+			"sha256": "c95140fa3942671c1a77e2bc7dc81dc4968570de615dd143fbc4042bfa40b6f6"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/harness.log",
+			"bytes": 1048,
+			"sha256": "07c8458f0cc44c2f7f48e0506329298e299d68edc603d80e53938cd8eba9f928"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/lost-response.png",
+			"bytes": 83777,
+			"sha256": "58daf48fa79a028e7a05b7ae73db371aaf3f8fc7f48ce54a104a9b0b0f536c66"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/recovery-notice.png",
+			"bytes": 95681,
+			"sha256": "2360c7f5b034d26e731155aca16bd89aaa6ba4a6e426a184e0e5fd7352fd14d3"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/same-key-retry.png",
+			"bytes": 115687,
+			"sha256": "91ad086ab8d44ef2280d26f7d1aac9596c40ec9e27aed7f4389ebb0d6a046316"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/server-error.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/server-recovery-error.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/server-recovery.log",
+			"bytes": 61,
+			"sha256": "33e770e999e44de34d247007d196413f0407c710eea580bd9cc00ce4fbc6f859"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/server.log",
+			"bytes": 61,
+			"sha256": "33e770e999e44de34d247007d196413f0407c710eea580bd9cc00ce4fbc6f859"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/session-draft.png",
+			"bytes": 80707,
+			"sha256": "044f062d3d0f894ee8ea2b71b10fa98fdd621d7fa65f3dce4697f261fc53b456"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-browser/final-b8JPF6/task-conflict.png",
+			"bytes": 114987,
+			"sha256": "1409c510b4b099c2bb994d441b37c4c27676932d93d268a1c1d8382fe971e8dd"
+		},
+		{
+			"path": "/tmp/backlog-a04-web-cdp.mjs",
+			"bytes": 29017,
+			"sha256": "91a1908a2a51e07f4832606402e0f25dfc3a17c577b14e2fc736ab58fcfcfaea"
+		}
+	],
+	"gitDelivery": {
+		"branch": "tasks/server-a04-write-history",
+		"head": "adb84179c3e639140c270504e75841f96cb4f4d0",
+		"committed": false,
+		"pushed": false,
+		"merged": false,
+		"status": "Local source, task and documentation changes; origin/server unchanged."
+	}
+}

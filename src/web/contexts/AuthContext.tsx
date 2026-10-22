@@ -1,14 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ADMIN_PERMISSIONS, type AuthSession, type ProjectPermissions } from "../../server/auth-types";
+import type { WriteState } from "../../server/mutation-types";
 import { projectScope, setProjectStorageAccount } from "../lib/project-scope";
 import { HttpError, onSessionExpired, requestJson, setRequestSession } from "../lib/request";
 import { LoginForm, PasswordForm } from "../components/AccountForms";
+import { ProjectWriteNotice } from "../components/ProjectWriteNotice";
 import { useConfirmDiscardChanges } from "./UnsavedChangesContext";
 
 interface AuthState {
 	central: boolean;
 	session: AuthSession | null;
 	permissions: ProjectPermissions;
+	writeState: WriteState;
+	pendingOperationId: string | null;
 	ready: boolean;
 	logoutPending: boolean;
 	logoutError: string | null;
@@ -28,6 +32,8 @@ const AuthContext = createContext<AuthState>({
 	central: false,
 	session: null,
 	permissions: ADMIN_PERMISSIONS,
+	writeState: "ready",
+	pendingOperationId: null,
 	ready: true,
 	logoutPending: false,
 	logoutError: null,
@@ -46,6 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	const central = isCentralPage(window.location.pathname);
 	const [session, setSession] = useState<AuthSession | null>(null);
 	const [permissions, setPermissions] = useState<ProjectPermissions>(NO_PERMISSIONS);
+	const [writeState, setWriteState] = useState<WriteState>("ready");
+	const [pendingOperationId, setPendingOperationId] = useState<string | null>(null);
 	const [checked, setChecked] = useState(!central);
 	const [mounted, setMounted] = useState(!central);
 	const [accountKey, setAccountKey] = useState("local");
@@ -86,17 +94,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 		}
 		try {
 			if (projectScope.id) {
-				const detail = await requestJson<{ permissions: ProjectPermissions }>(projectScope.apiBase);
+				const detail = await requestJson<{
+					permissions: ProjectPermissions;
+					writeState?: WriteState;
+					pendingOperationId?: string;
+				}>(projectScope.apiBase);
 				if (owner !== generation.current) return;
 				setPermissions((current) =>
 					JSON.stringify(current) === JSON.stringify(detail.permissions) ? current : detail.permissions,
 				);
-			} else setPermissions(next.user.role === "admin" ? ADMIN_PERMISSIONS : NO_PERMISSIONS);
+				setWriteState(detail.writeState ?? "ready");
+				setPendingOperationId(detail.pendingOperationId ?? null);
+			} else {
+				setPermissions(next.user.role === "admin" ? ADMIN_PERMISSIONS : NO_PERMISSIONS);
+				setWriteState("ready");
+				setPendingOperationId(null);
+			}
 			setError(null);
 			setMounted(true);
 		} catch (reason) {
 			if (owner !== generation.current) return;
 			setPermissions(NO_PERMISSIONS);
+			setWriteState("ready");
+			setPendingOperationId(null);
 			setError(reason instanceof Error ? reason.message : String(reason));
 		}
 		setChecked(true);
@@ -138,6 +158,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			latestSession.current = null;
 			setSession(null);
 			setPermissions(NO_PERMISSIONS);
+			setWriteState("ready");
+			setPendingOperationId(null);
 			setError(null);
 			setChecked(true);
 		});
@@ -154,6 +176,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			logoutRequest.current?.abort();
 		};
 	}, [central, refresh, cancelRefresh]);
+
+	useEffect(() => {
+		if (!central || !projectScope.id) return;
+		const changed = () => void refresh();
+		window.addEventListener("backlog-project-write-state", changed);
+		return () => window.removeEventListener("backlog-project-write-state", changed);
+	}, [central, refresh]);
 
 	useEffect(() => {
 		if (!central) return;
@@ -202,6 +231,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			latestSession.current = null;
 			setSession(null);
 			setPermissions(NO_PERMISSIONS);
+			setWriteState("ready");
+			setPendingOperationId(null);
 			setError(null);
 			setMounted(false);
 			lastUser.current = null;
@@ -222,6 +253,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				central,
 				session,
 				permissions: central ? permissions : ADMIN_PERMISSIONS,
+				writeState,
+				pendingOperationId,
 				ready,
 				logoutPending,
 				logoutError,
@@ -230,6 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				acceptSession,
 			}}
 		>
+			{central && ready && <ProjectWriteNotice />}
 			{mounted && (
 				<div key={accountKey} hidden={!ready}>
 					{children}

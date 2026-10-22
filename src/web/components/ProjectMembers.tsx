@@ -7,9 +7,11 @@ import {
 	type ServerUser,
 } from "../../server/auth-types";
 import { useAuth } from "../contexts/AuthContext";
+import type { RecordVersionLike } from "../lib/api";
 import { projectScope } from "../lib/project-scope";
 import { requestJson } from "../lib/request";
 import { buttonClass, inputClass } from "./AccountForms";
+import { isMutationConflict, MutationConflictNotice } from "./MutationConflictNotice";
 
 const LABELS: Record<keyof ProjectPermissions, string> = {
 	tasksWrite: "Tasks, drafts and milestones",
@@ -21,21 +23,25 @@ const LABELS: Record<keyof ProjectPermissions, string> = {
 };
 export default function ProjectMembers() {
 	const { session, refresh } = useAuth();
-	const [members, setMembers] = useState<ProjectMember[]>([]);
+	const [members, setMembers] = useState<(ProjectMember & RecordVersionLike)[]>([]);
 	const [users, setUsers] = useState<ServerUser[]>([]);
 	const [userId, setUserId] = useState("");
 	const [error, setError] = useState<string | null>(null);
+	const [conflict, setConflict] = useState<unknown>(null);
 	const [busy, setBusy] = useState(false);
 	const base = `/api/admin/projects/${projectScope.id}/members`;
 	const load = async () => {
 		const [nextMembers, nextUsers] = await Promise.all([
-			requestJson<ProjectMember[]>(base),
+			requestJson<(ProjectMember & RecordVersionLike)[]>(base),
 			requestJson<ServerUser[]>("/api/admin/users"),
 		]);
 		setMembers(nextMembers);
 		setUsers(nextUsers);
 	};
-	const failed = (reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason));
+	const failed = (reason: unknown) => {
+		setError(reason instanceof Error ? reason.message : String(reason));
+		setConflict(isMutationConflict(reason) ? reason : null);
+	};
 	useEffect(() => {
 		if (session?.user.role === "admin") void load().catch(failed);
 	}, [session?.user.role]);
@@ -43,10 +49,18 @@ export default function ProjectMembers() {
 		if (busy) return;
 		setBusy(true);
 		setError(null);
+		setConflict(null);
 		try {
+			const current = members.find((member) => member.userId === id);
 			await requestJson(
 				`${base}/${encodeURIComponent(id)}`,
-				permissions ? { method: "PUT", body: JSON.stringify({ permissions }) } : { method: "DELETE" },
+				permissions
+					? {
+							method: "PUT",
+							headers: current?.revision ? { "If-Match": current.revision } : undefined,
+							body: JSON.stringify({ permissions }),
+						}
+					: { method: "DELETE", headers: current?.revision ? { "If-Match": current.revision } : undefined },
 			);
 			await load();
 			if (id === userId) setUserId("");
@@ -67,6 +81,16 @@ export default function ProjectMembers() {
 		<section className="mx-auto max-w-4xl p-8">
 			<h1 className="mb-8 text-2xl font-bold">Project access</h1>
 			{error && (
+				<MutationConflictNotice
+					error={conflict}
+					draft={false}
+					onOpenCurrent={() => {
+						if (window.confirm("Discard current form values and reload project access?")) window.location.reload();
+					}}
+					onDismiss={() => setConflict(null)}
+				/>
+			)}
+			{error && !conflict && (
 				<p role="alert" className="mb-5 text-red-700 dark:text-red-300">
 					{error}
 				</p>

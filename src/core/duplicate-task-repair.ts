@@ -352,7 +352,7 @@ async function findReferenceReviews(core: Core, groupIds: string[]): Promise<Dup
 		const projectPath = normalizeRelativePath(core.filesystem.rootDir, join(core.filesystem.backlogDir, file));
 		let content: string;
 		try {
-			content = await Bun.file(join(core.filesystem.backlogDir, file)).text();
+			content = await core.filesystem.readText(join(core.filesystem.backlogDir, file));
 		} catch (error) {
 			failures.push(`Reference scan could not read ${projectPath}: ${errorMessage(error)}`);
 			continue;
@@ -429,9 +429,7 @@ export async function previewDuplicateTaskIdRepair(
 			}
 			const sourcePath = absoluteProjectPath(core.filesystem.rootDir, task.filePath);
 			const targetAbsolutePath = absoluteProjectPath(core.filesystem.rootDir, targetPath);
-			const content = await Bun.file(sourcePath)
-				.text()
-				.catch(() => "");
+			const content = await core.filesystem.readText(sourcePath).catch(() => "");
 			if (!content) {
 				blockedReasons.push(`${task.filePath}: task file could not be read.`);
 				continue;
@@ -621,7 +619,7 @@ export async function applyDuplicateTaskIdRepair(
 			plan.changes.map(async (change, index) => {
 				const sourcePath = absoluteProjectPath(core.filesystem.rootDir, change.sourcePath);
 				const targetPath = absoluteProjectPath(core.filesystem.rootDir, change.targetPath);
-				const content = await Bun.file(sourcePath).text();
+				const content = await core.filesystem.readText(sourcePath);
 				if (sha256(content) !== change.sourceHash) {
 					throw new Error(`${change.sourcePath} changed after the preview.`);
 				}
@@ -638,6 +636,41 @@ export async function applyDuplicateTaskIdRepair(
 				};
 			}),
 		);
+		const result = { repairedFiles: plan.changes.length, changes: plan.changes, references: plan.references };
+
+		if (core.filesystem.isCapturingPreparedChanges()) {
+			const [activeTasks, archivedTasks] = await Promise.all([
+				core.filesystem.listTasks(),
+				core.filesystem.listArchivedTasks(),
+			]);
+			for (const item of prepared) {
+				const identity = {
+					kind: "task" as const,
+					visibleId: item.newId,
+					lifecycle: item.location === "archived" ? ("archived" as const) : ("active" as const),
+					recordPath: item.targetPath,
+					transitionFromPath: item.sourcePath,
+				};
+				// Repair installs a new regular file and vacates the old pathname. In particular,
+				// a symlink source must not rewrite a referent shared by the retained duplicate.
+				await core.filesystem.stageRecordWrite(item.targetPath, item.content, undefined, identity);
+				await core.filesystem.stageRecordRemoval(item.sourcePath, identity);
+			}
+			const bySource = new Map(prepared.map((item) => [item.sourcePath, item]));
+			const projected = (tasks: Task[]) =>
+				tasks.map((task) => {
+					const change = task.filePath ? bySource.get(resolve(core.filesystem.rootDir, task.filePath)) : undefined;
+					return change ? { ...task, id: change.newId, filePath: change.targetPath } : task;
+				});
+			const nextActive = projected(activeTasks);
+			const remainingGroups = await findLocalDuplicateTaskIds(core, {
+				tasks: nextActive,
+				activeTasks: nextActive,
+				archivedTasks: projected(archivedTasks),
+			});
+			if (remainingGroups.length) throw new Error("Repair verification still found duplicate task IDs.");
+			return { ...result, remainingGroups };
+		}
 
 		const staged: string[] = [];
 		const stagedIdentities = new Map<string, FileOwnershipIdentity>();
@@ -679,12 +712,7 @@ export async function applyDuplicateTaskIdRepair(
 			}
 
 			for (const item of backups) await removeIfPresent(item.backupPath).catch(() => {});
-			return {
-				repairedFiles: plan.changes.length,
-				changes: plan.changes,
-				references: plan.references,
-				remainingGroups,
-			};
+			return { ...result, remainingGroups };
 		} catch (error) {
 			const rollbackIssues: string[] = [];
 			for (const item of installed.reverse()) {

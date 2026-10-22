@@ -21,7 +21,7 @@ export function assertRegistrationAccess(database: Database, userId: string, roo
 	if (user.role === "admin") return;
 	// A-02 databases are readable before their first successful A-03 write, but
 	// cannot contain a personal grant yet.
-	if (database.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version !== 3)
+	if ((database.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version ?? 0) < 3)
 		throw new AuthStoreError("Project registration is not permitted for this folder.", 403);
 	const areas = database
 		.query<{ rootPath: string }, [string]>("SELECT root_path AS rootPath FROM folder_areas WHERE user_id=?")

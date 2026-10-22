@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import Modal from './Modal';
 import { apiClient } from '../lib/api';
 import StoredDate from './StoredDate';
+import { useAuth } from '../contexts/AuthContext';
 
 interface CleanupModalProps {
 	isOpen: boolean;
@@ -28,9 +29,11 @@ const AGE_OPTIONS = [
 ];
 
 const CleanupModal: React.FC<CleanupModalProps> = ({ isOpen, onClose, onSuccess, dateFormat }) => {
+	const { writeState } = useAuth();
 	const [selectedAge, setSelectedAge] = useState<number | null>(null);
 	const [previewTasks, setPreviewTasks] = useState<TaskPreview[]>([]);
 	const [previewCount, setPreviewCount] = useState(0);
+	const [previewFingerprint, setPreviewFingerprint] = useState<string | undefined>();
 	const [isLoadingPreview, setIsLoadingPreview] = useState(false);
 	const [isExecuting, setIsExecuting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -45,25 +48,27 @@ const CleanupModal: React.FC<CleanupModalProps> = ({ isOpen, onClose, onSuccess,
 			const preview = await apiClient.getCleanupPreview(age);
 			setPreviewTasks(preview.tasks);
 			setPreviewCount(preview.count);
+			setPreviewFingerprint(preview.fingerprint);
 			setShowConfirmation(false);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to load preview');
 			setPreviewTasks([]);
 			setPreviewCount(0);
+			setPreviewFingerprint(undefined);
 		} finally {
 			setIsLoadingPreview(false);
 		}
 	};
 
 	const handleExecuteCleanup = async () => {
-		if (previewTasks.length === 0) return;
+		if (previewTasks.length === 0 || writeState !== 'ready') return;
 
 		setIsExecuting(true);
 		setError(null);
 
 		try {
 			// Only the tasks the preview showed, not whatever matches the age by now.
-			const result = await apiClient.executeCleanup(previewTasks.map((task) => task.id));
+			const result = await apiClient.executeCleanup(previewTasks.map((task) => task.id), previewFingerprint);
 
 			// A task that could not be archived is shown as an error, not in the success toast.
 			if (result.success && !result.failedTasks?.length) {
@@ -83,6 +88,7 @@ const CleanupModal: React.FC<CleanupModalProps> = ({ isOpen, onClose, onSuccess,
 		setSelectedAge(null);
 		setPreviewTasks([]);
 		setPreviewCount(0);
+		setPreviewFingerprint(undefined);
 		setError(null);
 		setShowConfirmation(false);
 		onClose();
@@ -203,7 +209,7 @@ const CleanupModal: React.FC<CleanupModalProps> = ({ isOpen, onClose, onSuccess,
 								) : (
 									<button
 										onClick={handleExecuteCleanup}
-										disabled={isExecuting}
+										disabled={isExecuting || writeState !== 'ready'}
 										className="px-4 py-2 text-sm font-medium text-white bg-red-500 dark:bg-red-600 rounded-md hover:bg-red-600 dark:hover:bg-red-700 disabled:opacity-50 transition-colors duration-200"
 									>
 										{isExecuting ? 'Archiving Tasks...' : `Archive ${previewCount} Task${previewCount !== 1 ? 's' : ''}`}

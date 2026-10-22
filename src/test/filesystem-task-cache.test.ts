@@ -182,11 +182,11 @@ describe("FileSystem task parse cache", () => {
 		const newerRead = deferred<string>();
 		const harness = filesystem as unknown as TaskCacheHarness;
 		let readCount = 0;
-		const fileSpy = spyOn(Bun, "file").mockImplementation(((filepath: string | URL) => {
-			expect(resolve(String(filepath))).toBe(resolve(taskPath));
+		const readSpy = spyOn(filesystem, "readBytes").mockImplementation(async (filepath: string) => {
+			expect(resolve(filepath)).toBe(resolve(taskPath));
 			const content = readCount++ === 0 ? olderRead.promise : readCount === 2 ? newerRead.promise : replacement;
-			return { text: async () => await content } as ReturnType<typeof Bun.file>;
-		}) as typeof Bun.file);
+			return Buffer.from(await content);
+		});
 		const parseSpy = spyOn(markdownParser, "parseTask");
 
 		try {
@@ -202,7 +202,7 @@ describe("FileSystem task parse cache", () => {
 			expect(parseSpy).toHaveBeenCalledTimes(2);
 		} finally {
 			parseSpy.mockRestore();
-			fileSpy.mockRestore();
+			readSpy.mockRestore();
 		}
 	});
 
@@ -213,11 +213,11 @@ describe("FileSystem task parse cache", () => {
 		const harness = filesystem as unknown as TaskCacheHarness;
 		const staleEpoch = harness.taskParseCacheEpoch;
 		let readCount = 0;
-		const fileSpy = spyOn(Bun, "file").mockImplementation(((filepath: string | URL) => {
-			expect(resolve(String(filepath))).toBe(resolve(taskPath));
+		const readSpy = spyOn(filesystem, "readBytes").mockImplementation(async (filepath: string) => {
+			expect(resolve(filepath)).toBe(resolve(taskPath));
 			const result = readCount++ === 0 ? inFlightRead.promise : content;
-			return { text: async () => await result } as ReturnType<typeof Bun.file>;
-		}) as typeof Bun.file);
+			return Buffer.from(await result);
+		});
 
 		try {
 			const startedBeforeRootChange = harness.readParsedTaskFile(taskPath, staleEpoch);
@@ -233,7 +233,7 @@ describe("FileSystem task parse cache", () => {
 			expect(harness.parsedTaskFiles.has(resolve(taskPath))).toBe(false);
 			expect(harness.taskFileReadGenerations.has(resolve(taskPath))).toBe(false);
 		} finally {
-			fileSpy.mockRestore();
+			readSpy.mockRestore();
 		}
 	});
 
@@ -242,10 +242,10 @@ describe("FileSystem task parse cache", () => {
 		const taskPath = join(filesystem.tasksDir, "task-1 - Deleted task.md");
 		const inFlightRead = deferred<string>();
 		const harness = filesystem as unknown as TaskCacheHarness;
-		const fileSpy = spyOn(Bun, "file").mockImplementation(((filepath: string | URL) => {
-			expect(resolve(String(filepath))).toBe(resolve(taskPath));
-			return { text: async () => await inFlightRead.promise } as ReturnType<typeof Bun.file>;
-		}) as typeof Bun.file);
+		const readSpy = spyOn(filesystem, "readBytes").mockImplementation(async (filepath: string) => {
+			expect(resolve(filepath)).toBe(resolve(taskPath));
+			return Buffer.from(await inFlightRead.promise);
+		});
 
 		try {
 			const staleRead = harness.readParsedTaskFile(taskPath);
@@ -257,7 +257,7 @@ describe("FileSystem task parse cache", () => {
 			expect((await staleRead).title).toBe("Deleted task");
 			expect(harness.parsedTaskFiles.has(resolve(taskPath))).toBe(false);
 		} finally {
-			fileSpy.mockRestore();
+			readSpy.mockRestore();
 		}
 	});
 
@@ -269,7 +269,7 @@ describe("FileSystem task parse cache", () => {
 		let started = 0;
 		let active = 0;
 		let maximumActive = 0;
-		const fileSpy = spyOn(Bun, "file").mockImplementation(((_filepath: string | URL) => {
+		const readSpy = spyOn(filesystem, "readBytes").mockImplementation(async (_filepath: string) => {
 			started++;
 			active++;
 			maximumActive = Math.max(maximumActive, active);
@@ -287,8 +287,8 @@ describe("FileSystem task parse cache", () => {
 			const startedSignal = nextReadStarted;
 			nextReadStarted = deferred<void>();
 			startedSignal.resolve();
-			return { text: async () => await read.promise } as ReturnType<typeof Bun.file>;
-		}) as typeof Bun.file);
+			return Buffer.from(await read.promise);
+		});
 
 		try {
 			const reads = Promise.all([
@@ -323,7 +323,7 @@ describe("FileSystem task parse cache", () => {
 			expect(activeTasks).toHaveLength(32);
 			expect(archivedTasks).toHaveLength(32);
 		} finally {
-			fileSpy.mockRestore();
+			readSpy.mockRestore();
 		}
 	});
 });

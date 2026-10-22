@@ -9,6 +9,7 @@ import MilestoneTaskRow from "./MilestoneTaskRow";
 import Modal from "./Modal";
 import StoredDate from "./StoredDate";
 import { useUnsavedChanges } from "../contexts/UnsavedChangesContext";
+import { MutationConflictNotice, isMutationConflict } from "./MutationConflictNotice";
 
 type RemoveTaskHandling = "clear" | "reassign";
 
@@ -58,10 +59,12 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	onRefreshData,
 	dateFormat,
 }) => {
-	const { permissions } = useAuth();
+	const { permissions, writeState } = useAuth();
+	const canWrite = permissions.tasksWrite && writeState === 'ready';
 	const [newMilestone, setNewMilestone] = useState("");
 	const [newMilestoneDueDate, setNewMilestoneDueDate] = useState("");
 	const [error, setError] = useState<string | null>(null);
+	const [listConflict, setListConflict] = useState<unknown>(null);
 	const [success, setSuccess] = useState<string | null>(null);
 	const [isSaving, setIsSaving] = useState(false);
 	const [showAddModal, setShowAddModal] = useState(false);
@@ -74,16 +77,17 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	const [savingMilestoneKey, setSavingMilestoneKey] = useState<string | null>(null);
 	const [removingMilestoneKey, setRemovingMilestoneKey] = useState<string | null>(null);
 	const [editingBucket, setEditingBucket] = useState<MilestoneBucket | null>(null);
+	const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
 	const [editMilestoneName, setEditMilestoneName] = useState("");
 	const [editMilestoneDueDate, setEditMilestoneDueDate] = useState("");
 	const [removingBucket, setRemovingBucket] = useState<MilestoneBucket | null>(null);
+	const [removingMilestone, setRemovingMilestone] = useState<Milestone | null>(null);
 	const [removeTaskHandling, setRemoveTaskHandling] = useState<RemoveTaskHandling>("clear");
 	const [removeReassignTo, setRemoveReassignTo] = useState("");
 	const [modalError, setModalError] = useState<string | null>(null);
+	const [modalConflict, setModalConflict] = useState<unknown>(null);
 	const [searchQuery, setSearchQuery] = useState("");
-	const originalMilestone = editingBucket?.milestone
-		? milestoneEntities.find((item) => milestoneKey(item.id) === milestoneKey(editingBucket.milestone))
-		: null;
+	const originalMilestone = editingMilestone;
 	useUnsavedChanges(
 		(showAddModal && (newMilestone.trim() !== "" || newMilestoneDueDate !== "")) ||
 			(editingBucket !== null &&
@@ -200,7 +204,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 		e.preventDefault();
 		setDropTargetKey(null);
 
-		if (!draggedTask) return;
+		if (!draggedTask || !canWrite) return;
 
 		// Don't do anything if dropping on same milestone
 		if (draggedTask.milestone === targetMilestone) {
@@ -208,17 +212,20 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 			return;
 		}
 
+		setListConflict(null);
 		try {
-			await apiClient.updateTask(draggedTask.id, { milestone: targetMilestone });
+			await apiClient.updateTask(draggedTask.id, { milestone: targetMilestone }, draggedTask);
 			if (onRefreshData) {
 				await onRefreshData();
 			}
 		} catch (err) {
 			console.error("Failed to update task milestone:", err);
+			setError(err instanceof Error ? err.message : "Failed to update task milestone.");
+			setListConflict(isMutationConflict(err) ? err : null);
 		}
 
 		setDraggedTask(null);
-	}, [draggedTask, onRefreshData]);
+	}, [draggedTask, onRefreshData, canWrite]);
 
 	const handleNewMilestoneChange = (value: string) => {
 		setNewMilestone(value);
@@ -235,6 +242,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 
 	const handleAddMilestone = async (event?: React.FormEvent<HTMLFormElement>) => {
 		event?.preventDefault();
+		if (!canWrite) return;
 		const value = newMilestone.trim();
 		if (!value) {
 			setError("Milestone name cannot be empty.");
@@ -265,7 +273,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 
 	const handleArchiveMilestone = useCallback(
 		async (bucket: MilestoneBucket) => {
-			if (!bucket.milestone) return;
+			if (!bucket.milestone || writeState !== 'ready') return;
 
 			const label = bucket.label || bucket.milestone;
 			const confirmed = window.confirm(
@@ -275,9 +283,11 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 
 			setArchivingMilestoneKey(bucket.key);
 			setError(null);
+			setListConflict(null);
 			setSuccess(null);
 			try {
-				await apiClient.archiveMilestone(bucket.milestone);
+				const milestone = milestoneEntities.find((item) => milestoneKey(item.id) === milestoneKey(bucket.milestone));
+				await apiClient.archiveMilestone(bucket.milestone, milestone);
 				setSuccess(`Archived milestone "${label}"`);
 				if (onRefreshData) {
 					await onRefreshData();
@@ -286,11 +296,12 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 			} catch (err) {
 				console.error("Failed to archive milestone:", err);
 				setError(err instanceof Error ? err.message : "Failed to archive milestone.");
+				setListConflict(isMutationConflict(err) ? err : null);
 			} finally {
 				setArchivingMilestoneKey(null);
 			}
 		},
-		[onRefreshData],
+		[onRefreshData, milestoneEntities, writeState],
 	);
 
 	const findDuplicateMilestone = (title: string, currentMilestoneId?: string): Milestone | undefined => {
@@ -307,19 +318,23 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	const openEditModal = (bucket: MilestoneBucket) => {
 		if (!bucket.milestone) return;
 		setEditingBucket(bucket);
+		setEditingMilestone(milestoneEntities.find((item) => milestoneKey(item.id) === milestoneKey(bucket.milestone)) ?? null);
 		setEditMilestoneName(bucket.label || bucket.milestone);
 		const milestone = milestoneEntities.find((candidate) => milestoneKey(candidate.id) === milestoneKey(bucket.milestone));
 		setEditMilestoneDueDate(milestone?.dueDate ?? "");
 		setModalError(null);
+		setModalConflict(null);
 		setError(null);
 		setSuccess(null);
 	};
 
 	const closeEditModal = () => {
 		setEditingBucket(null);
+		setEditingMilestone(null);
 		setEditMilestoneName("");
 		setEditMilestoneDueDate("");
 		setModalError(null);
+		setModalConflict(null);
 	};
 
 	const handleEditMilestoneNameChange = (value: string) => {
@@ -331,6 +346,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 
 	const handleUpdateMilestone = async (event?: React.FormEvent<HTMLFormElement>) => {
 		event?.preventDefault();
+		if (!canWrite) return;
 		const bucket = editingBucket;
 		if (!bucket?.milestone) return;
 
@@ -352,7 +368,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 		setError(null);
 		setSuccess(null);
 		try {
-			await apiClient.updateMilestone(bucket.milestone, value, editMilestoneDueDate || null);
+			await apiClient.updateMilestone(bucket.milestone, value, editMilestoneDueDate || null, editingMilestone);
 			closeEditModal();
 			setSuccess(previousLabel === value ? `Updated milestone "${value}"` : `Renamed milestone "${previousLabel}" to "${value}"`);
 			if (onRefreshData) {
@@ -362,6 +378,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 		} catch (err) {
 			console.error("Failed to update milestone:", err);
 			setModalError(err instanceof Error ? err.message : "Failed to update milestone.");
+			setModalConflict(isMutationConflict(err) ? err : null);
 		} finally {
 			setSavingMilestoneKey(null);
 		}
@@ -373,21 +390,26 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 			(milestone) => milestoneKey(milestone.id) !== milestoneKey(bucket.milestone),
 		);
 		setRemovingBucket(bucket);
+		setRemovingMilestone(milestoneEntities.find((item) => milestoneKey(item.id) === milestoneKey(bucket.milestone)) ?? null);
 		setRemoveTaskHandling("clear");
 		setRemoveReassignTo(fallbackMilestone?.id ?? "");
 		setModalError(null);
+		setModalConflict(null);
 		setError(null);
 		setSuccess(null);
 	};
 
 	const closeRemoveModal = () => {
 		setRemovingBucket(null);
+		setRemovingMilestone(null);
 		setRemoveTaskHandling("clear");
 		setRemoveReassignTo("");
 		setModalError(null);
+		setModalConflict(null);
 	};
 
 	const handleRemoveMilestone = async () => {
+		if (writeState !== 'ready') return;
 		const bucket = removingBucket;
 		if (!bucket?.milestone) return;
 		const selectedTaskHandling = removeTaskHandling;
@@ -406,7 +428,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 			await apiClient.removeMilestone(bucket.milestone, {
 				taskHandling: selectedTaskHandling,
 				reassignTo: selectedTaskHandling === "reassign" ? selectedReassignTo : undefined,
-			});
+			}, removingMilestone);
 			closeRemoveModal();
 			setSuccess(
 				selectedTaskHandling === "reassign"
@@ -420,9 +442,18 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 		} catch (err) {
 			console.error("Failed to remove milestone:", err);
 			setModalError(err instanceof Error ? err.message : "Failed to remove milestone.");
+			setModalConflict(isMutationConflict(err) ? err : null);
 		} finally {
 			setRemovingMilestoneKey(null);
 		}
+	};
+	const openCurrentMilestones = () => {
+		if (editingBucket && (editMilestoneName !== (editingBucket.label || editingBucket.milestone) || editMilestoneDueDate !== (editingMilestone?.dueDate ?? ""))) {
+			if (!window.confirm("Discard your draft and open current milestones?")) return;
+		}
+		closeEditModal();
+		closeRemoveModal();
+		void onRefreshData?.();
 	};
 
 	const getStatusBadgeClass = (status?: string | null) => {
@@ -582,7 +613,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							<button
 								type="button"
 								onClick={() => openEditModal(bucket)}
-								disabled={!permissions.tasksWrite || isArchiving || isSavingMilestone || isRemoving}
+								disabled={!canWrite || isArchiving || isSavingMilestone || isRemoving}
 								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-60"
 							>
 								<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -593,7 +624,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							<button
 								type="button"
 								onClick={() => openRemoveModal(bucket)}
-								disabled={!permissions.delete || isArchiving || isSavingMilestone || isRemoving}
+								disabled={!permissions.delete || writeState !== 'ready' || isArchiving || isSavingMilestone || isRemoving}
 								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-60"
 							>
 								<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -604,7 +635,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							<button
 								type="button"
 								onClick={() => handleArchiveMilestone(bucket)}
-								disabled={!permissions.archive || isArchiving || isSavingMilestone || isRemoving}
+								disabled={!permissions.archive || writeState !== 'ready' || isArchiving || isSavingMilestone || isRemoving}
 								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-60"
 							>
 								<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -816,7 +847,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							{success}
 						</span>
 					)}
-					{error && (
+					{error && !listConflict && (
 						<span className="inline-flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400">
 							<svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 								<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v4m0 4h.01M5.07 19h13.86a2 2 0 001.74-3L13.74 4a2 2 0 00-3.48 0L3.33 16a2 2 0 001.74 3z" />
@@ -826,7 +857,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 					)}
 					<button
 						type="button"
-						disabled={!permissions.tasksWrite}
+						disabled={!canWrite}
                         onClick={() => setShowAddModal(true)}
 						className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-offset-gray-900 transition-colors"
 					>
@@ -834,6 +865,11 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 					</button>
 				</div>
 			</div>
+			{Boolean(listConflict) && (
+				<div className="mb-4">
+					<MutationConflictNotice error={listConflict} draft={false} onOpenCurrent={() => { setListConflict(null); setError(null); void onRefreshData?.(); }} onDismiss={() => setListConflict(null)} />
+				</div>
+			)}
 
 			{/* Search no-match hint */}
 			{showSearchNoMatchHint && (
@@ -942,7 +978,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 						</button>
 						<button
 							type="submit"
-							disabled={!permissions.tasksWrite || isSaving || !newMilestone.trim()}
+							disabled={!canWrite || isSaving || !newMilestone.trim()}
 							className="px-4 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-colors"
 						>
 							{isSaving ? "Saving..." : "Create"}
@@ -969,7 +1005,8 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 						<p className="text-xs text-gray-500 dark:text-gray-400">
 							Renaming updates local tasks that reference this milestone.
 						</p>
-						{modalError && <p className="text-xs text-red-600 dark:text-red-400">{modalError}</p>}
+						<MutationConflictNotice error={modalConflict} onOpenCurrent={openCurrentMilestones} onDismiss={() => setModalConflict(null)} />
+						{modalError && !modalConflict && <p className="text-xs text-red-600 dark:text-red-400">{modalError}</p>}
 					</div>
 					<div className="space-y-2">
 						<label htmlFor="edit-milestone-due-date" className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -993,7 +1030,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 						</button>
 						<button
 							type="submit"
-							disabled={!permissions.tasksWrite || savingMilestoneKey !== null || !editMilestoneName.trim()}
+							disabled={!canWrite || savingMilestoneKey !== null || !editMilestoneName.trim()}
 							className="px-4 py-2 rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 transition-colors"
 						>
 							{savingMilestoneKey ? "Saving..." : "Save"}
@@ -1064,7 +1101,8 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							</span>
 						</label>
 					</div>
-					{modalError && <p className="text-xs text-red-600 dark:text-red-400">{modalError}</p>}
+					<MutationConflictNotice error={modalConflict} onOpenCurrent={openCurrentMilestones} onDismiss={() => setModalConflict(null)} />
+					{modalError && !modalConflict && <p className="text-xs text-red-600 dark:text-red-400">{modalError}</p>}
 					<div className="flex justify-end gap-2">
 						<button
 							type="button"
@@ -1076,7 +1114,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 						<button
 							type="button"
 							onClick={handleRemoveMilestone}
-							disabled={!permissions.delete || removingMilestoneKey !== null || (removeTaskHandling === "reassign" && !removeReassignTo)}
+							disabled={!permissions.delete || writeState !== 'ready' || removingMilestoneKey !== null || (removeTaskHandling === "reassign" && !removeReassignTo)}
 							className="px-4 py-2 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 transition-colors"
 						>
 							{removingMilestoneKey ? "Removing..." : "Remove milestone"}

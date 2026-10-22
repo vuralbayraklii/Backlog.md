@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { Milestone, Task } from "../types/index.ts";
 import Board from "../web/components/Board.tsx";
-import { apiClient, type MoveTasksPayload } from "../web/lib/api.ts";
+import { ApiError, apiClient, type MoveTasksPayload, type ReorderTaskPayload } from "../web/lib/api.ts";
+import { projectScope } from "../web/lib/project-scope.ts";
+import { setRequestSession } from "../web/lib/request.ts";
 
 const STATUSES = ["To Do", "In Progress", "Done"];
 
@@ -46,6 +48,7 @@ const renderBoard = (
 		onTasksUpdated?: (tasks: Task[], requestTask: Task) => void;
 		onRefreshData?: () => Promise<void>;
 		tasks?: Task[];
+		tasksRevision?: string;
 		filterPriority?: string;
 	} = {},
 ): HTMLElement => {
@@ -64,6 +67,7 @@ const rerenderBoard = (
 		onTasksUpdated?: (tasks: Task[], requestTask: Task) => void;
 		onRefreshData?: () => Promise<void>;
 		tasks?: Task[];
+		tasksRevision?: string;
 		filterPriority?: string;
 	} = {},
 ) => {
@@ -73,6 +77,7 @@ const rerenderBoard = (
 				onEditTask={onEditTask}
 				onNewTask={() => {}}
 				tasks={extra.tasks ?? TASKS}
+				tasksRevision={extra.tasksRevision}
 				statuses={STATUSES}
 				isLoading={false}
 				milestones={[]}
@@ -434,6 +439,43 @@ describe("Web board batch move", () => {
 		}
 	});
 
+	it("sends selected record revisions and refreshes after a central conflict", async () => {
+		const originalScope = { ...projectScope };
+		const originalMoveTasks = apiClient.moveTasks.bind(apiClient);
+		Object.assign(projectScope, { id: "1", routeBase: "/projects/1", apiBase: "/api/projects/1" });
+		const versionedTasks = TASKS.map((task, index) => ({
+			...task,
+			recordKey: `key-${index + 1}`,
+			revision: `rev-${index + 1}`,
+		}));
+		let payload: MoveTasksPayload | null = null;
+		let refreshes = 0;
+		apiClient.moveTasks = async (value) => {
+			payload = value;
+			throw new ApiError("Board changed", 409, "REVISION_CONFLICT", { code: "REVISION_CONFLICT" });
+		};
+		try {
+			const container = renderBoard(() => {}, { tasks: versionedTasks, onRefreshData: async () => void refreshes++ });
+			await clickCard(getCard(container, "TASK-1"), { ctrlKey: true });
+			const select = container.querySelector("#batch-move-status") as HTMLSelectElement;
+			await act(async () => {
+				select.value = "Done";
+				select.dispatchEvent(new window.Event("change", { bubbles: true }));
+				await Promise.resolve();
+			});
+			await act(async () => {
+				findButton(container, "Move").click();
+				await Promise.resolve();
+			});
+			expect((payload as MoveTasksPayload | null)?.expectedRevisions).toEqual({ "key-1": "rev-1" });
+			expect(refreshes).toBe(1);
+			expect(container.textContent).toContain("This record changed. Open current data before changing it.");
+		} finally {
+			apiClient.moveTasks = originalMoveTasks;
+			Object.assign(projectScope, originalScope);
+		}
+	});
+
 	// A range only ever adds to the selection, so a second shift-click reaches the same union whether
 	// it extends from the first anchor or from the card just clicked. This pins that down so a later
 	// change to replacing selections has to decide the anchor question deliberately.
@@ -573,6 +615,111 @@ describe("Web board batch move", () => {
 		}
 	});
 
+	it("uses the returned collection revision for a second own reorder", async () => {
+		const originalFetch = globalThis.fetch;
+		const originalScope = { ...projectScope };
+		Object.assign(projectScope, { id: "1", routeBase: "/projects/1", apiBase: "/api/projects/1" });
+		setRequestSession({
+			user: {
+				id: "alice",
+				username: "alice",
+				displayName: "Alice",
+				role: "admin",
+				active: true,
+				mustChangePassword: false,
+			},
+			csrfToken: "csrf-alice",
+			createdAt: "2026-01-01T00:00:00Z",
+			expiresAt: "2026-01-01T12:00:00Z",
+			lastActivityAt: "2026-01-01T00:00:00Z",
+			idleExpiresAt: "2026-01-01T02:00:00Z",
+		});
+		const versionedTasks = TASKS.map((task, index) => ({
+			...task,
+			recordKey: `key-${index + 1}`,
+			revision: `rev-${index + 1}`,
+		}));
+		const sent: Array<{ ifMatch: string | null; payload: ReorderTaskPayload }> = [];
+		let applied = 0;
+		let appliedOrdinal: number | undefined;
+		globalThis.fetch = (async (input, options) => {
+			expect(String(input)).toBe("/api/projects/1/tasks/reorder");
+			const payload = JSON.parse(String(options?.body)) as ReorderTaskPayload;
+			sent.push({ ifMatch: new Headers(options?.headers).get("If-Match"), payload });
+			const originalTask = versionedTasks.find((item) => item.id === payload.taskId);
+			if (!originalTask) throw new Error(`Missing task ${payload.taskId}`);
+			const task = { ...originalTask, ordinal: 3000 + sent.length * 1000, revision: `next-${sent.length}` };
+			return Response.json(
+				{ success: true, task, changedTasks: [task] },
+				{ headers: { "X-Backlog-Tasks-Revision": `collection-${sent.length}` } },
+			);
+		}) as typeof fetch;
+		try {
+			setupDom();
+			const container = document.getElementById("root") as HTMLElement;
+			activeRoot = createRoot(container);
+			function Harness() {
+				const [tasks, setTasks] = useState<Task[]>(versionedTasks);
+				const [revision, setRevision] = useState<string | null>("collection-0");
+				return (
+					<Board
+						onEditTask={() => {}}
+						onNewTask={() => {}}
+						tasks={tasks}
+						tasksRevision={revision}
+						statuses={STATUSES}
+						isLoading={false}
+						milestones={[]}
+						availableLabels={[]}
+						milestoneEntities={[]}
+						archivedMilestones={[]}
+						laneMode="none"
+						onLaneChange={() => {}}
+						onTasksUpdated={(changed, _requestTask, nextRevision) => {
+							applied++;
+							appliedOrdinal = changed[0]?.ordinal;
+							setTasks((current) => current.map((item) => changed.find((update) => update.id === item.id) ?? item));
+							if (nextRevision !== undefined) setRevision(nextRevision);
+						}}
+					/>
+				);
+			}
+			await act(async () => activeRoot?.render(<Harness />));
+			await dispatchDragStart(getCard(container, "TASK-1"));
+			await act(async () => {
+				dispatchDrop(getColumn(container, "To Do"), { "text/plain": "TASK-1", "text/status": "To Do" });
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			});
+			for (let attempt = 0; attempt < 20; attempt++) {
+				const order = Array.from(getColumn(container, "To Do").querySelectorAll('[draggable="true"]')).map(
+					(card) => card.textContent?.match(/TASK-\d+/)?.[0],
+				);
+				if (order[0] === "TASK-2") break;
+				await act(async () => new Promise((resolve) => setTimeout(resolve, 0)));
+			}
+			await dispatchDragEnd(getCard(container, "TASK-1"));
+			expect([applied, appliedOrdinal]).toEqual([1, 4000]);
+			expect(
+				Array.from(getColumn(container, "To Do").querySelectorAll('[draggable="true"]')).map(
+					(card) => card.textContent?.match(/TASK-\d+/)?.[0],
+				),
+			).toEqual(["TASK-2", "TASK-3", "TASK-1"]);
+			await act(async () =>
+				getColumn(container, "To Do").querySelector<HTMLButtonElement>("button[title='Column actions']")?.click(),
+			);
+			await act(async () => {
+				findButton(container, "Sort by Creation Date (oldest first)").click();
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			});
+			expect(sent.map((request) => request.ifMatch)).toEqual(["collection-0", "collection-1"]);
+			expect(sent[1]?.payload.expectedRevisions?.["key-1"]).toBe("next-1");
+		} finally {
+			globalThis.fetch = originalFetch;
+			Object.assign(projectScope, originalScope);
+			setRequestSession(null);
+		}
+	});
+
 	it("keeps an in-place release inside a milestone lane a pure no-op", async () => {
 		const originalReorderTask = apiClient.reorderTask.bind(apiClient);
 		const calls: unknown[] = [];
@@ -635,10 +782,7 @@ describe("Web board batch move", () => {
 
 	it("feeds a completed batch move through the board store rather than reloading the board", async () => {
 		const originalMoveTasks = apiClient.moveTasks.bind(apiClient);
-		const moved: Task[] = [
-			{ ...TASKS[0], status: "Done" } as Task,
-			{ ...TASKS[1], status: "Done" } as Task,
-		];
+		const moved: Task[] = [{ ...TASKS[0], status: "Done" } as Task, { ...TASKS[1], status: "Done" } as Task];
 		apiClient.moveTasks = async () => ({ success: true, tasks: moved, changedTasks: moved, failures: [] });
 		const updates: Array<{ tasks: Task[]; requestTask: Task }> = [];
 		let refreshes = 0;

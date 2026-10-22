@@ -14,6 +14,7 @@ import { sanitizeUrlTitle } from '../utils/urlHelpers';
 import StoredDate from './StoredDate';
 import { documentIdKey } from '../../utils/document-id';
 import { ArchiveButton, ArchivedLabel, ArchiveRefusal, useRecordArchive } from './RecordArchive';
+import { MutationConflictNotice, isMutationConflict } from './MutationConflictNotice';
 
 // Custom MDEditor wrapper for proper height handling
 const MarkdownEditor = memo(function MarkdownEditor({
@@ -102,19 +103,20 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
     const isArchived = currentDocument?.archived === true;
     // The editor opens on request (the Edit button, `?edit=true` in the URL, the new page), but never
     // for an archived document: the request can come before or after the record has loaded.
-    const { permissions } = useAuth();
+    const { permissions, writeState } = useAuth();
+    const canWrite = permissions.docsWrite && writeState === 'ready';
     const isEditing = editRequested && !isArchived && permissions.docsWrite;
     const hasChanges = content !== originalContent || docTitle !== originalDocTitle || docPath !== originalDocPath;
     const clearUnsaved = useUnsavedChanges(isEditing && hasChanges);
-    const {archive, isArchiving, archiveError, dismissArchiveError} = useRecordArchive(
+    const {archive, isArchiving, archiveError, archiveErrorCause, dismissArchiveError} = useRecordArchive(
         'document',
-        currentDocument && !isLoading && !isNewDocument ? {id: currentDocument.id, title: currentDocument.title} : null,
+		currentDocument && !isLoading && !isNewDocument ? {id: currentDocument.id, title: currentDocument.title, recordKey: currentDocument.recordKey, revision: currentDocument.revision} : null,
         routeIdentity,
         onRefreshData,
     );
 
     useEffect(() => {
-        if (editRequested && hasChanges && (id === "new" || currentDocument)) return;
+        if (editRequested && (currentDocument || (id === "new" && hasChanges))) return;
         let active = true;
         if (id === 'new') {
             // Handle new document creation
@@ -214,6 +216,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
     }, [routeIdentity, docs]);
 
     const handleSave = useCallback(async () => {
+        if (!canWrite) return;
         if (!docTitle.trim()) {
             setSaveError(new Error('Document title is required'));
             return;
@@ -257,7 +260,8 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
                     addDocPrefix(id),
                     content,
                     titleChanged ? normalizedTitle : undefined,
-                    pathChanged ? normalizedPath : undefined
+                    pathChanged ? normalizedPath : undefined,
+                    currentDocument,
                 );
 
                 // Update original title to the new value
@@ -288,7 +292,14 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
         } finally {
             setIsSaving(false);
         }
-    }, [id, docTitle, docPath, originalDocPath, content, isNewDocument, onRefreshData, navigate, loadDocContent, clearUnsaved]);
+    }, [id, docTitle, docPath, originalDocPath, content, isNewDocument, onRefreshData, navigate, loadDocContent, clearUnsaved, canWrite, currentDocument]);
+
+    const openCurrentVersion = async () => {
+        if (hasChanges && !window.confirm('Discard your draft and open the current version?')) return;
+        setEditRequested(false);
+        setSaveError(null);
+        await loadDocContent(() => true);
+    };
 
     const handleEdit = () => {
         setEditRequested(true);
@@ -408,7 +419,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
                                 {isArchived ? null : !isEditing ? (
                                     <>
                                     <button
-                                        disabled={!permissions.docsWrite}
+                                        disabled={!canWrite}
                                         onClick={handleEdit}
                                         className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors duration-200"
                                     >
@@ -420,7 +431,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
                                         Edit
                                     </button>
                                     {currentDocument && !isNewDocument && permissions.archive && (
-                                        <ArchiveButton onClick={archive} disabled={isArchiving} />
+                                        <ArchiveButton onClick={archive} disabled={isArchiving || writeState !== 'ready'} />
                                     )}
                                     </>
                                 ) : (
@@ -433,7 +444,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
 	                                        </button>
                                         <button
                                             onClick={handleSave}
-                                            disabled={!permissions.docsWrite || !hasChanges || isSaving}
+	                                            disabled={!canWrite || !hasChanges || isSaving}
 	                                            className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors duration-200 ${
 	                                                hasChanges && !isSaving
 	                                                    ? 'bg-blue-600 dark:bg-blue-600 text-white hover:bg-blue-700 dark:hover:bg-blue-700 focus:ring-blue-500 dark:focus:ring-blue-400'
@@ -452,7 +463,8 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
                             </div>
                         </div>
                     </div>
-                    {archiveError && <ArchiveRefusal message={archiveError} onDismiss={dismissArchiveError} />}
+                    <MutationConflictNotice error={archiveErrorCause} draft={false} onOpenCurrent={() => { dismissArchiveError(); void onRefreshData(); }} onDismiss={dismissArchiveError} />
+                    {archiveError && !isMutationConflict(archiveErrorCause) && <ArchiveRefusal message={archiveError} onDismiss={dismissArchiveError} />}
                 </div>
 
                 {/* Content Section */}
@@ -467,7 +479,8 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
                 </div>
 
                 {/* Save Error Alert */}
-                {saveError && (
+                <MutationConflictNotice error={saveError} onOpenCurrent={() => void openCurrentVersion()} onDismiss={() => setSaveError(null)} />
+                {saveError && !isMutationConflict(saveError) && (
                     <div className="border-t border-red-200 bg-red-50 px-8 py-3">
                         <div className="flex items-center space-x-3">
                             <svg className="w-5 h-5 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

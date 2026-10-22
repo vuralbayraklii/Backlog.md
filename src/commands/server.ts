@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from "node:crypto";
 import { isCancel, password as promptPassword } from "@clack/prompts";
 import type { Command } from "commander";
 import { printJson } from "../formatters/json-output.ts";
@@ -9,9 +10,28 @@ import {
 	type ServerUser,
 } from "../server/auth-types.ts";
 import { CentralServer } from "../server/central.ts";
+import { MutationStore } from "../server/mutation-store.ts";
+import type { HistoryKind, MutationScope } from "../server/mutation-types.ts";
+import { type ManagementAuditHook, managementAudit } from "../server/mutations.ts";
 import { ProjectStore, type ServerProject } from "../server/project-store.ts";
+import { listRecovery, type RecoveryReport, resolveRecovery, viewRecovery } from "../server/recovery.ts";
 import type { FolderArea, ProjectPreview } from "../server/registration-types.ts";
 import { addHelpSchema } from "./help-schema.ts";
+
+const humanTime = new Intl.DateTimeFormat("sv-SE", {
+	timeZone: "Europe/Istanbul",
+	year: "numeric",
+	month: "2-digit",
+	day: "2-digit",
+	hour: "2-digit",
+	minute: "2-digit",
+	second: "2-digit",
+	hour12: false,
+});
+
+function formatEventTime(utc: string): string {
+	return `${humanTime.format(new Date(utc))} Europe/Istanbul`;
+}
 
 function formatProject(project: ServerProject): string {
 	return `${project.id} - ${project.name}\n  Root: ${project.rootPath}\n  Registered: ${project.createdAt}\n  Tracking: ${project.tracking}`;
@@ -37,6 +57,25 @@ function printPreview(preview: ProjectPreview, json?: boolean): void {
 	console.log(`  Can register: ${preview.canRegister}`);
 }
 
+function localAudit(
+	server: Command,
+	action: string,
+	options: { scope?: MutationScope; status?: number; forceEvent?: boolean } = {},
+): ManagementAuditHook {
+	const operationId = randomUUID();
+	const dataDir = server.opts<{ dataDir: string }>().dataDir;
+	return managementAudit(new MutationStore(dataDir), {
+		operationId,
+		scope: options.scope ?? { kind: "admin" },
+		actor: { kind: "unknown" },
+		source: "server-cli",
+		requestHash: createHash("sha256").update(`server-cli\0${action}\0${operationId}`).digest("hex"),
+		action,
+		status: options.status,
+		forceEvent: options.forceEvent,
+	});
+}
+
 export function registerServerCommand(program: Command): void {
 	const server = program
 		.command("server")
@@ -58,7 +97,7 @@ export function registerServerCommand(program: Command): void {
 			},
 		],
 		reads: "Accounts and project bindings from <data-dir>/server.sqlite; an initial active admin is required",
-		writes: "No project files at startup",
+		writes: "Initial inventory and interrupted-operation state in server.sqlite; project source files stay unchanged",
 		output: "Local server URL at 127.0.0.1; Ctrl+C stops the listener",
 		examples: ["backlog server --data-dir ./server-data start --public-url https://backlog.example.com --port 6420"],
 	})
@@ -126,7 +165,16 @@ export function registerServerCommand(program: Command): void {
 		.requiredOption("--name <name>", "display name for the server project")
 		.option("--json", "print versioned JSON output")
 		.action(async (path: string, options: { name: string; json?: boolean }) => {
-			printProject(await store().register(options.name, path), options.json);
+			printProject(
+				await store().register(
+					options.name,
+					path,
+					undefined,
+					undefined,
+					localAudit(server, "project.register", { scope: { kind: "registration" }, status: 201 }),
+				),
+				options.json,
+			);
 		});
 
 	addHelpSchema(projects.command("list"), {
@@ -172,10 +220,15 @@ export function registerServerCommand(program: Command): void {
 		.requiredOption("--enabled <boolean>", "true to resume tracking, false to stop", booleanOption)
 		.option("--json", "print versioned JSON output")
 		.action(async (id: string, options: { enabled: boolean; json?: boolean }) => {
-			printProject(await store().setTracking(id, options.enabled), options.json);
+			printProject(
+				await store().setTracking(id, options.enabled, undefined, localAudit(server, "project.tracking")),
+				options.json,
+			);
 		});
 	registerAccountCommands(server, projects);
 	registerFolderAreaCommands(server);
+	registerHistoryCommands(server);
+	registerRecoveryCommands(server);
 }
 
 function printFolderArea(area: FolderArea): void {
@@ -218,7 +271,7 @@ function registerFolderAreaCommands(server: Command): void {
 		.description("assign an existing personal directory to a user")
 		.option("--json", "print versioned JSON output")
 		.action(async (userId: string, path: string, options: { json?: boolean }) => {
-			const area = await store().upsertFolderArea(userId, path);
+			const area = await store().upsertFolderArea(userId, path, undefined, localAudit(server, "folder_area.upsert"));
 			if (options.json) printJson({ schemaVersion: 1, kind: "server-folder-area", area });
 			else printFolderArea(area);
 		});
@@ -233,7 +286,7 @@ function registerFolderAreaCommands(server: Command): void {
 		.description("remove a personal folder area without removing project memberships")
 		.option("--json", "print versioned JSON output")
 		.action((id: string, options: { json?: boolean }) => {
-			store().removeFolderArea(id);
+			store().removeFolderArea(id, undefined, localAudit(server, "folder_area.remove"));
 			if (options.json) printJson({ schemaVersion: 1, kind: "server-folder-area-remove", id });
 			else console.log(`Removed folder area ${id}.`);
 		});
@@ -328,13 +381,21 @@ function registerAccountCommands(server: Command, projects: Command): void {
 				const password = await readPassword(options);
 				const account =
 					command === "init-admin"
-						? await store().initializeAdmin(loginName, password, options.displayName)
-						: await store().createUser({
-								username: loginName,
+						? await store().initializeAdmin(
+								loginName,
 								password,
-								displayName: options.displayName,
-								role: options.role,
-							});
+								options.displayName,
+								localAudit(server, "user.init_admin", { status: 201 }),
+							)
+						: await store().createUser(
+								{
+									username: loginName,
+									password,
+									displayName: options.displayName,
+									role: options.role,
+								},
+								localAudit(server, "user.create", { status: 201 }),
+							);
 				printUser(account, options.json);
 			},
 		);
@@ -390,7 +451,7 @@ function registerAccountCommands(server: Command, projects: Command): void {
 		.option("--json", "print versioned JSON output")
 		.action(
 			(id: string, options: { displayName?: string; role?: ServerUser["role"]; active?: boolean; json?: boolean }) => {
-				printUser(store().editUser(id, options), options.json);
+				printUser(store().editUser(id, options, localAudit(server, "user.edit")), options.json);
 			},
 		);
 	addHelpSchema(users.command("reset-password <id>"), {
@@ -405,7 +466,14 @@ function registerAccountCommands(server: Command, projects: Command): void {
 		.option("--password-stdin", "read password from stdin; preserve spaces")
 		.option("--json", "print versioned JSON output")
 		.action(async (id: string, options: { passwordStdin?: boolean; json?: boolean }) => {
-			printUser(await store().resetPassword(id, await readPassword(options)), options.json);
+			printUser(
+				await store().resetPassword(
+					id,
+					await readPassword(options),
+					localAudit(server, "user.reset_password", { forceEvent: true }),
+				),
+				options.json,
+			);
 		});
 
 	const members = projects
@@ -450,7 +518,7 @@ function registerAccountCommands(server: Command, projects: Command): void {
 		const patch = Object.fromEntries(
 			PERMISSION_NAMES.filter((key) => options[key] !== undefined).map((key) => [key, options[key]]),
 		) as Partial<ProjectPermissions>;
-		printMember(store().setMember(id, userId, patch), options.json);
+		printMember(store().setMember(id, userId, patch, localAudit(server, "membership.set")), options.json);
 	});
 	addHelpSchema(members.command("remove <projectId> <userId>"), {
 		required: [dataDirectory, projectId, memberUserId],
@@ -463,8 +531,212 @@ function registerAccountCommands(server: Command, projects: Command): void {
 		.description("remove a normal user's project access")
 		.option("--json", "print versioned JSON output")
 		.action((projectId: string, userId: string, options: { json?: boolean }) => {
-			store().removeMember(projectId, userId);
+			store().removeMember(projectId, userId, localAudit(server, "membership.remove"));
 			if (options.json) printJson({ schemaVersion: 1, kind: "server-project-member-remove", projectId, userId });
 			else console.log(`Removed ${userId} from project ${projectId}.`);
+		});
+}
+
+function registerHistoryCommands(server: Command): void {
+	const store = () => new MutationStore(server.opts<{ dataDir: string }>().dataDir);
+	const projectStore = () => new ProjectStore(server.opts<{ dataDir: string }>().dataDir);
+	const dataDirectory = { name: "--data-dir", type: "Directory", description: "Required server data directory" };
+	const jsonOption = { name: "--json", type: "Boolean", description: "Print schemaVersion 1 JSON" };
+	const history = server.command("history").description("inspect durable central project and management events");
+	addHelpSchema(history.command("list"), {
+		required: [dataDirectory],
+		optional: [
+			jsonOption,
+			{ name: "--project", type: "Positive integer", description: "Project history; omit for management history" },
+			{ name: "--scope", type: "admin | registration", description: "Management history scope" },
+			{ name: "--record-key", type: "String", description: "Only events touching this record key" },
+			{ name: "--kind", type: "String", description: "Only events touching this record kind" },
+			{ name: "--cursor", type: "String", description: "Cursor from the previous page" },
+			{ name: "--limit", type: "Integer", description: "Page size from 1 to 100" },
+		],
+		reads: "Immutable history from server.sqlite; missing data is not created or upgraded",
+		writes: "None",
+		output: "UTC events and next cursor; JSON schemaVersion 1, kind server-history-page",
+		examples: ["backlog server --data-dir ./server-data history list --project 1 --json"],
+	})
+		.description("list a page of project or management history")
+		.option("--project <id>", "registered project ID")
+		.option("--scope <scope>", "management scope: admin or registration")
+		.option("--record-key <key>", "only one record key")
+		.option("--kind <kind>", "only one record kind")
+		.option("--cursor <cursor>", "cursor from a previous page")
+		.option("--limit <count>", "page size, 1–100", "50")
+		.option("--json", "print versioned JSON output")
+		.action(
+			(options: {
+				project?: string;
+				scope?: string;
+				recordKey?: string;
+				kind?: string;
+				cursor?: string;
+				limit: string;
+				json?: boolean;
+			}) => {
+				if (options.project && options.scope) throw new Error("Use either --project or --scope.");
+				if (options.project && !projectStore().load(options.project))
+					throw new Error(`Server project ${options.project} was not found.`);
+				if (options.scope && options.scope !== "admin" && options.scope !== "registration")
+					throw new Error("--scope must be admin or registration.");
+				const scope: MutationScope = options.project
+					? { kind: "project", projectId: options.project }
+					: options.scope === "registration"
+						? { kind: "registration" }
+						: { kind: "admin" };
+				const kinds: HistoryKind[] = [
+					"task",
+					"document",
+					"decision",
+					"milestone",
+					"config",
+					"user",
+					"membership",
+					"folder-area",
+					"project",
+				];
+				if (options.kind && !kinds.includes(options.kind as HistoryKind)) throw new Error("Unknown history kind.");
+				const page = store().listHistory({
+					scope,
+					...(options.recordKey && { recordKey: options.recordKey }),
+					...(options.kind && { kind: options.kind as HistoryKind }),
+					...(options.cursor && { cursor: options.cursor }),
+					limit: Number(options.limit),
+				});
+				if (options.json) printJson({ schemaVersion: 1, kind: "server-history-page", scope, ...page });
+				else {
+					for (const event of page.items) {
+						const actor = event.actor.kind === "user" ? event.actor.userId : "unknown";
+						console.log(`${formatEventTime(event.occurredAt)}  ${event.action}  ${actor}  ${event.operationId}`);
+						for (const change of event.changes)
+							console.log(`  ${change.kind} ${change.visibleId} (${change.recordKey})`);
+					}
+					if (!page.items.length) console.log("No history events.");
+					if (page.nextCursor) console.log(`Next cursor: ${page.nextCursor}`);
+				}
+			},
+		);
+
+	const operations = server.command("operation").description("inspect durable central operation results");
+	addHelpSchema(operations.command("view <operationId>"), {
+		required: [dataDirectory, { name: "operationId", type: "UUID", description: "Operation ID" }],
+		optional: [jsonOption],
+		reads: "Safe operation state and result from server.sqlite; no physical file bytes",
+		writes: "None; missing data is not created or upgraded",
+		output: "Operation state, actor, scope, and safe result; JSON schemaVersion 1, kind server-operation",
+		examples: ["backlog server --data-dir ./server-data operation view <uuid> --json"],
+	})
+		.description("view one operation without revealing raw recovery file bytes")
+		.option("--json", "print versioned JSON output")
+		.action((operationId: string, options: { json?: boolean }) => {
+			const operation = store().loadOperation(operationId, { actor: { kind: "unknown" }, admin: true });
+			if (!operation) throw new Error(`Operation ${operationId} was not found.`);
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-operation", operation });
+			else {
+				console.log(`${operation.operationId} - ${operation.state}`);
+				console.log(
+					`  Scope: ${operation.scope.kind}${operation.scope.kind === "project" ? ` ${operation.scope.projectId}` : ""}`,
+				);
+				console.log(`  Actor: ${operation.actor.kind === "user" ? operation.actor.userId : "unknown"}`);
+				console.log(`  Source: ${operation.source}`);
+				console.log(`  Started: ${formatEventTime(operation.createdAt)}`);
+				if (operation.result) console.log(`  HTTP status: ${operation.result.status}`);
+				if (operation.error) console.log(`  Result: ${operation.error.code} - ${operation.error.message}`);
+				if (operation.resolvedBy) console.log(`  Resolved by: ${operation.resolvedBy}`);
+			}
+		});
+}
+
+function formatRecovery(report: RecoveryReport): string {
+	const lines = [
+		`${report.operationId} - ${report.state} (project ${report.projectId})`,
+		`  Action: ${report.action}`,
+		`  Started: ${formatEventTime(report.createdAt)}`,
+		`  Observed: ${report.classification}`,
+		`  Fingerprint: ${report.fingerprint ?? "unavailable"}`,
+	];
+	if (report.issue) lines.push(`  Issue: ${report.issue}`);
+	for (const file of report.files) {
+		const describe = (entry: typeof file.before | null) => {
+			if (entry === null) return "unreadable";
+			if (entry.type === "absent") return "absent";
+			if (entry.type === "file") return `file ${entry.bytes} bytes sha256 ${entry.sha256}`;
+			return `symlink -> ${entry.target} sha256 ${entry.sha256}`;
+		};
+		lines.push(`  ${file.path}`);
+		lines.push(`    Before: ${describe(file.before)}`);
+		lines.push(`    After: ${describe(file.after)}`);
+		lines.push(`    Observed: ${describe(file.observed)}`);
+	}
+	return lines.join("\n");
+}
+
+function registerRecoveryCommands(server: Command): void {
+	const dataDir = () => server.opts<{ dataDir: string }>().dataDir;
+	const dataDirectory = { name: "--data-dir", type: "Directory", description: "Required server data directory" };
+	const jsonOption = { name: "--json", type: "Boolean", description: "Print schemaVersion 1 JSON" };
+	const operationId = { name: "operationId", type: "UUID", description: "Unresolved operation ID" };
+	const recovery = server.command("recovery").description("inspect and resolve interrupted central project writes");
+	addHelpSchema(recovery.command("list"), {
+		required: [dataDirectory],
+		optional: [jsonOption],
+		reads: "Unresolved intents, safe path snapshots, and current registered project files",
+		writes: "None; does not create or upgrade server data",
+		output: "Project-scoped unresolved reports and fingerprints; JSON schemaVersion 1, kind server-recovery-list",
+		examples: ["backlog server --data-dir ./server-data recovery list --json"],
+	})
+		.description("list pending and recovery-required project operations")
+		.option("--json", "print versioned JSON output")
+		.action(async (options: { json?: boolean }) => {
+			const items = await listRecovery(dataDir());
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-recovery-list", items });
+			else console.log(items.length ? items.map(formatRecovery).join("\n\n") : "No unresolved project operations.");
+		});
+	addHelpSchema(recovery.command("view <operationId>"), {
+		required: [dataDirectory, operationId],
+		optional: [jsonOption],
+		reads: "One unresolved intent and its current physical paths; file bytes are not printed",
+		writes: "None; does not create or upgrade server data",
+		output: "Before, intended after, observed state, and fingerprint; JSON schemaVersion 1, kind server-recovery",
+		examples: ["backlog server --data-dir ./server-data recovery view <uuid> --json"],
+	})
+		.description("inspect an unresolved operation and its observed files")
+		.option("--json", "print versioned JSON output")
+		.action(async (id: string, options: { json?: boolean }) => {
+			const report = await viewRecovery(dataDir(), id);
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-recovery", report });
+			else console.log(formatRecovery(report));
+		});
+	addHelpSchema(recovery.command("resolve <operationId>"), {
+		required: [
+			dataDirectory,
+			operationId,
+			{ name: "--accept-observed", type: "Boolean", description: "Explicitly accept the reviewed current files" },
+			{ name: "--expected-fingerprint", type: "SHA-256", description: "Fingerprint printed by recovery view" },
+		],
+		optional: [jsonOption],
+		reads: "Current fingerprint, project boundary, parser, record identities, and other unresolved operations",
+		writes:
+			"A separate recovery event and record snapshot in server.sqlite; the interrupted operation stays unsuccessful",
+		output: "Recovery operation and accepted report; JSON schemaVersion 1, kind server-recovery-resolution",
+		examples: [
+			"backlog server --data-dir ./server-data recovery resolve <uuid> --accept-observed --expected-fingerprint <sha256> --json",
+		],
+	})
+		.description("accept a reviewed physical state as a separate recovery event")
+		.requiredOption("--expected-fingerprint <sha256>", "fingerprint shown by recovery view")
+		.option("--accept-observed", "explicitly accept the reviewed current files")
+		.option("--json", "print versioned JSON output")
+		.action(async (id: string, options: { expectedFingerprint: string; acceptObserved?: boolean; json?: boolean }) => {
+			if (!options.acceptObserved) throw new Error("--accept-observed is required to resolve a recovery operation.");
+			const result = await resolveRecovery(dataDir(), id, options.expectedFingerprint);
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-recovery-resolution", ...result });
+			else
+				console.log(
+					`Accepted observed files for ${id} as recovery operation ${result.operation.operationId}. The interrupted operation remains unsuccessful.`,
+				);
 		});
 }

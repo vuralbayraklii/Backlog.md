@@ -14,6 +14,7 @@ import {
 } from "./auth-types.ts";
 import { ServerDatabase } from "./database.ts";
 import { pathsOverlap } from "./folder-areas.ts";
+import type { ManagementAuditHook } from "./mutations.ts";
 import type { FolderArea } from "./registration-types.ts";
 
 const ABSOLUTE_LIFETIME = 12 * 60 * 60 * 1000;
@@ -132,23 +133,37 @@ export class AuthStore {
 		);
 	}
 
-	async initializeAdmin(loginName: string, password: string, name?: string): Promise<ServerUser> {
+	async initializeAdmin(
+		loginName: string,
+		password: string,
+		name?: string,
+		audit?: ManagementAuditHook,
+	): Promise<ServerUser> {
 		const normalized = username(loginName);
 		const label = displayName(name ?? normalized);
 		const passwordHash = await hashPassword(password);
 		return this.database.write((database) => {
 			if (database.query("SELECT 1 FROM users LIMIT 1").get())
 				throw new AuthStoreError("The initial admin is already configured. Use user reset-password for recovery.");
-			return this.insertUser(database, normalized, label, "admin", passwordHash);
+			const user = this.insertUser(database, normalized, label, "admin", passwordHash);
+			audit?.(
+				database,
+				{ kind: "user", recordKey: `user:${user.id}`, visibleId: user.id, before: null, after: user },
+				user,
+			);
+			return user;
 		});
 	}
 
-	async createUser(input: {
-		username: string;
-		password: string;
-		displayName?: string;
-		role?: ServerUser["role"];
-	}): Promise<ServerUser> {
+	async createUser(
+		input: {
+			username: string;
+			password: string;
+			displayName?: string;
+			role?: ServerUser["role"];
+		},
+		audit?: ManagementAuditHook,
+	): Promise<ServerUser> {
 		if (!this.hasAdmin()) throw new AuthStoreError("Initialize the first admin with server user init-admin first.");
 		const normalized = username(input.username);
 		const label = displayName(input.displayName === undefined ? normalized : input.displayName);
@@ -158,7 +173,13 @@ export class AuthStore {
 		return this.database.write((database) => {
 			if (!database.query("SELECT 1 FROM users WHERE role='admin' AND active=1 LIMIT 1").get())
 				throw new AuthStoreError("Initialize the first admin with server user init-admin first.");
-			return this.insertUser(database, normalized, label, role, passwordHash);
+			const user = this.insertUser(database, normalized, label, role, passwordHash);
+			audit?.(
+				database,
+				{ kind: "user", recordKey: `user:${user.id}`, visibleId: user.id, before: null, after: user },
+				user,
+			);
+			return user;
 		});
 	}
 
@@ -177,7 +198,11 @@ export class AuthStore {
 		});
 	}
 
-	editUser(id: string, patch: { displayName?: string; role?: ServerUser["role"]; active?: boolean }): ServerUser {
+	editUser(
+		id: string,
+		patch: { displayName?: string; role?: ServerUser["role"]; active?: boolean },
+		audit?: ManagementAuditHook,
+	): ServerUser {
 		if (!this.loadUser(id)) throw new AuthStoreError("User not found.", 404);
 		if (patch.role !== undefined) validateRole(patch.role);
 		if (patch.active !== undefined && typeof patch.active !== "boolean")
@@ -185,6 +210,7 @@ export class AuthStore {
 		const label = patch.displayName === undefined ? undefined : displayName(patch.displayName);
 		return this.database.write((database) => {
 			const row = this.requireUser(database, id);
+			const before = publicUser(row);
 			const role = patch.role ?? row.role;
 			const active = patch.active ?? Boolean(row.active);
 			if (row.role === "admin" && row.active && (role !== "admin" || !active)) {
@@ -198,18 +224,22 @@ export class AuthStore {
 				.query("UPDATE users SET display_name=?,role=?,active=? WHERE id=?")
 				.run(label ?? row.displayName, role, Number(active), id);
 			if (!active) database.query("DELETE FROM sessions WHERE user_id=?").run(id);
-			return publicUser(this.requireUser(database, id));
+			const user = publicUser(this.requireUser(database, id));
+			audit?.(database, { kind: "user", recordKey: `user:${id}`, visibleId: id, before, after: user }, user);
+			return user;
 		});
 	}
 
-	async resetPassword(id: string, password: string): Promise<ServerUser> {
+	async resetPassword(id: string, password: string, audit?: ManagementAuditHook): Promise<ServerUser> {
 		if (!this.loadUser(id)) throw new AuthStoreError("User not found.", 404);
 		const passwordHash = await hashPassword(password);
 		return this.database.write((database) => {
-			this.requireUser(database, id);
+			const before = publicUser(this.requireUser(database, id));
 			database.query("UPDATE users SET password_hash=?,must_change_password=1 WHERE id=?").run(passwordHash, id);
 			database.query("DELETE FROM sessions WHERE user_id=?").run(id);
-			return publicUser(this.requireUser(database, id));
+			const user = publicUser(this.requireUser(database, id));
+			audit?.(database, { kind: "user", recordKey: `user:${id}`, visibleId: id, before, after: user }, user);
+			return user;
 		});
 	}
 
@@ -276,6 +306,7 @@ export class AuthStore {
 		token: string,
 		currentPassword: string,
 		newPassword: string,
+		audit?: ManagementAuditHook,
 	): Promise<{ token: string; session: AuthSession }> {
 		const session = this.loadSession(token);
 		if (!session) throw new AuthStoreError("Authentication required.", 401);
@@ -294,11 +325,19 @@ export class AuthStore {
 			const currentUser = currentSession ? this.userRow(database, currentSession.user.id) : null;
 			if (!currentUser || currentUser.passwordHash !== originalHash)
 				throw new AuthStoreError("Authentication required.", 401);
+			const before = publicUser(currentUser);
 			database
 				.query("UPDATE users SET password_hash=?,must_change_password=0 WHERE id=?")
 				.run(passwordHash, currentUser.id);
 			database.query("DELETE FROM sessions WHERE user_id=?").run(currentUser.id);
-			return this.createSession(database, this.requireUser(database, currentUser.id));
+			const updated = this.requireUser(database, currentUser.id);
+			const after = publicUser(updated);
+			audit?.(
+				database,
+				{ kind: "user", recordKey: `user:${currentUser.id}`, visibleId: currentUser.id, before, after },
+				after,
+			);
+			return this.createSession(database, updated);
 		});
 	}
 
@@ -347,7 +386,12 @@ export class AuthStore {
 		return rows.map(publicMember);
 	}
 
-	setMember(projectId: string, userId: string, patch: Partial<ProjectPermissions> = {}): ProjectMember {
+	setMember(
+		projectId: string,
+		userId: string,
+		patch: Partial<ProjectPermissions> = {},
+		audit?: ManagementAuditHook,
+	): ProjectMember {
 		if (!this.loadUser(userId)) throw new AuthStoreError("User not found.", 404);
 		for (const [key, value] of Object.entries(patch)) {
 			if (!PERMISSION_NAMES.includes(key as keyof ProjectPermissions) || typeof value !== "boolean")
@@ -361,24 +405,53 @@ export class AuthStore {
 					`SELECT ${MEMBER_COLUMNS} FROM project_members WHERE CAST(project_id AS TEXT)=? AND user_id=?`,
 				)
 				.get(projectId, userId);
+			const before = row ? publicMember(row) : null;
 			const permissions = { ...(row ? publicMember(row).permissions : DEFAULT_PERMISSIONS), ...patch };
 			database
 				.query(
 					"INSERT INTO project_members(project_id,user_id,tasks_write,docs_write,decisions_write,decisions_manage,archive,permanent_delete) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(project_id,user_id) DO UPDATE SET tasks_write=excluded.tasks_write,docs_write=excluded.docs_write,decisions_write=excluded.decisions_write,decisions_manage=excluded.decisions_manage,archive=excluded.archive,permanent_delete=excluded.permanent_delete",
 				)
 				.run(Number(projectId), userId, ...PERMISSION_NAMES.map((key) => Number(permissions[key])));
-			return { projectId, userId, permissions };
+			const member = { projectId, userId, permissions };
+			audit?.(
+				database,
+				{
+					kind: "membership",
+					recordKey: `membership:${projectId}:${userId}`,
+					visibleId: userId,
+					before,
+					after: member,
+				},
+				member,
+			);
+			return member;
 		});
 	}
 
-	removeMember(projectId: string, userId: string): void {
+	removeMember(projectId: string, userId: string, audit?: ManagementAuditHook): void {
 		if (!this.loadUser(userId)) throw new AuthStoreError("User not found.", 404);
 		this.database.write((database) => {
 			this.requireProject(database, projectId);
 			this.requireUser(database, userId);
+			const row = database
+				.query<MemberRow, [string, string]>(
+					`SELECT ${MEMBER_COLUMNS} FROM project_members WHERE CAST(project_id AS TEXT)=? AND user_id=?`,
+				)
+				.get(projectId, userId);
 			database
 				.query("DELETE FROM project_members WHERE CAST(project_id AS TEXT)=? AND user_id=?")
 				.run(projectId, userId);
+			audit?.(
+				database,
+				{
+					kind: "membership",
+					recordKey: `membership:${projectId}:${userId}`,
+					visibleId: userId,
+					before: row ? publicMember(row) : null,
+					after: null,
+				},
+				{ success: true },
+			);
 		});
 	}
 
@@ -395,7 +468,12 @@ export class AuthStore {
 		});
 	}
 
-	async upsertFolderArea(userId: string, path: string, beforeCommit?: () => void): Promise<FolderArea> {
+	async upsertFolderArea(
+		userId: string,
+		path: string,
+		beforeCommit?: () => void,
+		audit?: ManagementAuditHook,
+	): Promise<FolderArea> {
 		if (!this.loadUser(userId)) throw new AuthStoreError("User not found.", 404);
 		if (typeof path !== "string" || !path.trim()) throw new AuthStoreError("Folder path is required.");
 		const requestedPath = resolve(path);
@@ -426,21 +504,45 @@ export class AuthStore {
 					throw new AuthStoreError("Folder area overlaps another user's area.", 409);
 			}
 			const existing = areas.find((area) => area.userId === userId && area.rootPath === rootPath);
-			if (existing) return existing;
+			if (existing) {
+				audit?.(
+					database,
+					{
+						kind: "folder-area",
+						recordKey: `folder-area:${existing.id}`,
+						visibleId: existing.id,
+						before: existing,
+						after: existing,
+					},
+					existing,
+				);
+				return existing;
+			}
 			const area = { id: randomUUID(), userId, rootPath, createdAt: new Date(this.now()).toISOString() };
 			database
 				.query("INSERT INTO folder_areas(id,user_id,root_path,created_at) VALUES(?,?,?,?)")
 				.run(area.id, userId, rootPath, area.createdAt);
+			audit?.(
+				database,
+				{ kind: "folder-area", recordKey: `folder-area:${area.id}`, visibleId: area.id, before: null, after: area },
+				area,
+			);
 			return area;
 		});
 	}
 
-	removeFolderArea(id: string, beforeCommit?: () => void): void {
+	removeFolderArea(id: string, beforeCommit?: () => void, audit?: ManagementAuditHook): void {
 		if (!this.listFolderAreas().some((area) => area.id === id)) throw new AuthStoreError("Folder area not found.", 404);
 		this.database.write((database) => {
 			beforeCommit?.();
+			const prior = database.query<FolderArea, [string]>(`SELECT ${AREA_COLUMNS} FROM folder_areas WHERE id=?`).get(id);
 			if (!database.query("DELETE FROM folder_areas WHERE id=?").run(id).changes)
 				throw new AuthStoreError("Folder area not found.", 404);
+			audit?.(
+				database,
+				{ kind: "folder-area", recordKey: `folder-area:${id}`, visibleId: id, before: prior, after: null },
+				{ success: true },
+			);
 		});
 	}
 

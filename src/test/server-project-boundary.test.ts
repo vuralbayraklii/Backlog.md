@@ -3,7 +3,7 @@ import { cp, mkdir, rename, symlink, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import type { ServerWebSocket } from "bun";
 import { Core } from "../core/backlog.ts";
-import { BacklogServer } from "../server/index.ts";
+import { BacklogServer, type ProjectReadContext } from "../server/index.ts";
 import { assertProjectBoundary, readProjectFile } from "../server/project-paths.ts";
 import { ProjectStore } from "../server/project-store.ts";
 import { createTestDirOutsideRepository, initializeFilesystemTestProject, safeCleanup } from "./test-utils.ts";
@@ -46,7 +46,10 @@ describe("registered project boundaries", () => {
 		return server;
 	}
 	function read(server: BacklogServer, path = "/api/tasks"): Promise<Response> {
-		return server.dispatchApi(new Request(`http://localhost${path}`), path, authorized);
+		const context: ProjectReadContext = {
+			recordKeyFor: (kind, visibleId, recordPath) => `${kind}:${visibleId}:${recordPath}`,
+		};
+		return server.dispatchApi(new Request(`http://localhost${path}`), path, authorized, context);
 	}
 
 	it.each(["root-config", "folder-config", "unused-config", "backlog-dir", "record", "nested-doc-dir", "asset"])(
@@ -175,11 +178,22 @@ describe("registered project boundaries", () => {
 				kind === "task" ? SECRET : 'project_name: "PRIVATE_EXTERNAL_SENTINEL"\nstatuses: ["To Do"]\n',
 			);
 			let attempted = false;
-			const originalRead = filesystem.readText.bind(filesystem);
-			const spy = spyOn(filesystem, "readText").mockImplementation(async (path) => {
-				if (path === localPath) attempted = true;
-				return await originalRead(path);
-			});
+			const originalText = filesystem.readText.bind(filesystem);
+			const originalBytes = filesystem.readBytes.bind(filesystem);
+			const textSpy =
+				kind === "config"
+					? spyOn(filesystem, "readText").mockImplementation(async (path) => {
+							if (path === localPath) attempted = true;
+							return await originalText(path);
+						})
+					: null;
+			const byteSpy =
+				kind === "task"
+					? spyOn(filesystem, "readBytes").mockImplementation(async (path) => {
+							if (path === localPath) attempted = true;
+							return await originalBytes(path);
+						})
+					: null;
 			try {
 				await rename(localPath, `${localPath}.safe`);
 				await symlink(external, localPath);
@@ -195,7 +209,8 @@ describe("registered project boundaries", () => {
 				expect(restored.status).toBe(200);
 				expect(await restored.text()).toContain("Safe source");
 			} finally {
-				spy.mockRestore();
+				textSpy?.mockRestore();
+				byteSpy?.mockRestore();
 			}
 		},
 	);
@@ -209,6 +224,21 @@ describe("registered project boundaries", () => {
 		expect((await read(server)).status).toBe(200);
 		await Bun.write(task, SOURCE);
 		expect((await read(server)).status).toBe(200);
+	});
+
+	it("publishes a new bound revision when watched Markdown bytes change without changing parsed fields", async () => {
+		const server = handler();
+		const opened = (await (await read(server)).json()) as Array<{ title: string; revision: string }>;
+		const original = opened[0];
+		if (!original) throw new Error("Seed task was not listed");
+		const contentStore = await (server as unknown as { core: Core }).core.getContentStore();
+		const beforeVersion = contentStore.publicationVersion();
+		const task = join(core.fs.tasksDir, "task-1 - Safe.md");
+		await Bun.write(task, SOURCE.replace("\n---\nSafe content.", "\n# preserved comment\n---\nSafe content."));
+		await waitFor(() => contentStore.publicationVersion() > beforeVersion);
+		const changed = (await (await read(server)).json()) as Array<{ title: string; revision: string }>;
+		expect(changed[0]?.title).toBe(original.title);
+		expect(changed[0]?.revision).not.toBe(original.revision);
 	});
 
 	it("guards a previous handler layout after root config switches to a new Backlog tree", async () => {

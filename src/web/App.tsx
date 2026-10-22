@@ -33,7 +33,7 @@ import {
 	type TaskSearchResult,
 } from '../types';
 import { formatDependencyCleanupMessage } from '../utils/dependency-graph';
-import { ApiError, apiClient, readMovedFailureState } from './lib/api';
+import { ApiError, apiClient, isAmbiguousIdConflict, readMovedFailureState } from './lib/api';
 import type { TaskDetail } from '../core/task-detail';
 import type { DuplicateRepairPlan } from '../core/duplicate-task-repair';
 import { isValidTaskId } from '../utils/task-id';
@@ -268,6 +268,7 @@ function AppContent() {
   const kanbanTasks = React.useMemo(() => filterKanbanTasks(tasks), [tasks]);
   const [docs, setDocs] = useState<Document[]>([]);
   const [decisions, setDecisions] = useState<Decision[]>([]);
+  const [tasksRevision, setTasksRevision] = useState<string | null>(null);
   // Mirrors of the store lists, so refreshes can reconcile in place without
   // resubscribing the WebSocket effect to every state change.
   const tasksRef = useRef<Task[]>([]);
@@ -423,7 +424,7 @@ function AppContent() {
         apiClient.fetchMilestones(),
         apiClient.fetchArchivedMilestones(),
       ]);
-      const searchResultsPromise = apiClient.search();
+      const searchResultsPromise = apiClient.searchSnapshot();
       void searchResultsPromise.catch(() => {});
 
       const [statusesData, configData, milestonesData, archivedMilestonesData] = await shellDataPromise;
@@ -441,7 +442,7 @@ function AppContent() {
       setMilestoneEntities(milestonesData);
       setArchivedMilestones(archivedMilestonesData);
 
-      const searchResults = await searchResultsPromise;
+      const searchSnapshot = await searchResultsPromise;
 
       if (loadAllDataRequestRef.current !== requestId) {
         return;
@@ -449,7 +450,8 @@ function AppContent() {
 
       const archivedKeys = new Set(collectArchivedMilestoneKeys(archivedMilestonesData, milestonesData));
       const milestoneAliases = buildMilestoneAliasMap(milestonesData, archivedMilestonesData);
-      const { tasks: tasksList } = applySearchResults(searchResults, archivedKeys, milestoneAliases);
+      setTasksRevision(searchSnapshot.tasksRevision);
+      const { tasks: tasksList } = applySearchResults(searchSnapshot.results, archivedKeys, milestoneAliases);
       hasLoadedDataRef.current = true;
 
       applyMilestoneIds(
@@ -660,10 +662,10 @@ function AppContent() {
     pendingDataRequestRef.current = requestId;
     pendingScopeRankRef.current = withMilestones ? 1 : 0;
     try {
-      const [milestonesData, archivedMilestonesData, searchResults] = await Promise.all([
+      const [milestonesData, archivedMilestonesData, searchSnapshot] = await Promise.all([
         withMilestones ? apiClient.fetchMilestones() : milestoneEntitiesRef.current,
         withMilestones ? apiClient.fetchArchivedMilestones() : archivedMilestonesRef.current,
-        apiClient.search(),
+        apiClient.searchSnapshot(),
       ]);
       if (loadAllDataRequestRef.current !== requestId) {
         return;
@@ -682,7 +684,8 @@ function AppContent() {
           .sort()
           .join("\n");
       const previousIdSignature = idSignature(tasksRef.current);
-      const { tasks: tasksList } = applySearchResults(searchResults, archivedKeys, milestoneAliases);
+      setTasksRevision(searchSnapshot.tasksRevision);
+      const { tasks: tasksList } = applySearchResults(searchSnapshot.results, archivedKeys, milestoneAliases);
       applyMilestoneIds(
         collectMilestoneIds(tasksList, milestonesData, archivedMilestonesData).filter(
           (milestone) => !archivedKeys.has(milestoneKey(milestone)),
@@ -730,7 +733,13 @@ function AppContent() {
     window.dispatchEvent(new Event('drafts-updated'));
   }, [loadAllData]);
 
-	const applyReorderedTasks = useCallback((updatedTasks: Task[], requestTask: Task) => {
+  useEffect(() => {
+    const resolved = () => void fullRefreshData();
+    window.addEventListener('backlog-operation-resolved', resolved);
+    return () => window.removeEventListener('backlog-operation-resolved', resolved);
+  }, [fullRefreshData]);
+
+	const applyReorderedTasks = useCallback((updatedTasks: Task[], requestTask: Task, revision?: string | null) => {
 		const current = tasksRef.current;
 		const currentRequest = current.find((task) => task.id === requestTask.id);
 		if (currentRequest !== requestTask) return;
@@ -738,6 +747,7 @@ function AppContent() {
 		const next = current.map((task) => updatesById.get(task.id) ?? task);
 		tasksRef.current = next;
 		setTasks(next);
+		if (revision !== undefined) setTasksRevision(revision);
 	}, []);
 
   /**
@@ -750,7 +760,7 @@ function AppContent() {
       clearTaskModal();
       if (!fromRoute || !routeBasePath) return;
       const message =
-        error instanceof ApiError && error.status === 409
+        isAmbiguousIdConflict(error)
           ? `Task "${taskId}" is ambiguous. Repair duplicate task IDs before opening this link.`
           : error instanceof ApiError && error.status === 400
             ? `"${taskId}" is not a valid task ID.`
@@ -860,7 +870,7 @@ function AppContent() {
   const handleSubmitTask = async (taskData: Partial<Task>) => {
     // Don't catch errors here - let TaskDetailsModal handle them
     if (editingTask) {
-      await apiClient.updateTask(editingTask.id, taskData);
+      await apiClient.updateTask(editingTask.id, taskData, editingTask);
     } else {
       // Set status to 'Draft' if in draft mode
       const finalTaskData = isDraftMode
@@ -899,7 +909,7 @@ function AppContent() {
 
   const handleArchiveTask = async (taskId: string) => {
     try {
-      await apiClient.archiveTask(taskId);
+      await apiClient.archiveTask(taskId, editingTask);
       handleCloseModal();
       await refreshData();
     } catch (error) {
@@ -947,6 +957,7 @@ function AppContent() {
       onEditTask={handleEditTask}
       onNewTask={handleNewTask}
       tasks={kanbanTasks}
+      tasksRevision={tasksRevision}
       onRefreshData={refreshData}
 	  onTasksUpdated={applyReorderedTasks}
       statuses={statuses}

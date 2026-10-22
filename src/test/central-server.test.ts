@@ -7,6 +7,7 @@ import { ADMIN_PERMISSIONS } from "../server/auth-types.ts";
 import { CentralServer } from "../server/central.ts";
 import { findNextAvailablePort } from "../server/index.ts";
 import { ProjectStore } from "../server/project-store.ts";
+import { centralFixtureFetch } from "./central-test-client.ts";
 import { createUniqueTestDir, initializeFilesystemTestProject, safeCleanup } from "./test-utils.ts";
 
 describe("central project server", () => {
@@ -31,7 +32,7 @@ describe("central project server", () => {
 		headers.set("Cookie", cookie);
 		headers.set("Origin", base);
 		headers.set("X-CSRF-Token", csrf);
-		return fetch(input, { ...init, headers });
+		return centralFixtureFetch(input, { ...init, headers });
 	}
 
 	async function seed(name: string, directory?: string): Promise<string> {
@@ -171,12 +172,15 @@ describe("central project server", () => {
 			id: "1",
 			name: "Shown Alpha",
 			permissions: ADMIN_PERMISSIONS,
+			writeState: "ready",
 		});
 		for (const [id, name] of [
 			["1", "Alpha"],
 			["2", "Beta"],
 		] as const) {
-			const task = await (await request(`${base}/api/projects/${id}/task/TASK-1`)).json();
+			const taskResponse = await request(`${base}/api/projects/${id}/task/TASK-1`);
+			expect(taskResponse.status, await taskResponse.clone().text()).toBe(200);
+			const task = await taskResponse.json();
 			expect(task.title).toBe(`${name} task`);
 			const doc = await (await request(`${base}/api/projects/${id}/doc/doc-1`)).json();
 			expect(doc.title).toBe(`${name} document`);
@@ -224,7 +228,7 @@ describe("central project server", () => {
 		expect((await put({ autoCommit: true })).status).toBe(400);
 		expect((await put({ projectName: "Renamed" })).status).toBe(400);
 		const response = await put({ hideEmptyColumns: true });
-		expect(response.status).toBe(200);
+		expect(response.status, await response.clone().text()).toBe(200);
 		expect((await response.json()).projectName).toBe("Shown Alpha");
 		const config = await new Core(alpha).fs.loadConfig();
 		expect(config?.hideEmptyColumns).toBe(true);

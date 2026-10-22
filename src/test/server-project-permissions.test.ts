@@ -4,12 +4,14 @@ import { join } from "node:path";
 import type { ServerWebSocket } from "bun";
 import { Core } from "../core/backlog.ts";
 import type { ProjectAuthorization, ProjectPermission } from "../server/auth-types.ts";
-import { BacklogServer } from "../server/index.ts";
+import { BacklogServer, type ProjectMutationContext } from "../server/index.ts";
+import { MutationAbortResponse, MutationError } from "../server/mutations.ts";
 import { createTestDirOutsideRepository, initializeFilesystemTestProject, safeCleanup } from "./test-utils.ts";
 
 let testDir: string;
 let core: Core;
 let server: BacklogServer;
+let projectQueue: Promise<void> = Promise.resolve();
 const all: ProjectAuthorization = { check: () => null };
 
 function permissions(...allowed: Array<ProjectPermission | "read" | "admin">): ProjectAuthorization {
@@ -21,10 +23,45 @@ function permissions(...allowed: Array<ProjectPermission | "read" | "admin">): P
 
 function request(path: string, method = "GET", body?: unknown, authorization = all): Promise<Response> {
 	const encoded = typeof body === "string" ? body : body === undefined ? undefined : JSON.stringify(body);
-	return server.dispatchApi(new Request(`http://localhost${path}`, { method, body: encoded }), path, authorization);
+	const keyFor = (kind: string, visibleId: string) => `${kind}:${visibleId.toLowerCase()}`;
+	const context: ProjectMutationContext = {
+		recordKeyFor: (kind, visibleId) => keyFor(kind, visibleId),
+		resolveRecordKey: ({ kind, visibleId }) => keyFor(kind, visibleId),
+		commit: async (_mutation, apply, publish, revalidate) => {
+			const denied = revalidate();
+			if (denied) throw new MutationAbortResponse(denied);
+			await apply();
+			await publish();
+		},
+	};
+	const dispatch = () =>
+		server
+			.dispatchApi(new Request(`http://localhost${path}`, { method, body: encoded }), path, authorization, context)
+			.catch((error) => {
+				if (error instanceof MutationAbortResponse) return error.response;
+				if (error instanceof MutationError) return error.response();
+				throw error;
+			});
+	if (["GET", "HEAD", "OPTIONS"].includes(method)) return dispatch();
+	const previous = projectQueue;
+	let release = () => {};
+	const gate = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	projectQueue = previous.catch(() => {}).then(() => gate);
+	return previous
+		.catch(() => {})
+		.then(async () => {
+			try {
+				return await dispatch();
+			} finally {
+				release();
+			}
+		});
 }
 
 beforeEach(async () => {
+	projectQueue = Promise.resolve();
 	testDir = await createTestDirOutsideRepository("server-project-permissions");
 	core = new Core(testDir, { serverMode: true });
 	await initializeFilesystemTestProject(core, "Permissions");

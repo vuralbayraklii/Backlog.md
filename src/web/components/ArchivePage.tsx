@@ -4,11 +4,14 @@ import { projectScope } from "../lib/project-scope";
 import { HttpError, requestJson } from "../lib/request";
 import { buttonClass, inputClass } from "./AccountForms";
 import MermaidMarkdown from "./MermaidMarkdown";
+import { isMutationConflict, MutationConflictNotice } from "./MutationConflictNotice";
 
 type Kind = "tasks" | "docs" | "decisions";
 interface ArchivedRecord {
 	id: string;
 	title: string;
+	recordKey?: string;
+	revision?: string;
 	rawContent?: string;
 	content?: string;
 	description?: string;
@@ -17,11 +20,12 @@ interface ArchivedRecord {
 	consequences?: string;
 }
 export default function ArchivePage({ onRefreshData }: { onRefreshData: () => Promise<void> }) {
-	const { permissions } = useAuth();
+	const { permissions, writeState } = useAuth();
 	const [kind, setKind] = useState<Kind>("tasks");
 	const [records, setRecords] = useState<ArchivedRecord[]>([]);
 	const [selected, setSelected] = useState<ArchivedRecord | null>(null);
 	const [error, setError] = useState<string | null>(null);
+	const [conflict, setConflict] = useState<unknown>(null);
 	const [busy, setBusy] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const generation = useRef(0);
@@ -32,6 +36,7 @@ export default function ArchivePage({ onRefreshData }: { onRefreshData: () => Pr
 		setRecords([]);
 		setSelected(null);
 		setError(null);
+		setConflict(null);
 		generation.current++;
 		void requestJson<ArchivedRecord[]>(`${base}/archived`, { signal: controller.signal })
 			.then(setRecords)
@@ -48,11 +53,15 @@ export default function ArchivePage({ onRefreshData }: { onRefreshData: () => Pr
 		if (remove && !window.confirm(`Permanently delete ${record.id} — ${record.title}? This cannot be undone.`)) return;
 		setBusy(true);
 		setError(null);
+		setConflict(null);
 		const owner = generation.current;
 		try {
 			const outcome = await requestJson<{ cleanedTaskIds?: string[]; listedAsDocumentationBy?: string[] }>(
 				`${base}/${encodeURIComponent(record.id)}${remove ? "" : "/restore"}`,
-				{ method: remove ? "DELETE" : "POST" },
+				{
+					method: remove ? "DELETE" : "POST",
+					headers: projectScope.id && record.revision ? { "If-Match": record.revision } : undefined,
+				},
 			);
 			if (owner !== generation.current) return;
 			setRecords((current) => current.filter((item) => item.id !== record.id));
@@ -71,6 +80,7 @@ export default function ArchivePage({ onRefreshData }: { onRefreshData: () => Pr
 				await onRefreshData();
 			}
 			setError(reason instanceof Error ? reason.message : String(reason));
+			setConflict(isMutationConflict(reason) ? reason : null);
 		} finally {
 			setBusy(false);
 		}
@@ -88,7 +98,13 @@ export default function ArchivePage({ onRefreshData }: { onRefreshData: () => Pr
 					</select>
 				</label>
 			</div>
-			{error && (
+			<MutationConflictNotice
+				error={conflict}
+				draft={false}
+				onOpenCurrent={() => window.location.reload()}
+				onDismiss={() => setConflict(null)}
+			/>
+			{error && !conflict && (
 				<p role="alert" className="mb-5 text-red-700 dark:text-red-300">
 					{error}
 				</p>
@@ -113,7 +129,7 @@ export default function ArchivePage({ onRefreshData }: { onRefreshData: () => Pr
 									<button
 										type="button"
 										className={buttonClass}
-										disabled={busy}
+										disabled={busy || writeState !== "ready"}
 										onClick={() => void mutate(record, false)}
 									>
 										Restore
@@ -123,7 +139,7 @@ export default function ArchivePage({ onRefreshData }: { onRefreshData: () => Pr
 									<button
 										type="button"
 										className="rounded-md bg-red-700 px-4 py-2 text-sm text-white disabled:opacity-50"
-										disabled={busy}
+										disabled={busy || writeState !== "ready"}
 										onClick={() => void mutate(record, true)}
 									>
 										Delete permanently

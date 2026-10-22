@@ -1,17 +1,19 @@
 import { type FormEvent, useEffect, useState } from "react";
 import type { ServerUser } from "../../server/auth-types";
 import { useAuth } from "../contexts/AuthContext";
+import type { RecordVersionLike } from "../lib/api";
 import { requestJson } from "../lib/request";
 import { buttonClass, inputClass } from "./AccountForms";
 import AccountNavigation from "./AccountNavigation";
 import AdminProjectRegistration from "./AdminProjectRegistration";
+import { isMutationConflict, MutationConflictNotice } from "./MutationConflictNotice";
 
 function UserRow({
 	user,
 	changed,
 	failed,
 }: {
-	user: ServerUser;
+	user: ServerUser & RecordVersionLike;
 	changed: () => Promise<void>;
 	failed: (error: unknown) => void;
 }) {
@@ -26,6 +28,7 @@ function UserRow({
 		try {
 			await requestJson(`/api/admin/users/${encodeURIComponent(user.id)}${reset ? "/reset-password" : ""}`, {
 				method: reset ? "POST" : "PATCH",
+				headers: !reset && user.revision ? { "If-Match": user.revision } : undefined,
 				body: JSON.stringify(reset ? { password } : { displayName, role, active }),
 			});
 			setPassword("");
@@ -96,22 +99,27 @@ function UserRow({
 
 export default function AdminUsers() {
 	const { central, session, refresh } = useAuth();
-	const [users, setUsers] = useState<ServerUser[]>([]);
+	const [users, setUsers] = useState<(ServerUser & RecordVersionLike)[]>([]);
 	const [username, setUsername] = useState("");
 	const [displayName, setDisplayName] = useState("");
 	const [password, setPassword] = useState("");
 	const [role, setRole] = useState<ServerUser["role"]>("user");
 	const [error, setError] = useState<string | null>(null);
+	const [conflict, setConflict] = useState<unknown>(null);
 	const [busy, setBusy] = useState(false);
-	const failed = (reason: unknown) => setError(reason instanceof Error ? reason.message : String(reason));
+	const failed = (reason: unknown) => {
+		setError(reason instanceof Error ? reason.message : String(reason));
+		setConflict(isMutationConflict(reason) ? reason : null);
+	};
 	const load = async () => {
-		setUsers(await requestJson<ServerUser[]>("/api/admin/users"));
+		setUsers(await requestJson<(ServerUser & RecordVersionLike)[]>("/api/admin/users"));
 	};
 	useEffect(() => {
 		if (session?.user.role === "admin") void load().catch(failed);
 	}, [session?.user.role]);
 	const changed = async () => {
 		setError(null);
+		setConflict(null);
 		await load();
 		await refresh();
 	};
@@ -158,6 +166,16 @@ export default function AdminUsers() {
 				</a>
 			</div>
 			{error && (
+				<MutationConflictNotice
+					error={conflict}
+					draft={false}
+					onOpenCurrent={() => {
+						if (window.confirm("Discard current form values and reload users?")) window.location.reload();
+					}}
+					onDismiss={() => setConflict(null)}
+				/>
+			)}
+			{error && !conflict && (
 				<p role="alert" className="mb-5 text-red-700 dark:text-red-300">
 					{error}
 				</p>

@@ -162,6 +162,9 @@ afterEach(async () => {
 	globalThis.fetch = originalFetch;
 	Object.assign(globalThis, originalGlobals);
 	Object.assign(projectScope, originalScope);
+	// A lost central response belongs to its account even through expiry. A different
+	// account ends that operation before the next isolated test starts.
+	setRequestSession(session({ ...ordinary, id: "test-cleanup" }));
 	setRequestSession(null);
 	setProjectStorageAccount(null);
 	currentAuth = null;
@@ -358,7 +361,8 @@ describe("project registration", () => {
 		await fillProject();
 		await click("Preview project");
 		await click("Register project");
-		expect(document.querySelector('[role="alert"]')?.textContent).toBe("Folder access denied");
+		expect(document.body.textContent).toContain("The request result is uncertain");
+		expect(document.body.textContent).toContain("has no confirmed result");
 		expect(document.querySelector<HTMLInputElement>('input[name="projectPath"]')?.value).toBe(project.rootPath);
 		expect(calls.filter((call) => call.path === "/api/projects")).toHaveLength(1);
 		expect(unloadIsBlocked()).toBe(true);
@@ -463,9 +467,12 @@ describe("admin registration management", () => {
 		setup((path, options) => {
 			if (!options?.method) {
 				if (path === "/api/admin/users") return Response.json([admin, ordinary]);
-				if (path === "/api/admin/folder-areas") return Response.json([area]);
+				if (path === "/api/admin/folder-areas") return Response.json([{ ...area, revision: "rev-area" }]);
 				if (path === "/api/admin/projects")
-					return Response.json([project, { ...project, id: "14", name: "Dormant", tracking: false }]);
+					return Response.json([
+						{ ...project, revision: "rev-project" },
+						{ ...project, id: "14", name: "Dormant", tracking: false, revision: "rev-dormant" },
+					]);
 			}
 			if (handler) return handler(path, options);
 			throw new Error(path);
@@ -481,7 +488,7 @@ describe("admin registration management", () => {
 	}
 
 	it("assigns and removes personal folders with CSRF and without changing project memberships", async () => {
-		const added = { ...area, id: "8", rootPath: "/srv/new-area" };
+		const added = { ...area, id: "8", rootPath: "/srv/new-area", revision: "rev-added" };
 		adminSetup((path, options) =>
 			path === "/api/admin/folder-areas" && options?.method === "POST"
 				? Response.json(added)
@@ -509,6 +516,8 @@ describe("admin registration management", () => {
 		]);
 		expect(JSON.parse(String(writes[0]?.options?.body))).toEqual({ userId: ordinary.id, path: added.rootPath });
 		for (const call of writes) expect(new Headers(call.options?.headers).get("X-CSRF-Token")).toBe("csrf-1");
+		expect(new Headers(writes[0]?.options?.headers).get("Idempotency-Key")).toMatch(/^[0-9a-f-]{36}$/i);
+		expect(new Headers(writes[1]?.options?.headers).get("If-Match")).toBe("rev-added");
 	});
 
 	it("stops and re-enables tracking in place while retaining project identity", async () => {
@@ -538,6 +547,10 @@ describe("admin registration management", () => {
 			["/api/admin/projects/14/tracking", { tracking: true }],
 		]);
 		for (const call of writes) expect(new Headers(call.options?.headers).get("X-CSRF-Token")).toBe("csrf-1");
+		expect(writes.map((call) => new Headers(call.options?.headers).get("If-Match"))).toEqual([
+			"rev-project",
+			"rev-dormant",
+		]);
 	});
 
 	it("shows folder and tracking errors while retaining form and current state", async () => {
@@ -560,7 +573,7 @@ describe("admin registration management", () => {
 		window.confirm = () => true;
 		await act(async () => element<HTMLButtonElement>(`button[aria-label="Remove folder ${area.rootPath}"]`).click());
 		await flush();
-		expect(document.body.textContent).toContain("Could not remove folder");
+		expect(document.body.textContent).toContain("The request result is uncertain");
 		expect(document.querySelector(`button[aria-label="Remove folder ${area.rootPath}"]`)).not.toBeNull();
 		expect(calls.filter((call) => call.options?.method === "DELETE")).toHaveLength(1);
 	});

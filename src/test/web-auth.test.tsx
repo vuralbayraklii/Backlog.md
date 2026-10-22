@@ -183,12 +183,98 @@ afterEach(async () => {
 	globalThis.fetch = originalFetch;
 	Object.assign(globalThis, originalBrowserGlobals);
 	Object.assign(projectScope, originalScope);
+	setRequestSession(userSession("test-cleanup"));
 	setRequestSession(null);
 	setProjectStorageAccount(null);
 	currentAuth = null;
 });
 
 describe("central browser session", () => {
+	it("shows recovery as project availability while preserving granted permissions", async () => {
+		setup();
+		globalThis.fetch = (async (input) => {
+			if (String(input) === "/api/auth/session") return Response.json(userSession());
+			if (String(input) === "/api/projects/1")
+				return Response.json({
+					permissions: ADMIN_PERMISSIONS,
+					writeState: "recovery_required",
+					pendingOperationId: "op-pending",
+				});
+			throw new Error(String(input));
+		}) as typeof fetch;
+		await renderAuth();
+		expect(auth().permissions.tasksWrite).toBe(true);
+		expect(auth().writeState).toBe("recovery_required");
+		expect(document.body.textContent).toContain("Project writes are paused for recovery.");
+		expect(document.body.textContent).toContain("Operation op-pending");
+	});
+
+	it("updates the read-only notice when a write returns recovery required", async () => {
+		setup();
+		let blocked = false;
+		let operationId = "";
+		globalThis.fetch = (async (input, options) => {
+			const path = String(input);
+			if (path === "/api/auth/session") return Response.json(userSession());
+			if (path === "/api/projects/1")
+				return Response.json({
+					permissions: ADMIN_PERMISSIONS,
+					writeState: blocked ? "recovery_required" : "ready",
+					...(blocked ? { pendingOperationId: operationId } : {}),
+				});
+			if (path === "/api/projects/1/tasks" && options?.method === "POST") {
+				operationId = new Headers(options.headers).get("Idempotency-Key") ?? "";
+				blocked = true;
+				return Response.json({ error: "Recovery required", code: "RECOVERY_REQUIRED", operationId }, { status: 503 });
+			}
+			throw new Error(path);
+		}) as typeof fetch;
+		await renderAuth();
+		expect(auth().writeState).toBe("ready");
+		await act(async () => {
+			const response = await sessionFetch("/api/projects/1/tasks", { method: "POST", body: "{}" });
+			expect(response.status).toBe(503);
+		});
+		await flush();
+		expect(auth().permissions.tasksWrite).toBe(true);
+		expect(auth().writeState).toBe("recovery_required");
+		expect(document.body.textContent).toContain("Project writes are paused for recovery.");
+		expect(document.body.textContent).toContain(operationId);
+	});
+
+	it("offers a manual result check after a lost write without replaying it", async () => {
+		setup();
+		let writes = 0;
+		let lookups = 0;
+		globalThis.fetch = (async (input) => {
+			const path = String(input);
+			if (path === "/api/auth/session") return Response.json(userSession());
+			if (path === "/api/projects/1") return Response.json({ permissions: ADMIN_PERMISSIONS, writeState: "ready" });
+			if (path === "/api/projects/1/tasks") {
+				writes++;
+				throw new TypeError("response lost");
+			}
+			if (path.startsWith("/api/operations/"))
+				return Response.json({
+					state: ++lookups === 1 ? "pending" : "completed",
+					result: { status: 200, body: { id: "TASK-1" }, headers: { "content-type": "application/json" } },
+				});
+			throw new Error(path);
+		}) as typeof fetch;
+		await renderAuth();
+		await act(async () => {
+			await expect(sessionFetch("/api/projects/1/tasks", { method: "POST", body: "{}" })).rejects.toThrow("uncertain");
+		});
+		expect(document.body.textContent).toContain("is still in progress.");
+		await act(async () => {
+			visibleButton("Check result").click();
+		});
+		await flush();
+		expect(writes).toBe(1);
+		expect(lookups).toBe(2);
+		expect(document.body.textContent).toContain("Operation completed");
+	});
+
 	it("waits for project permissions before mounting project content", async () => {
 		setup();
 		let mounts = 0;
@@ -335,6 +421,8 @@ describe("central browser session", () => {
 			setup();
 			const documentRecord: BacklogDocument = {
 				id: "doc-1",
+				recordKey: "document-key-1",
+				revision: "rev-1",
 				title: "Runbook",
 				type: "other",
 				createdDate: "2026-01-01",
@@ -343,6 +431,8 @@ describe("central browser session", () => {
 			};
 			const decisionRecord: Decision = {
 				id: "decision-1",
+				recordKey: "decision-key-1",
+				revision: "rev-1",
 				title: "Choice",
 				status: "proposed",
 				date: "2026-01-01",
@@ -351,8 +441,15 @@ describe("central browser session", () => {
 				consequences: "",
 				rawContent: "Original decision",
 			};
-			globalThis.fetch = (async (input) => {
+			let saveHeaders: Headers | null = null;
+			let savePath = "";
+			globalThis.fetch = (async (input, options) => {
 				const path = String(input);
+				if (options?.method === "PUT" && (path.endsWith("/docs/doc-1") || path.endsWith("/decisions/decision-1"))) {
+					savePath = path;
+					saveHeaders = new Headers(options.headers);
+					return Response.json({ error: "Another edit was saved", code: "REVISION_CONFLICT" }, { status: 409 });
+				}
 				if (path === "/api/auth/session" || path === "/api/auth/login") return Response.json(userSession());
 				if (path === "/api/projects/1") return Response.json({ permissions: ADMIN_PERMISSIONS });
 				if (path === "/expire") return Response.json({ error: "Login required" }, { status: 401 });
@@ -413,9 +510,24 @@ describe("central browser session", () => {
 			});
 			await submitLogin();
 			await act(async () => {
-				[...document.querySelectorAll("button")].find((button) => button.textContent === "Refresh list")!.click();
+				const refreshButton = [...document.querySelectorAll("button")].find(
+					(button) => button.textContent === "Refresh list",
+				);
+				if (!refreshButton) throw new Error("Refresh list button missing");
+				refreshButton.click();
 			});
 			expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(`Unsaved ${kind}`);
+			await act(async () => {
+				[...document.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Save")!.click();
+			});
+			await flush();
+			const sentHeaders = saveHeaders as Headers | null;
+			expect(sentHeaders?.get("If-Match")).toBe("rev-1");
+			expect(savePath).toContain("/api/projects/1/");
+			expect(sentHeaders?.get("Idempotency-Key")).toMatch(/^[0-9a-f-]{36}$/i);
+			if (kind === "decision") expect(sentHeaders?.get("Content-Type")).toBe("text/plain");
+			expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe(`Unsaved ${kind}`);
+			expect(document.body.textContent).toContain("This record changed. Your draft is kept.");
 		});
 	}
 
@@ -461,7 +573,8 @@ describe("session response ownership", () => {
 			let loggedIn = false;
 			globalThis.fetch = (async (input) => {
 				const path = String(input);
-				if (path === "/api/auth/session") return ++reads === 1 ? Response.json(userSession("account-a")) : oldResponse.promise;
+				if (path === "/api/auth/session")
+					return ++reads === 1 ? Response.json(userSession("account-a")) : oldResponse.promise;
 				if (path === "/api/auth/login") {
 					loggedIn = true;
 					return Response.json(userSession("account-b"));
@@ -491,7 +604,10 @@ describe("session response ownership", () => {
 					oldResponse.resolve(
 						responseKind === "success"
 							? Response.json(userSession("account-a"))
-							: Response.json({ error: "Old account response" }, { status: responseKind === "unauthorized" ? 401 : 500 }),
+							: Response.json(
+									{ error: "Old account response" },
+									{ status: responseKind === "unauthorized" ? 401 : 500 },
+								),
 					);
 				await pending;
 			});
@@ -512,8 +628,10 @@ describe("session response ownership", () => {
 		let loggedIn = false;
 		globalThis.fetch = (async (input) => {
 			const path = String(input);
-			if (path === "/api/auth/session") return ++reads === 1 ? Response.json(userSession("account-a")) : oldResponse.promise;
-			if (path === "/api/projects/1") return loggedIn ? newPermissions.promise : Response.json({ permissions: ADMIN_PERMISSIONS });
+			if (path === "/api/auth/session")
+				return ++reads === 1 ? Response.json(userSession("account-a")) : oldResponse.promise;
+			if (path === "/api/projects/1")
+				return loggedIn ? newPermissions.promise : Response.json({ permissions: ADMIN_PERMISSIONS });
 			if (path === "/api/auth/login") {
 				loggedIn = true;
 				return Response.json(userSession("account-b"));
@@ -602,7 +720,8 @@ describe("session response ownership", () => {
 		const pendingResponse = deferred<Response>();
 		let reads = 0;
 		globalThis.fetch = (async (input) => {
-			if (String(input) === "/api/auth/session") return ++reads === 1 ? Response.json(userSession()) : pendingResponse.promise;
+			if (String(input) === "/api/auth/session")
+				return ++reads === 1 ? Response.json(userSession()) : pendingResponse.promise;
 			if (String(input) === "/api/projects/1") return Response.json({ permissions: ADMIN_PERMISSIONS });
 			throw new Error(String(input));
 		}) as typeof fetch;
@@ -854,7 +973,9 @@ describe("logout with unsaved changes", () => {
 	for (const status of [200, 401]) {
 		it(`logs out a clean editor without confirmation when the server returns ${status}`, async () => {
 			setup();
-			const calls = installFetch(() => Response.json(status === 200 ? { success: true } : { error: "Login required" }, { status }));
+			const calls = installFetch(() =>
+				Response.json(status === 200 ? { success: true } : { error: "Login required" }, { status }),
+			);
 			const confirm = mock(() => false);
 			window.confirm = confirm;
 			await renderGuardedEditor();

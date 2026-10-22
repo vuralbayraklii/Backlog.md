@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { DuplicateRepairPlan } from "../../core/duplicate-task-repair";
+import { useAuth } from "../contexts/AuthContext";
 import { apiClient } from "../lib/api";
 import Modal from "./Modal";
 
@@ -11,6 +12,7 @@ interface DuplicateIdRepairModalProps {
 }
 
 export function DuplicateIdRepairModal({ isOpen, plan, onClose, onRepaired }: DuplicateIdRepairModalProps) {
+	const { writeState } = useAuth();
 	const [showConfirmation, setShowConfirmation] = useState(false);
 	const [isRepairing, setIsRepairing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -29,6 +31,7 @@ export function DuplicateIdRepairModal({ isOpen, plan, onClose, onRepaired }: Du
 	};
 
 	const handleRepair = async () => {
+		if (writeState !== "ready") return;
 		setIsRepairing(true);
 		setError(null);
 		try {
@@ -53,8 +56,8 @@ export function DuplicateIdRepairModal({ isOpen, plan, onClose, onRepaired }: Du
 		>
 			<div className="space-y-5">
 				<p className="text-sm text-gray-700 dark:text-gray-300">
-					Backlog.md found {plan.groups.length} duplicate ID {plan.groups.length === 1 ? "group" : "groups"}. The
-					repair keeps one file in each group at its current ID and assigns new incremental IDs to the others.
+					Backlog.md found {plan.groups.length} duplicate ID {plan.groups.length === 1 ? "group" : "groups"}. The repair
+					keeps one file in each group at its current ID and assigns new incremental IDs to the others.
 				</p>
 
 				<div>
@@ -92,7 +95,9 @@ export function DuplicateIdRepairModal({ isOpen, plan, onClose, onRepaired }: Du
 						<ul className="mt-3 max-h-40 space-y-2 overflow-y-auto text-xs text-amber-950 dark:text-amber-100">
 							{plan.references.map((reference) => (
 								<li key={`${reference.path}:${reference.line}`}>
-									<p className="font-mono">{reference.path}:{reference.line}</p>
+									<p className="font-mono">
+										{reference.path}:{reference.line}
+									</p>
 									{reference.text && <p className="truncate text-amber-800 dark:text-amber-300">{reference.text}</p>}
 								</li>
 							))}
@@ -122,7 +127,10 @@ export function DuplicateIdRepairModal({ isOpen, plan, onClose, onRepaired }: Du
 				)}
 
 				{error && (
-					<div role="alert" className="rounded-md bg-red-100 p-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-200">
+					<div
+						role="alert"
+						className="rounded-md bg-red-100 p-3 text-sm text-red-800 dark:bg-red-900/40 dark:text-red-200"
+					>
 						{error}
 					</div>
 				)}
@@ -151,10 +159,12 @@ export function DuplicateIdRepairModal({ isOpen, plan, onClose, onRepaired }: Du
 							ref={repairButtonRef}
 							type="button"
 							onClick={handleRepair}
-							disabled={isRepairing}
+							disabled={isRepairing || writeState !== "ready"}
 							className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 dark:bg-red-500 dark:hover:bg-red-400"
 						>
-							{isRepairing ? "Repairing…" : `Repair ${plan.changes.length} ${plan.changes.length === 1 ? "file" : "files"}`}
+							{isRepairing
+								? "Repairing…"
+								: `Repair ${plan.changes.length} ${plan.changes.length === 1 ? "file" : "files"}`}
 						</button>
 					)}
 				</div>

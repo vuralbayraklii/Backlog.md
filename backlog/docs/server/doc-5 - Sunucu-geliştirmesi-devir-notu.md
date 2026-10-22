@@ -3,13 +3,57 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-22 07:21'
+updated_date: '2026-10-22 10:42'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje sunucusuna yeni sohbetten devam etmek içindir. A-00–A-03 uygulaması ve kabul kontrolleri tamamlandı. Güncel dal tasks/server-a03-project-registration; başlangıç A-02 HEAD’i 4e67653bb76723cb93ff299ac12f99fd10b36a87. Uygulama commit/push ve uzak HEAD eşitliği doğrulandı; aşağıdaki Git kaydını, güncel HEAD/temizliği doğrula. Sonraki ürün aşaması A-04; bu teslimde başlatılmadı. Eski aşamalar aşağıda tarihsel kanıtlarıyla korunur.
+Bu not Backlog.md çoklu proje sunucusuna yeni sohbetten devam etmek içindir. A-00–A-04 tamamlandı; BACK-799–BACK-805 Done. Güncel dal tasks/server-a04-write-history; kaynak tabanı adb84179c3e639140c270504e75841f96cb4f4d0. Kaynak, kabul kanıtı ve CLI kayıt değişiklikleri yereldir; commit/push/merge yapılmadı. Önce Git durumunu doğrula ve yerel çalışmayı koru.
+
+## Tamamlanan A-04 — ortak yazım, işlem sonucu ve tarihçe
+
+Kullanıcının doc-6 bölüm 9'da onayladığı dört karar uygulandı. @codex-store BACK-800 deposunu ve açık dosya devriyle BACK-804 CLI/recovery/SIGKILL dilimini; @codex-core BACK-801/802 Core/FileSystem/pano/bakım dilimini; @codex-web BACK-803 web ve DOM dilimini tamamladı. Ana ajan @codex BACK-804 merkezi yürütücü/API/audit/README, BACK-802 duplicate repair dilimi ve BACK-805 birleşmiş kabul sahibidir. Tüm kabul ölçütleri ve DoD, CLI görevlerinde kanıta bağlandı.
+
+Mevcut Core, parser, serializer, allocator, kilitler ve arayüzler kullanılır. Tek hazırlama/yazma yolu niyeti fiziksel dosyalardan önce, güvenli sonucu ve tek olay zarfını başarı/cache/search/WS yayınından önce kesinleştirir. Aynı ham dosya snapshot'ı DTO revision'ını taşır; izleyiciden gelen görev/belge/karar yenilemeleri de bu yolu kullanır. recordKey merkezi yaşam döngüsü ve açık kimlik onarımında korunur. Ek kullanıcı kararıyla, güvenle sonradan okunan yeni yerel yol yeni kimlik alır; eşleşmeyen dış taşıma da yeni kimlik sayılır. Bu eşleme sahte olay/aktör üretmez; dış taşıma tanıma ve dış olay tarihçesi A-05'tedir. Bulk partial success, config, milestone cascade, cleanup ve duplicate repair aynı sınırdadır.
+
+Merkezi yazılarda UUID Idempotency-Key, mevcut kayıtta If-Match; pano bulk'ta recordKey ile expectedRevisions, reorder'da koleksiyon sürümü kullanılır. Sıra/replay ve SQLite BEGIN beklemesi sonrasında güncel aktör/izin tekrar denetlenir. Tek işlem okuma yolu GET /api/operations/:operationId; history proje/admin/registration kapsamlıdır. Yönetim audit'i mevcut SQLite transaction'ındadır; parola/hash/token/CSRF/Set-Cookie saklanmaz. Parola taşıyan istekler A-02 akışında kalır ve yalnız güvenli audit üretir.
+
+Kesinti: tüm dosyalar önceki durumdaysa not_applied; sonraki durumdaysa saklanan sonuç ve olay kesinleşir; karışık/bilinmeyende yalnız ilgili proje yazmaya kapanır. Fingerprintli CLI accept-observed ayrı kurtarma olayı üretir, eski işlem başarısız kalır ve resolvedBy ile bağlanır. Açık sunucu bu çözümü görüp handler'ı yeniler; eski anahtar OPERATION_RESOLVED verir. SIGKILL'den kalan ortak dosya kilidi tazeyken WRITE_LOCKED korunur. Ortak kilide katılmayan dış yazıcılara tam atomiklik verilmez; sürekli dış olay/agent takibi A-05, doğrulama/kullanıcı kabul ekranları A-06'dır.
+
+Sabit son kaynakta tam Bun: 3908 başarılı / 13 atlanan / 0 başarısız; 3921 test / 351 dosya / 19407 beklenti. Tip, depo kapsamındaki yazmasız Biome, native build, test CLI bundle ve derlenmiş CLI/web/MCP smoke geçti. Gerçek Chromium 21 kontrol ve 0 işlenmemiş hata ile geçti. Gerçek alt süreçler altı noktada SIGKILL ile kesilip yeni süreçte disk/SQLite/olay/kurtarma durumu doğrulandı; exception testi bu sayıya katılmadı.
+
+Normal Biome ayarı TSX'i kapsamıyor. Değişen TSX'ler aynı kuralları kalıtan geçici ayarla ayrıca tarandı: HEAD 171 hata/52 uyarı, son kaynak 166 hata/50 uyarı; yeni tanı 0. Eski biçim/erişilebilirlik borcu silinmedi veya temiz tarama gibi sunulmadı; ham tarama exit1 ve fark kapısı raporda ayrıdır. İlk tanı tam koşusunun 32 hatası yeni sözleşmeye uymayan test taklitleri/temizliği ve izleyici snapshot kusuruydu; düzeltilip final koşu yeniden yapıldı.
+
+Kalıcı sonuç, kabul eşlemeleri, kaynak/test/günlük SHA-256 özetleri [a04-verification.json](../../../verification/server/a04-verification.json) içindedir. Son kaynak özeti c53431ce1c370f25366f06cbad9215b5e084d99e2251d11735132b22406b126c; derleme/testler/tarayıcı sonrası aynı kaldı. Ham günlükler /tmp/backlog-a04-final ve Chromium raporundaki geçici dizindedir; /tmp kalıcı yedek değildir. Başlangıç kayıt arşivi /tmp/backlog-a04-approved-start-records.tar.gz; SHA-256 7b402457c58ebb8bba8e1b69267243c0c8db43d4b7b07d95ed8c6b0004cc7ff4.
+
+Sadelik incelemesi: aynı SQLite/BEGIN politikası ve tek finalize; mevcut Core/FS üzerinde ortak fiziksel plan ve guarded snapshot okuyucusu; tek operation okuma yolu; ortak frontend request/outcome istemcisi; recovery'de ayrı CRUD yerine mevcut envanter ve depo. Groma bulunamadı; tarama veya Groma dosyası değişikliği yapılmadı. Yalnız geçici Linux projeleri kullanıldı; gerçek proje/Finbee bağlanmadı, manifesto değiştirilmedi. Platform/PTY atlananları başarı sayılmadı. origin/server değiştirilmedi.
+
+## A-04 hazırlığı — BACK-799–BACK-805 (22 Ekim 2026)
+
+Kullanıcı plan öncesinde ilgili backend/frontend kodunun okunmasını; görevlerde mevcut mimari, API, model ve bileşen kalıplarının, etkilenen modüllerin, iki taraf arasındaki bağımlılıkların ve mevcut/önerilen ayrımının gösterilmesini istedi. Araştırma ve görevleme tamamlandı; kullanıcı 22 Ekim 2026'da dört ürün kararını onayladı ve üç alt ajanlı uygulama oturumunu başlattığını bildirdi.
+
+[doc-6 kod incelemesi ve plan taslağı](<doc-6 - A-04-kod-incelemesi-ve-ortak-yazma-tarihçe-planı.md>) mutasyon envanteri, kaynak konumları, önerilen DTO/header/hata kodları, yeni history/operation API ve kanonik CLI, SQLite alanları, iki küçük UI bildirimi, fiziksel kesinti karar tablosu, dosya sahipliği ve üç alt ajan çalışma sırasını içerir. Bölüm 9'daki dört ürün kararı onaylandı; doc-4 kapsamı yalnız açık A-04/A-06 ayrımı ölçüsünde yorumlanır.
+
+Somut kaynak bulguları: CentralServer mevcut BacklogServer/Core yolunu kullanıyor; görev kilitleri eski tarayıcı revision'ını denetlemiyor; belge/karar farklı yazma yollarında; pano search sonucundan kuruluyor; frontend her409'u kimlik belirsizliği sayıyor; TaskDetailsModal kirli alanları korurken baseline yeniliyor. Bulk/cleanup/repair/milestone/config ve yaşam döngüsü referans temizliği çok dosyalı olabilir. Kalıcı niyet için Core/FileSystem hazırlama–uygulama sınırı ve kesinleşmeye bağlı cache/WS yayını önerildi.
+
+| Görev | Kapsam | Durum / başlama bağımlılığı |
+|---|---|---|
+| BACK-799 | A-04.1 araştırma ve sözleşme/ürün kararları | Done, @codex; dört karar onaylandı |
+| BACK-800 | A-04.2 kalıcı işlem/tarihçe deposu | Done, @codex-store; BACK-799 |
+| BACK-801 | A-04.3 Core/FileSystem ortak kayıt yazımı | Done, @codex-core; BACK-799 |
+| BACK-802 | A-04.4 çok dosyalı pano/bakım/milestone/config | Done, @codex-core ve @codex; BACK-801 |
+| BACK-803 | A-04.5 frontend sürüm/işlem sonucu | Done, @codex-web; BACK-799 |
+| BACK-804 | A-04.6 merkezi runtime, API/CLI ve yönetim audit | Done, @codex; BACK-799 |
+| BACK-805 | A-04.7 gerçek kesinti ve birleşmiş kabul | Done, @codex; BACK-800/802/803/804 |
+
+Uygulama dağılımı: ana ajan BACK-804 ortak tip/runtime/API/CLI; alt ajan1 BACK-800, alt ajan2 BACK-801 ardından BACK-802, alt ajan3 BACK-803. BACK-799 kararı tamamlandı. Core/index sahipliği BACK-801→802 sıralıdır; frontend bütün web dosyalarının tek sahibidir. Backend–frontend kapanış bağımlılıkları her görevde ayrıca belirtilir. Her uygulayıcı koddan önce kendi CLI görevine güncel yürütme planını yazar.
+
+Onaylanan dört karar: bir mantıksal işlem/tek olay zarfı; tamamen önceki durumda uygulanmadı, tamamen sonraki durumda kesinleştirme, karışık durumda yazma engeli ve fingerprintli CLI incelemesi; ortak kilit dışı yazıcılara tam atomiklik garantisi verilmemesi; A-04'te mevcut yazılar ve güvenli audit, yeni doğrulama/kullanıcı kabulünün A-06'ya ayrılması. Fingerprintli accept-observed ayrı kurtarma olayıdır ve ilk işlemi başarılı göstermez. BACK-799 kabul ölçütleri ve DoD kanıtla kapatıldı.
+
+Başlangıç Git temizdi; A-03 yerel ve GitHub başı adb84179 ile eşitti. Yeni dal açılmadan önce /tmp/backlog-a04-plan-rl9fukci/start.tar.gz oluşturuldu; SHA-256 feb34babb05fc4a4548cf93c48379c49cdf64f14ad33e30f6b443d9674fe3aa0. Görev/dokümanlar standart CLI allocator ile oluşturuldu. Sandbox altında oluşturma kilidi EROFS verdi; gereken .git/backlog.md kilit erişimiyle CLI yeniden çalıştırıldı. Kimlik kilidi devre dışı bırakılmadı. Groma bulunamadı; kullanıcı açık kaynak incelemesi istediği için kod doğrudan okundu, Groma taraması/yönetilen dosya değişikliği yapılmadı.
+
+BACK-799 kapanışında uygulama kaynakları değişmedi; testler yeniden çalıştırılmadı. CLI ile görev/bağımlılık okumaları ve git diff --check kayıt doğrulamasıdır; A-03 test sonuçları A-04 kabul kanıtı sayılmaz. Ham hazırlık dosyaları /tmp/backlog-a04-plan-rl9fukci/ altındadır; karar öncesi yerel kayıt anlık görüntüsü /tmp/backlog-a04-approved-start-records.tar.gz (SHA-256 7b402457c58ebb8bba8e1b69267243c0c8db43d4b7b07d95ed8c6b0004cc7ff4); kalıcı esas kayıtlar doc-6 ve BACK-799–805'tir. /tmp uzun süreli yedek değildir. Commit/push/merge yapılmadı; origin/server değiştirilmedi.
 
 ## Tamamlanan A-03 kabulü — BACK-795–BACK-798 (22 Ekim 2026)
 
@@ -209,34 +253,23 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00–A-03 uygulaması ve kabul kontrolleri tamamlandı. A-03 Git teslimi aşağıdaki güncel kayıttan doğrulanır. Gerçek proje veya Finbee bağlanmadı. Sıradaki ürün aşaması A-04 ortak yazma, tarihçe ve kesinti kurtarmasıdır; A-05 agent sunucu bağlantısı ayrı kapsamdır. Kullanıcı yetkilendirmeden sonraki aşama başlatılmaz.
+A-00–A-04 uygulaması ve kabulü tamamlandı. A-04'ün yerel teslimi tasks/server-a04-write-history dalındadır; commit/push yapılmadı. Yeni aşama veya gerçek proje bağlama bu çalışmada başlatılmadı. A-05 agent kimliği/dış değişiklik olayları, A-06 kullanıcı geçmişi ve doğrulama/kabul iş akışları doc-4'teki ayrı aşamalardır.
 
-Devam sırası:
+Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-6, a00-baseline.json ve a04-verification.json okumalı; BACK-799–805'i CLI ile doğrulamalı. Git durumunu ve yerel dosyaları korumadan dal değiştirmemeli. Sonraki kapsamı mevcut kullanıcı vuralbayraklii belirler; önceki öneriler kendiliğinden onaylanmış sayılmaz.
 
-1. MANIFESTO.md, AGENTS.md, doc-4/doc-5, sabit A-00 kanıtı ve a03-verification.json dosyalarını oku; BACK-795–BACK-798 görevlerini CLI ile doğrula.
-2. tasks/server-a03-project-registration dalında güncel HEAD, uzak dal eşitliği ve temizliği doğrula; yerel kayıtları koru. origin/server kendiliğinden değiştirilmez.
-3. Yeni bir aşama yalnız mevcut kullanıcı vuralbayraklii yetkilendirdiğinde başlar. Sıradaki A-04 kapsamını ve henüz açık kurtarma/tarihçe kararlarını onunla netleştir; A-02/A-03 kesin kararlarını yeniden belirsiz sayma.
-4. Yeni görevleri CLI allocator ile oluştur, görevi üzerine al ve planını kaydet. Groma varsa yönergelerini, yoksa sınırlamayı kaydet; kabul kanıtlarıyla bu devri güncelle.
+## Sonraki aşamalarda karar gerektiren konular
 
-## Karar bekleyen inceleme önerileri
-
-Aşağıdakiler önceki plan incelemesinde önerildi; kullanıcı bunları ayrıca karara bağlamadı. Gereken aşamaya gelince netleştir, kabul edilmiş özellik gibi uygulama:
-
-- İnceleme/karar taleplerinin alanları ve Markdown/SQLite arasındaki esas kaynak dağılımı; mevcut metin assignee’lerin uygulama kullanıcılarıyla eşleştirilmesi; proje durumlarından tarihçe olaylarına eşleme.
-- Doğrulama ve kullanıcı kabulünün hangi içerik/kod sürümüne ait olduğu; kapsam değişince yeniden inceleme gerekip gerekmediği; yeniden kullanılan görünen kimliği ayıran kalıcı kayıt kimliği.
-- Dosya ve SQLite arasındaki kesinti kurtarma karar tablosu; kısmen yazılmış çok dosyalı işlem; ortak kilide katılmayan dış yazıcılara karşı verilen eşzamanlılık garantisinin sınırı.
-- Tek işin birden fazla kayıt olayını kapsadığı durumda ortak operation_id ile tekilleştirme; aynı idempotency anahtarının farklı içerikle, sürerken veya tamamlandıktan sonra gönderilmesi.
-- A-02 ile global adminin tüm içeriğe erişimi; A-03 ile normal proje kaydedenin standart üyeliği, kişisel alan ve takip politikaları kesinleşti. Açık kalan: doğrulama/kabul olaylarını kimin yazabileceği ve agent’ın kullanıcı adına kabul verebilmesi; agent anahtarının bağımsız mı kullanıcıya bağlı mı olduğu.
-- A-02, ham karar Markdown’ında önceki/sonraki durum denetimini, ek realpath sınırını ve zararlı Markdown URL korumasını tamamladı. A-03 izinli klasör bağlama politikası bu teslimde kesinleşti. Açık kalan: A-04 dış yazıcı/kurtarma sınırları.
-- A-02 tarayıcı testleri tamamlandı. Açık kalan: yönetim tarihçesi ve yedek/geri yükleme provası. Asıl planın aşama tablosu doc-4’te özgün haliyle duruyor.
+- Agent anahtarının kullanıcıyla bağı ve agent'ın kullanıcı adına doğrulama/kabul yetkisi.
+- İnceleme taleplerinin alanları, Markdown/SQLite kaynak dağılımı ve serbest metin assignee'lerin hesaplarla eşleştirilmesi.
+- Doğrulama/kabulün hangi içerik veya kod sürümüne ait olduğu ve kapsam değişiminde yeniden inceleme politikası.
+- Yedek/geri yükleme provası ve sonraki işletim kapsamı. A-04 kesinti/olay/ortak kilit sınırları doc-6 bölüm9 ile karara bağlandı; açık öneri değildir.
 
 ## Yeni sohbete verilecek başlangıç mesajı
 
 ```text
-/home/vuralbayrakli/Backlog.md projesindeki sunucu fork’una devam ediyoruz.
-Önce MANIFESTO.md, AGENTS.md, doc-4/doc-5, verification/server/a00-baseline.json ve a03-verification.json ile BACK-795–BACK-798 görevlerini CLI üzerinden oku.
-A-00–A-03 uygulaması tamamlandı; güncel dal tasks/server-a03-project-registration. Git HEAD, uzak dal ve temizliği doğrula; yerel kayıtları koru.
-A-03 hazır proje önizleme/kayıt, kişisel alanlar ve takip yönetimidir; kaynak Markdown/config değişmez ve eksik Backlog oluşturulmaz. Mevcut görev/belge/karar/Markdown/arama/pano uygulaması korunur. Kayıt standart üyelikle atomik; takip kapatma kimlik/üyeliği korur.
-Son tam test/tip/Biome/build/smoke ve21 Chromium kabul kanıtı a03-verification.json içinde; /tmp/backlog-a03-8vr8jlkz ham kanıtları uzun süreli yedek değildir. Groma yoktu.
-Sıradaki ürün aşaması A-04 ortak yazma/tarihçe/kesinti kurtarmasıdır; kullanıcı yetkilendirmeden başlatma. A-05 agent bağlantı modu ayrı kapsamdır.
+Backlog.md çoklu proje sunucusunda A-04 tamamlandı; BACK-799–805 Done.
+Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5/doc-6 ve verification/server/a04-verification.json oku; görevleri CLI ile doğrula.
+Güncel dal tasks/server-a04-write-history; taban adb84179c3e639140c270504e75841f96cb4f4d0. Kaynak/kabul/görev kayıtları yerel; commit/push/merge yapılmadı. Git durumunu doğrula ve yerel çalışmayı koru.
+Üç alt ajanlı uygulama, gerçek SIGKILL ve derlenmiş sunucuda Chromium kabulü tamamlandı. Yeni aşama veya gerçek proje/Finbee bağlama başlatılmadı.
+A-05/A-06 kapsamlarını ve açık ürün kararlarını mevcut kullanıcı vuralbayraklii ile belirle; yeni çalışmaya başlamadan güncel görevi üzerine al ve CLI planını kaydet.
 ```

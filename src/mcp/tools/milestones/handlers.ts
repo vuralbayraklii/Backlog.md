@@ -477,6 +477,12 @@ export class MilestoneHandlers {
 				}
 				updatedTaskIds = updatedTaskIds.sort((a, b) => a.localeCompare(b));
 			} catch {
+				if (this.core.filesystem.isCapturingPreparedChanges()) {
+					throw new BacklogToolError(
+						`Failed to update task milestones after renaming "${sourceMilestone.title}".`,
+						"INTERNAL_ERROR",
+					);
+				}
 				const rollbackTaskFailures = await this.rollbackTaskMilestones(previousMilestones);
 				const rollbackRenameResult = await this.core.renameMilestone(
 					sourceMilestone.id,
@@ -619,6 +625,12 @@ export class MilestoneHandlers {
 				}
 				updatedTaskIds = updatedTaskIds.sort((a, b) => a.localeCompare(b));
 			} catch {
+				if (this.core.filesystem.isCapturingPreparedChanges()) {
+					throw new BacklogToolError(
+						`Failed while updating tasks for milestone removal "${sourceMilestone.title}".`,
+						"INTERNAL_ERROR",
+					);
+				}
 				const rollbackFailures = await this.rollbackTaskMilestones(previousMilestones);
 				const detailSuffix =
 					rollbackFailures.length > 0 ? ` (failed rollback for: ${rollbackFailures.join(", ")})` : "";
@@ -631,6 +643,12 @@ export class MilestoneHandlers {
 
 		const archiveResult = await this.core.archiveMilestone(sourceMilestone.id, false);
 		if (!archiveResult.success) {
+			if (this.core.filesystem.isCapturingPreparedChanges()) {
+				throw new BacklogToolError(
+					`Failed to archive milestone "${sourceMilestone.title}" before removal.`,
+					"INTERNAL_ERROR",
+				);
+			}
 			let detailSuffix = "";
 			if (taskHandling !== "keep") {
 				const rollbackFailures = await this.rollbackTaskMilestones(previousMilestones);

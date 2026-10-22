@@ -14,6 +14,14 @@ import {
 	isConfigValueError,
 	newTaskLockError,
 } from "../file-system/operations.ts";
+import type {
+	PreparedAfterFile,
+	PreparedFileChange,
+	PreparedPathGuard,
+	PreparedRecordIdentity,
+	PreparedRecordKeyResolver,
+} from "../file-system/prepared-change.ts";
+import { PreparedChangeConflictError } from "../file-system/prepared-change.ts";
 import { type GitBranchTip, type GitIndexEntry, GitOperations } from "../git/operations.ts";
 import { parseFrontmatter } from "../markdown/frontmatter.ts";
 import { parseTask } from "../markdown/parser.ts";
@@ -732,6 +740,47 @@ export class Core {
 
 	async withCreateLock<T>(fn: () => Promise<T>): Promise<T> {
 		return await this.fs.withCreateLock(fn);
+	}
+
+	/** Prepare a central write under its existing Core locks without changing disk or publishing caches. */
+	async prepareWrite<T>(
+		guard: PreparedPathGuard,
+		resolveRecordKey: PreparedRecordKeyResolver | undefined,
+		operation: () => Promise<T>,
+	): Promise<{
+		result: T;
+		files: PreparedFileChange[];
+		apply: (afterFile?: PreparedAfterFile) => Promise<void>;
+		publish: () => Promise<void>;
+		abort: (freeze: boolean) => Promise<void>;
+	}> {
+		const publication = this.contentStore?.beginPreparedWrite();
+		try {
+			const staged = await this.fs.capturePreparedChanges(guard, resolveRecordKey, operation);
+			return {
+				result: staged.result,
+				files: staged.files,
+				apply: staged.apply,
+				publish: async () => {
+					try {
+						if (staged.files.some((file) => file.record.kind === "config")) this.fs.invalidateConfigCache();
+						await publication?.publish();
+					} finally {
+						await staged.releaseLocks();
+					}
+				},
+				abort: async (freeze) => {
+					try {
+						await publication?.abort(freeze);
+					} finally {
+						await staged.releaseLocks();
+					}
+				},
+			};
+		} catch (error) {
+			await publication?.abort(false);
+			throw error;
+		}
 	}
 
 	async previewDuplicateTaskIdRepair(options: { includeBranches?: boolean } = {}): Promise<DuplicateRepairPlan> {
@@ -2102,7 +2151,11 @@ export class Core {
 		autoCommit: boolean,
 		write?: CreatedTaskWrite,
 	): Promise<Task | null> {
-		const savedTask = isDraft ? await this.fs.loadDraft(task.id) : await this.fs.loadTask(task.id);
+		const savedTask = this.fs.isCapturingPreparedChanges()
+			? { ...task, filePath: filepath }
+			: isDraft
+				? await this.fs.loadDraft(task.id)
+				: await this.fs.loadTask(task.id);
 
 		if (!isDraft && this.contentStore && savedTask) {
 			this.contentStore.upsertTask(savedTask);
@@ -2299,6 +2352,7 @@ export class Core {
 			const savedTask = await this.finalizeCreatedTask(task, write.filePath, isDraft, autoCommitEnabled, write);
 			return { task: savedTask ?? task, filePath: write.filePath };
 		} catch (error) {
+			if (this.fs.isCapturingPreparedChanges()) throw error;
 			let rollback: CreatedTaskRollbackResult;
 			try {
 				rollback = await this.rollbackCreatedTask(write);
@@ -3182,15 +3236,23 @@ export class Core {
 
 				normalizeAssignee(promotedTask);
 				const savedPath = await this.fs.saveTask(promotedTask);
+				await this.fs.stageIdentityTransition(savedPath, draftPath);
 
 				if (draftPath) {
-					await unlink(draftPath);
+					await this.removeRecordFile(draftPath, {
+						kind: "task",
+						visibleId: reference.canonicalId,
+						lifecycle: "deleted",
+						recordPath: draftPath,
+					});
 				}
 
 				return { promotedTask, savedPath };
 			});
 
-			const savedTask = await this.fs.loadTask(promotedTask.id);
+			const savedTask = this.fs.isCapturingPreparedChanges()
+				? { ...promotedTask, filePath: savedPath }
+				: await this.fs.loadTask(promotedTask.id);
 			if (this.contentStore && savedTask) {
 				this.contentStore.upsertTask(savedTask);
 			}
@@ -3256,9 +3318,15 @@ export class Core {
 
 			normalizeAssignee(demotedDraft);
 			const savedPath = await this.fs.saveDraft(demotedDraft);
+			if (taskPath) await this.fs.stageIdentityTransition(savedPath, taskPath);
 
 			if (taskPath) {
-				await unlink(taskPath);
+				await this.removeRecordFile(taskPath, {
+					kind: "task",
+					visibleId: current.id,
+					lifecycle: "deleted",
+					recordPath: taskPath,
+				});
 			}
 
 			// The draft is written and the task file is gone, so anything failing from here reports
@@ -3270,7 +3338,7 @@ export class Core {
 				cleanedTaskIds = written.cleanedTaskIds;
 				cleanedPaths = written.filePaths;
 			} catch (error) {
-				throw markRecordAlreadyMoved(error, "demotionState", "cleanup");
+				throw this.fs.isCapturingPreparedChanges() ? error : markRecordAlreadyMoved(error, "demotionState", "cleanup");
 			}
 
 			try {
@@ -3288,7 +3356,9 @@ export class Core {
 			}
 
 			return {
-				task: (await this.fs.loadDraft(demotedDraft.id)) ?? { ...demotedDraft, filePath: savedPath },
+				task: this.fs.isCapturingPreparedChanges()
+					? { ...demotedDraft, filePath: savedPath }
+					: ((await this.fs.loadDraft(demotedDraft.id)) ?? { ...demotedDraft, filePath: savedPath }),
 				cleanedTaskIds,
 			};
 		});
@@ -3758,14 +3828,22 @@ export class Core {
 		fromPath: string,
 		toPath: string,
 		destinationTaken: () => RecordRefusedError,
+		record: PreparedRecordIdentity,
 	): Promise<void> {
-		await mkdir(dirname(toPath), { recursive: true });
 		try {
-			await moveWithoutReplacing(fromPath, toPath);
+			if (!(await this.fs.stageRecordMove(fromPath, toPath, record))) {
+				await mkdir(dirname(toPath), { recursive: true });
+				await moveWithoutReplacing(fromPath, toPath);
+			}
 		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+			if ((error as NodeJS.ErrnoException).code !== "EEXIST" && !(error instanceof PreparedChangeConflictError))
+				throw error;
 			throw destinationTaken();
 		}
+	}
+
+	private async removeRecordFile(path: string, record: PreparedRecordIdentity): Promise<void> {
+		if (!(await this.fs.stageRecordRemoval(path, record))) await unlink(path);
 	}
 
 	/**
@@ -3795,6 +3873,7 @@ export class Core {
 					fromPath,
 					toPath,
 					() => new TaskFileExistsError(current.id, "archive", basename(toPath)),
+					{ kind: "task", visibleId: current.id, lifecycle: "archived", recordPath: toPath },
 				);
 				this.contentStore?.transitionTask(current.id, { ...current, filePath: toPath, source: "archived" });
 
@@ -3858,7 +3937,12 @@ export class Core {
 
 				const written = await this.writeVacatedIdCleanup(cleanup);
 				// unlink removes a symlinked task file as a link; the file it points to is left alone.
-				await unlink(current.filePath);
+				await this.removeRecordFile(current.filePath, {
+					kind: "task",
+					visibleId: current.id,
+					lifecycle: "deleted",
+					recordPath: current.filePath,
+				});
 				// Record the mutation before the content store, commit, or any lock release can fail.
 				deletionApplied = true;
 				this.contentStore?.transitionTask(current.id);
@@ -3876,6 +3960,7 @@ export class Core {
 				return { success: true, cleanedTaskIds: written.cleanedTaskIds };
 			});
 		} catch (error) {
+			if (this.fs.isCapturingPreparedChanges()) throw error;
 			if (!deletionApplied) throw error;
 			if (failureStep === "committing the change") {
 				throw new ChangeNotCommittedError(`Task ${task.id} was deleted`, error);
@@ -3908,6 +3993,7 @@ export class Core {
 					fromPath,
 					toPath,
 					() => new TaskFileExistsError(current.id, "restore", basename(toPath)),
+					{ kind: "task", visibleId: current.id, lifecycle: "active", recordPath: toPath },
 				);
 				this.contentStore?.transitionTask(current.id, { ...current, filePath: toPath, source: "local" });
 
@@ -4113,7 +4199,13 @@ export class Core {
 
 				normalizeAssignee(promotedTask);
 				const savedPath = await this.fs.saveTask(promotedTask);
-				await unlink(sourcePath);
+				await this.fs.stageIdentityTransition(savedPath, sourcePath);
+				await this.removeRecordFile(sourcePath, {
+					kind: "task",
+					visibleId: canonicalId,
+					lifecycle: "deleted",
+					recordPath: sourcePath,
+				});
 
 				const savedTask = await this.fs.loadTask(promotedTask.id);
 				if (this.contentStore && savedTask) {
@@ -4173,6 +4265,7 @@ export class Core {
 				return demotion;
 			});
 		} catch (error) {
+			if (this.fs.isCapturingPreparedChanges()) throw error;
 			// The lock wrapper can fail while releasing after the move completed. Keep
 			// the mutation outcome visible to the Web API and other clients.
 			if (demotion.success && demotion.moved) {
@@ -4589,6 +4682,7 @@ export class Core {
 					direction,
 					this.fs.contentRecordProjectPath(kind, movedRecord),
 				),
+			{ kind, visibleId: record.id, lifecycle: direction === "archive" ? "archived" : "active", recordPath: toPath },
 		);
 		// Lists and search read the content store, which holds the records of each folder. Without
 		// this, a long-running server would show the old state until its file watcher noticed.

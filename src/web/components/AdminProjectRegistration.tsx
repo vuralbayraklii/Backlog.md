@@ -4,16 +4,19 @@ import type { ServerProject } from "../../server/project-store";
 import type { FolderArea } from "../../server/registration-types";
 import { useAuth } from "../contexts/AuthContext";
 import { useUnsavedChanges } from "../contexts/UnsavedChangesContext";
+import type { RecordVersionLike } from "../lib/api";
 import { requestJson } from "../lib/request";
 import { buttonClass, inputClass } from "./AccountForms";
+import { isMutationConflict, MutationConflictNotice } from "./MutationConflictNotice";
 
 export default function AdminProjectRegistration({ users }: { users: ServerUser[] }) {
 	const { ready, session } = useAuth();
-	const [areas, setAreas] = useState<FolderArea[] | null>(null);
-	const [projects, setProjects] = useState<ServerProject[] | null>(null);
+	const [areas, setAreas] = useState<(FolderArea & RecordVersionLike)[] | null>(null);
+	const [projects, setProjects] = useState<(ServerProject & RecordVersionLike)[] | null>(null);
 	const [userId, setUserId] = useState("");
 	const [path, setPath] = useState("");
 	const [error, setError] = useState<string | null>(null);
+	const [conflict, setConflict] = useState<unknown>(null);
 	const [busy, setBusy] = useState(false);
 	const request = useRef<AbortController | null>(null);
 	const identity = useRef(session?.csrfToken);
@@ -30,8 +33,8 @@ export default function AdminProjectRegistration({ users }: { users: ServerUser[
 		const controller = new AbortController();
 		request.current = controller;
 		Promise.all([
-			requestJson<FolderArea[]>("/api/admin/folder-areas", { signal: controller.signal }),
-			requestJson<ServerProject[]>("/api/admin/projects", { signal: controller.signal }),
+			requestJson<(FolderArea & RecordVersionLike)[]>("/api/admin/folder-areas", { signal: controller.signal }),
+			requestJson<(ServerProject & RecordVersionLike)[]>("/api/admin/projects", { signal: controller.signal }),
 		])
 			.then(([nextAreas, nextProjects]) => {
 				if (controller.signal.aborted) return;
@@ -64,11 +67,15 @@ export default function AdminProjectRegistration({ users }: { users: ServerUser[
 			request.current === controller && !controller.signal.aborted && available.current && identity.current === owner;
 		setBusy(true);
 		setError(null);
+		setConflict(null);
 		try {
 			const result = await requestJson<T>(url, { ...options, signal: controller.signal });
 			if (ownsRequest()) saved(result);
 		} catch (reason) {
-			if (ownsRequest()) setError(reason instanceof Error ? reason.message : String(reason));
+			if (ownsRequest()) {
+				setError(reason instanceof Error ? reason.message : String(reason));
+				setConflict(isMutationConflict(reason) ? reason : null);
+			}
 		} finally {
 			if (request.current === controller) {
 				request.current = null;
@@ -81,7 +88,15 @@ export default function AdminProjectRegistration({ users }: { users: ServerUser[
 
 	return (
 		<div className="mb-8 space-y-8">
-			{error && (
+			<MutationConflictNotice
+				error={conflict}
+				draft={false}
+				onOpenCurrent={() => {
+					if (window.confirm("Discard current form values and reload registration settings?")) window.location.reload();
+				}}
+				onDismiss={() => setConflict(null)}
+			/>
+			{error && !conflict && (
 				<p role="alert" className="text-red-700 dark:text-red-300">
 					{error}
 				</p>
@@ -98,7 +113,7 @@ export default function AdminProjectRegistration({ users }: { users: ServerUser[
 					onSubmit={(event) => {
 						event.preventDefault();
 						if (!userId || !path.trim()) return;
-						void mutate<FolderArea>(
+						void mutate<FolderArea & RecordVersionLike>(
 							"/api/admin/folder-areas",
 							{ method: "POST", body: JSON.stringify({ userId, path }) },
 							(area) => {
@@ -175,7 +190,7 @@ export default function AdminProjectRegistration({ users }: { users: ServerUser[
 											)
 												void mutate(
 													`/api/admin/folder-areas/${encodeURIComponent(area.id)}`,
-													{ method: "DELETE" },
+													{ method: "DELETE", headers: area.revision ? { "If-Match": area.revision } : undefined },
 													() => setAreas((current) => current?.filter((item) => item.id !== area.id) ?? []),
 												);
 										}}
@@ -226,9 +241,13 @@ export default function AdminProjectRegistration({ users }: { users: ServerUser[
 												!window.confirm(`Stop tracking ${project.name}? Project files and memberships will be kept.`)
 											)
 												return;
-											void mutate<ServerProject>(
+											void mutate<ServerProject & RecordVersionLike>(
 												`/api/admin/projects/${encodeURIComponent(project.id)}/tracking`,
-												{ method: "PUT", body: JSON.stringify({ tracking: !project.tracking }) },
+												{
+													method: "PUT",
+													headers: project.revision ? { "If-Match": project.revision } : undefined,
+													body: JSON.stringify({ tracking: !project.tracking }),
+												},
 												(value) =>
 													setProjects(
 														(current) => current?.map((item) => (item.id === project.id ? value : item)) ?? [],

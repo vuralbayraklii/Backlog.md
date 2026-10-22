@@ -13,21 +13,30 @@ import type {
 	TaskStatus,
 } from "../../types/index.ts";
 import { projectScope } from "./project-scope";
-import { sessionFetch } from "./request";
-
-const API_BASE = projectScope.apiBase;
+import { sessionFetch, UncertainMutationError } from "./request";
 
 export interface ReorderTaskPayload {
 	taskId: string;
 	targetStatus: string;
 	orderedTaskIds: string[];
 	targetMilestone?: string | null;
+	expectedRevisions?: Record<string, string>;
 }
 
 export interface MoveTasksPayload {
 	taskIds: string[];
 	targetStatus: string;
 	targetMilestone?: string | null;
+	expectedRevisions?: Record<string, string>;
+}
+
+export interface RecordVersionLike {
+	recordKey?: string;
+	revision?: string;
+}
+
+function versionHeaders(record?: RecordVersionLike | null): Record<string, string> | undefined {
+	return projectScope.id && record?.revision ? { "If-Match": record.revision } : undefined;
 }
 
 export interface MoveTasksResult {
@@ -35,6 +44,7 @@ export interface MoveTasksResult {
 	tasks: Task[];
 	changedTasks: Task[];
 	failures: Array<{ taskId: string; reason: string }>;
+	tasksRevision?: string | null;
 }
 
 /**
@@ -109,7 +119,8 @@ export class ApiError extends Error {
 			typeof errorMessage === "string" && errorMessage.trim().length > 0
 				? errorMessage
 				: `HTTP ${response.status}: ${response.statusText}`;
-		return new ApiError(message, response.status, response.statusText, data);
+		const code = typeof data === "object" && data !== null && "code" in data ? (data as { code?: unknown }).code : null;
+		return new ApiError(message, response.status, typeof code === "string" ? code : response.statusText, data);
 	}
 }
 
@@ -126,12 +137,17 @@ async function toApiError(response: Response, fallbackMessage: string): Promise<
 	const serverMessage = typeof data === "object" && data !== null ? (data as { error?: unknown }).error : undefined;
 	const message =
 		typeof serverMessage === "string" && serverMessage.trim().length > 0 ? serverMessage : fallbackMessage;
-	return new ApiError(message, response.status, response.statusText, data);
+	const code = typeof data === "object" && data !== null && "code" in data ? (data as { code?: unknown }).code : null;
+	return new ApiError(message, response.status, typeof code === "string" ? code : response.statusText, data);
 }
 
-/** The document and decision endpoints answer 409 only when an ID matches more than one file. */
+/** Legacy local 409 responses had no code; central responses distinguish their cause. */
 export function isAmbiguousIdConflict(error: unknown): error is ApiError {
-	return error instanceof ApiError && error.status === 409;
+	return (
+		error instanceof ApiError &&
+		error.status === 409 &&
+		(error.code === "AMBIGUOUS_ID" || typeof error.data !== "object" || error.data === null || !("code" in error.data))
+	);
 }
 
 // Request configuration interface
@@ -140,6 +156,18 @@ interface RequestConfig {
 	timeout?: number;
 	Headers?: Record<string, string>;
 }
+
+type SearchRequestOptions = {
+	query?: string;
+	types?: SearchResultType[];
+	status?: string | string[];
+	excludeStatus?: string | string[];
+	priority?: SearchPriorityFilter | SearchPriorityFilter[];
+	assignee?: string | string[];
+	labels?: string[];
+	modifiedFiles?: string[];
+	limit?: number;
+};
 
 // Default configuration
 const DEFAULT_CONFIG: RequestConfig = {
@@ -164,20 +192,16 @@ export class ApiClient {
 
 		for (let attempt = 0; attempt <= retries; attempt++) {
 			try {
-				// Add timeout to the request
 				const controller = new AbortController();
 				const timeoutId = setTimeout(() => controller.abort(), timeout);
-
-				const response = await sessionFetch(url, {
-					...options,
-					signal: controller.signal,
-					headers: {
-						"Content-Type": "application/json",
-						...options.headers,
-					},
-				});
-
-				clearTimeout(timeoutId);
+				const headers = new Headers(options.headers);
+				if (!headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+				let response: Response;
+				try {
+					response = await sessionFetch(url, { ...options, signal: controller.signal, headers });
+				} finally {
+					clearTimeout(timeoutId);
+				}
 
 				if (!response.ok) {
 					let errorData: unknown = null;
@@ -192,6 +216,7 @@ export class ApiClient {
 				return response;
 			} catch (error) {
 				lastError = error as Error;
+				if (error instanceof UncertainMutationError) throw error;
 
 				// Don't retry on client errors (4xx) or specific cases
 				if (error instanceof ApiError && error.status && error.status >= 400 && error.status < 500) {
@@ -254,23 +279,17 @@ export class ApiClient {
 		// Default to true for cross-branch loading to match TUI behavior
 		if (options?.crossBranch !== false) params.append("crossBranch", "true");
 
-		const url = `${API_BASE}/tasks${params.toString() ? `?${params.toString()}` : ""}`;
+		const url = `${projectScope.apiBase}/tasks${params.toString() ? `?${params.toString()}` : ""}`;
 		return this.fetchJson<Task[]>(url);
 	}
 
-	async search(
-		options: {
-			query?: string;
-			types?: SearchResultType[];
-			status?: string | string[];
-			excludeStatus?: string | string[];
-			priority?: SearchPriorityFilter | SearchPriorityFilter[];
-			assignee?: string | string[];
-			labels?: string[];
-			modifiedFiles?: string[];
-			limit?: number;
-		} = {},
-	): Promise<SearchResult[]> {
+	async search(options: SearchRequestOptions = {}): Promise<SearchResult[]> {
+		return (await this.searchSnapshot(options)).results;
+	}
+
+	async searchSnapshot(
+		options: SearchRequestOptions = {},
+	): Promise<{ results: SearchResult[]; tasksRevision: string | null }> {
 		const params = new URLSearchParams();
 		if (options.query) {
 			params.set("query", options.query);
@@ -326,66 +345,87 @@ export class ApiClient {
 			params.set("limit", String(options.limit));
 		}
 
-		const url = `${API_BASE}/search${params.toString() ? `?${params.toString()}` : ""}`;
-		return this.fetchJson<SearchResult[]>(url);
+		const url = `${projectScope.apiBase}/search${params.toString() ? `?${params.toString()}` : ""}`;
+		const response = await this.fetchWithRetry(url);
+		return {
+			results: (await response.json()) as SearchResult[],
+			tasksRevision: response.headers.get("X-Backlog-Tasks-Revision"),
+		};
 	}
 
 	/** Reads one task through the detail path, so the response already carries its dependency graph. */
 	async fetchTask(id: string): Promise<TaskDetail> {
-		return this.fetchJson<TaskDetail>(`${API_BASE}/task/${encodeURIComponent(id)}`);
+		return this.fetchJson<TaskDetail>(`${projectScope.apiBase}/task/${encodeURIComponent(id)}`);
 	}
 
 	async createTask(task: Omit<Task, "id" | "createdDate">): Promise<Task> {
-		return this.fetchJson<Task>(`${API_BASE}/tasks`, {
+		return this.fetchJson<Task>(`${projectScope.apiBase}/tasks`, {
 			method: "POST",
 			body: JSON.stringify(task),
 		});
 	}
 
-	async updateTask(id: string, updates: TaskUpdateRequest): Promise<Task> {
-		return this.fetchJson<Task>(`${API_BASE}/tasks/${id}`, {
+	async updateTask(id: string, updates: TaskUpdateRequest, record?: RecordVersionLike | null): Promise<Task> {
+		return this.fetchJson<Task>(`${projectScope.apiBase}/tasks/${id}`, {
 			method: "PUT",
+			headers: versionHeaders(record),
 			body: JSON.stringify(updates),
 		});
 	}
 
-	async reorderTask(payload: ReorderTaskPayload): Promise<{ success: boolean; task: Task; changedTasks: Task[] }> {
-		return this.fetchJson<{ success: boolean; task: Task; changedTasks: Task[] }>(`${API_BASE}/tasks/reorder`, {
+	async reorderTask(
+		payload: ReorderTaskPayload,
+		tasksRevision?: string | null,
+	): Promise<{ success: boolean; task: Task; changedTasks: Task[]; tasksRevision?: string | null }> {
+		const response = await this.fetchWithRetry(`${projectScope.apiBase}/tasks/reorder`, {
 			method: "POST",
+			headers: projectScope.id && tasksRevision ? { "If-Match": tasksRevision } : undefined,
 			body: JSON.stringify(payload),
 		});
+		return {
+			...((await response.json()) as { success: boolean; task: Task; changedTasks: Task[] }),
+			tasksRevision: response.headers.get("X-Backlog-Tasks-Revision"),
+		};
 	}
 
 	async moveTasks(payload: MoveTasksPayload): Promise<MoveTasksResult> {
-		return this.fetchJson<MoveTasksResult>(`${API_BASE}/tasks/move`, {
+		const response = await this.fetchWithRetry(`${projectScope.apiBase}/tasks/move`, {
 			method: "POST",
 			body: JSON.stringify(payload),
 		});
+		return {
+			...((await response.json()) as MoveTasksResult),
+			tasksRevision: response.headers.get("X-Backlog-Tasks-Revision"),
+		};
 	}
 
 	// Not retried, for the same reason demote is not: the second attempt would target a task the
 	// first attempt already archived, and its "not found" would replace the real outcome.
-	async archiveTask(id: string): Promise<void> {
-		await this.fetchWithoutRetry(`${API_BASE}/tasks/${encodeURIComponent(id)}/archive`, {
+	async archiveTask(id: string, record?: RecordVersionLike | null): Promise<void> {
+		await this.fetchWithoutRetry(`${projectScope.apiBase}/tasks/${encodeURIComponent(id)}/archive`, {
 			method: "POST",
+			headers: versionHeaders(record),
 		});
 	}
 
-	async demoteTask(id: string): Promise<TaskVacancyResponse> {
-		const response = await this.fetchWithoutRetry(`${API_BASE}/tasks/${encodeURIComponent(id)}/demote`, {
+	async demoteTask(id: string, record?: RecordVersionLike | null): Promise<TaskVacancyResponse> {
+		const response = await this.fetchWithoutRetry(`${projectScope.apiBase}/tasks/${encodeURIComponent(id)}/demote`, {
 			method: "POST",
+			headers: versionHeaders(record),
 		});
 		return response.json();
 	}
 
 	async getCleanupPreview(age: number): Promise<{
 		count: number;
+		fingerprint?: string;
 		tasks: Array<{ id: string; title: string; updatedDate?: string; createdDate: string }>;
 	}> {
 		return this.fetchJson<{
 			count: number;
+			fingerprint?: string;
 			tasks: Array<{ id: string; title: string; updatedDate?: string; createdDate: string }>;
-		}>(`${API_BASE}/tasks/cleanup?age=${age}`);
+		}>(`${projectScope.apiBase}/tasks/cleanup?age=${age}`);
 	}
 
 	/**
@@ -394,6 +434,7 @@ export class ApiClient {
 	 */
 	async executeCleanup(
 		taskIds: string[],
+		fingerprint?: string,
 	): Promise<{ success: boolean; movedCount: number; totalCount: number; message: string; failedTasks?: string[] }> {
 		return this.fetchJson<{
 			success: boolean;
@@ -401,9 +442,9 @@ export class ApiClient {
 			totalCount: number;
 			message: string;
 			failedTasks?: string[];
-		}>(`${API_BASE}/tasks/cleanup/execute`, {
+		}>(`${projectScope.apiBase}/tasks/cleanup/execute`, {
 			method: "POST",
-			body: JSON.stringify({ taskIds }),
+			body: JSON.stringify({ taskIds, ...(projectScope.id && fingerprint ? { fingerprint } : {}) }),
 		});
 	}
 
@@ -412,18 +453,18 @@ export class ApiClient {
 	}
 
 	async fetchDuplicateTaskRepairPlan(): Promise<DuplicateRepairPlan> {
-		return await this.fetchJson<DuplicateRepairPlan>(`${API_BASE}/tasks/duplicates`);
+		return await this.fetchJson<DuplicateRepairPlan>(`${projectScope.apiBase}/tasks/duplicates`);
 	}
 
 	async repairDuplicateTaskIds(fingerprint: string): Promise<DuplicateRepairResult> {
-		return await this.fetchJson<DuplicateRepairResult>(`${API_BASE}/tasks/duplicates`, {
+		return await this.fetchJson<DuplicateRepairResult>(`${projectScope.apiBase}/tasks/duplicates`, {
 			method: "POST",
 			body: JSON.stringify({ fingerprint }),
 		});
 	}
 
 	async fetchStatuses(): Promise<string[]> {
-		const response = await sessionFetch(`${API_BASE}/statuses`);
+		const response = await sessionFetch(`${projectScope.apiBase}/statuses`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch statuses");
 		}
@@ -431,27 +472,39 @@ export class ApiClient {
 	}
 
 	async fetchConfig(): Promise<BacklogConfig> {
-		const response = await sessionFetch(`${API_BASE}/config`);
+		return (await this.fetchConfigSnapshot()).config;
+	}
+
+	async fetchConfigSnapshot(): Promise<{ config: BacklogConfig; revision: string | null }> {
+		const response = await sessionFetch(`${projectScope.apiBase}/config`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch config");
 		}
-		return response.json();
+		return { config: (await response.json()) as BacklogConfig, revision: response.headers.get("ETag") };
 	}
 
-	async updateConfig(config: Partial<BacklogConfig>): Promise<BacklogConfig> {
-		const response = await sessionFetch(`${API_BASE}/config`, {
+	async updateConfig(config: Partial<BacklogConfig>, revision?: string | null): Promise<BacklogConfig> {
+		return (await this.updateConfigSnapshot(config, revision)).config;
+	}
+
+	async updateConfigSnapshot(
+		config: Partial<BacklogConfig>,
+		revision?: string | null,
+	): Promise<{ config: BacklogConfig; revision: string | null }> {
+		const response = await sessionFetch(`${projectScope.apiBase}/config`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
+				...(projectScope.id && revision ? { "If-Match": revision } : {}),
 			},
 			body: JSON.stringify(config),
 		});
 		if (!response.ok) throw await toApiError(response, "Failed to update config");
-		return response.json();
+		return { config: (await response.json()) as BacklogConfig, revision: response.headers.get("ETag") };
 	}
 
 	async fetchDocs(): Promise<Document[]> {
-		const response = await sessionFetch(`${API_BASE}/docs`);
+		const response = await sessionFetch(`${projectScope.apiBase}/docs`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch documentation");
 		}
@@ -459,7 +512,7 @@ export class ApiClient {
 	}
 
 	async fetchDoc(filename: string): Promise<Document> {
-		const response = await sessionFetch(`${API_BASE}/docs/${encodeURIComponent(filename)}`);
+		const response = await sessionFetch(`${projectScope.apiBase}/docs/${encodeURIComponent(filename)}`);
 		if (!response.ok) {
 			throw await toApiError(response, "Failed to fetch document");
 		}
@@ -467,14 +520,20 @@ export class ApiClient {
 	}
 
 	async fetchDocument(id: string): Promise<Document> {
-		const response = await sessionFetch(`${API_BASE}/doc/${encodeURIComponent(id)}`);
+		const response = await sessionFetch(`${projectScope.apiBase}/doc/${encodeURIComponent(id)}`);
 		if (!response.ok) {
 			throw await toApiError(response, "Failed to fetch document");
 		}
 		return response.json();
 	}
 
-	async updateDoc(filename: string, content: string, title?: string, path?: string | null): Promise<Document> {
+	async updateDoc(
+		filename: string,
+		content: string,
+		title?: string,
+		path?: string | null,
+		record?: RecordVersionLike | null,
+	): Promise<Document> {
 		const payload: Record<string, unknown> = { content };
 		if (typeof title === "string") {
 			payload.title = title;
@@ -483,10 +542,11 @@ export class ApiClient {
 			payload.path = path;
 		}
 
-		const response = await sessionFetch(`${API_BASE}/docs/${encodeURIComponent(filename)}`, {
+		const response = await sessionFetch(`${projectScope.apiBase}/docs/${encodeURIComponent(filename)}`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
+				...versionHeaders(record),
 			},
 			body: JSON.stringify(payload),
 		});
@@ -497,7 +557,7 @@ export class ApiClient {
 	}
 
 	async createDoc(filename: string, content: string, path?: string): Promise<Document & { success?: boolean }> {
-		const response = await sessionFetch(`${API_BASE}/docs`, {
+		const response = await sessionFetch(`${projectScope.apiBase}/docs`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -505,23 +565,29 @@ export class ApiClient {
 			body: JSON.stringify({ filename, content, path }),
 		});
 		if (!response.ok) {
-			throw new Error("Failed to create document");
+			throw await toApiError(response, "Failed to create document");
 		}
 		return response.json();
 	}
 
 	// Archive is not retried, for the reason task archive is not: the second attempt would target a
 	// record the first attempt already archived, and its refusal would replace the real outcome.
-	async archiveDoc(id: string): Promise<void> {
-		await this.fetchWithoutRetry(`${API_BASE}/docs/${encodeURIComponent(id)}/archive`, { method: "POST" });
+	async archiveDoc(id: string, record?: RecordVersionLike | null): Promise<void> {
+		await this.fetchWithoutRetry(`${projectScope.apiBase}/docs/${encodeURIComponent(id)}/archive`, {
+			method: "POST",
+			headers: versionHeaders(record),
+		});
 	}
 
-	async archiveDecision(id: string): Promise<void> {
-		await this.fetchWithoutRetry(`${API_BASE}/decisions/${encodeURIComponent(id)}/archive`, { method: "POST" });
+	async archiveDecision(id: string, record?: RecordVersionLike | null): Promise<void> {
+		await this.fetchWithoutRetry(`${projectScope.apiBase}/decisions/${encodeURIComponent(id)}/archive`, {
+			method: "POST",
+			headers: versionHeaders(record),
+		});
 	}
 
 	async fetchDecisions(): Promise<Decision[]> {
-		const response = await sessionFetch(`${API_BASE}/decisions`);
+		const response = await sessionFetch(`${projectScope.apiBase}/decisions`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch decisions");
 		}
@@ -529,7 +595,7 @@ export class ApiClient {
 	}
 
 	async fetchDecision(id: string): Promise<Decision> {
-		const response = await sessionFetch(`${API_BASE}/decisions/${encodeURIComponent(id)}`);
+		const response = await sessionFetch(`${projectScope.apiBase}/decisions/${encodeURIComponent(id)}`);
 		if (!response.ok) {
 			throw await toApiError(response, "Failed to fetch decision");
 		}
@@ -537,18 +603,19 @@ export class ApiClient {
 	}
 
 	async fetchDecisionData(id: string): Promise<Decision> {
-		const response = await sessionFetch(`${API_BASE}/decision/${encodeURIComponent(id)}`);
+		const response = await sessionFetch(`${projectScope.apiBase}/decision/${encodeURIComponent(id)}`);
 		if (!response.ok) {
 			throw await toApiError(response, "Failed to fetch decision");
 		}
 		return response.json();
 	}
 
-	async updateDecision(id: string, content: string): Promise<void> {
-		const response = await sessionFetch(`${API_BASE}/decisions/${encodeURIComponent(id)}`, {
+	async updateDecision(id: string, content: string, record?: RecordVersionLike | null): Promise<void> {
+		const response = await sessionFetch(`${projectScope.apiBase}/decisions/${encodeURIComponent(id)}`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "text/plain",
+				...versionHeaders(record),
 			},
 			body: content,
 		});
@@ -558,7 +625,7 @@ export class ApiClient {
 	}
 
 	async createDecision(title: string): Promise<Decision> {
-		const response = await sessionFetch(`${API_BASE}/decisions`, {
+		const response = await sessionFetch(`${projectScope.apiBase}/decisions`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
@@ -566,13 +633,13 @@ export class ApiClient {
 			body: JSON.stringify({ title }),
 		});
 		if (!response.ok) {
-			throw new Error("Failed to create decision");
+			throw await toApiError(response, "Failed to create decision");
 		}
 		return response.json();
 	}
 
 	async fetchMilestones(): Promise<Milestone[]> {
-		const response = await sessionFetch(`${API_BASE}/milestones`);
+		const response = await sessionFetch(`${projectScope.apiBase}/milestones`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch milestones");
 		}
@@ -580,7 +647,7 @@ export class ApiClient {
 	}
 
 	async fetchArchivedMilestones(): Promise<Milestone[]> {
-		const response = await sessionFetch(`${API_BASE}/milestones/archived`);
+		const response = await sessionFetch(`${projectScope.apiBase}/milestones/archived`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch archived milestones");
 		}
@@ -588,7 +655,7 @@ export class ApiClient {
 	}
 
 	async fetchMilestone(id: string): Promise<Milestone> {
-		const response = await sessionFetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`);
+		const response = await sessionFetch(`${projectScope.apiBase}/milestones/${encodeURIComponent(id)}`);
 		if (!response.ok) {
 			throw new Error("Failed to fetch milestone");
 		}
@@ -596,17 +663,14 @@ export class ApiClient {
 	}
 
 	async createMilestone(title: string, description?: string, dueDate?: string): Promise<Milestone> {
-		const response = await sessionFetch(`${API_BASE}/milestones`, {
+		const response = await sessionFetch(`${projectScope.apiBase}/milestones`, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",
 			},
 			body: JSON.stringify({ title, description, dueDate }),
 		});
-		if (!response.ok) {
-			const data = await response.json().catch(() => ({}));
-			throw new Error(data.error || "Failed to create milestone");
-		}
+		if (!response.ok) throw await toApiError(response, "Failed to create milestone");
 		return response.json();
 	}
 
@@ -614,47 +678,46 @@ export class ApiClient {
 		id: string,
 		title: string,
 		dueDate?: string | null,
+		record?: RecordVersionLike | null,
 	): Promise<{ success: boolean; milestone?: Milestone | null; message?: string }> {
-		const response = await sessionFetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`, {
+		const response = await sessionFetch(`${projectScope.apiBase}/milestones/${encodeURIComponent(id)}`, {
 			method: "PUT",
 			headers: {
 				"Content-Type": "application/json",
+				...versionHeaders(record),
 			},
 			body: JSON.stringify({ title, dueDate }),
 		});
-		if (!response.ok) {
-			const data = await response.json().catch(() => ({}));
-			throw new Error(data.error || "Failed to update milestone");
-		}
+		if (!response.ok) throw await toApiError(response, "Failed to update milestone");
 		return response.json();
 	}
 
 	async removeMilestone(
 		id: string,
 		options: { taskHandling?: "clear" | "keep" | "reassign"; reassignTo?: string } = {},
+		record?: RecordVersionLike | null,
 	): Promise<{ success: boolean; message?: string }> {
-		const response = await sessionFetch(`${API_BASE}/milestones/${encodeURIComponent(id)}`, {
+		const response = await sessionFetch(`${projectScope.apiBase}/milestones/${encodeURIComponent(id)}`, {
 			method: "DELETE",
 			headers: {
 				"Content-Type": "application/json",
+				...versionHeaders(record),
 			},
 			body: JSON.stringify(options),
 		});
-		if (!response.ok) {
-			const data = await response.json().catch(() => ({}));
-			throw new Error(data.error || "Failed to remove milestone");
-		}
+		if (!response.ok) throw await toApiError(response, "Failed to remove milestone");
 		return response.json();
 	}
 
-	async archiveMilestone(id: string): Promise<{ success: boolean; milestone?: Milestone | null }> {
-		const response = await sessionFetch(`${API_BASE}/milestones/${encodeURIComponent(id)}/archive`, {
+	async archiveMilestone(
+		id: string,
+		record?: RecordVersionLike | null,
+	): Promise<{ success: boolean; milestone?: Milestone | null }> {
+		const response = await sessionFetch(`${projectScope.apiBase}/milestones/${encodeURIComponent(id)}/archive`, {
 			method: "POST",
+			headers: versionHeaders(record),
 		});
-		if (!response.ok) {
-			const data = await response.json().catch(() => ({}));
-			throw new Error(data.error || "Failed to archive milestone");
-		}
+		if (!response.ok) throw await toApiError(response, "Failed to archive milestone");
 		return response.json();
 	}
 
@@ -663,11 +726,11 @@ export class ApiClient {
 	> {
 		return this.fetchJson<
 			TaskStatistics & { statusCounts: Record<string, number>; priorityCounts: Record<string, number> }
-		>(`${API_BASE}/statistics`);
+		>(`${projectScope.apiBase}/statistics`);
 	}
 
 	async checkStatus(): Promise<InitializationStatus> {
-		return this.fetchJson<InitializationStatus>(`${API_BASE}/status`);
+		return this.fetchJson<InitializationStatus>(`${projectScope.apiBase}/status`);
 	}
 
 	async initializeProject(options: {
@@ -694,7 +757,7 @@ export class ApiClient {
 		};
 	}): Promise<{ success: boolean; projectName: string; mcpResults?: Record<string, string> }> {
 		return this.fetchJson<{ success: boolean; projectName: string; mcpResults?: Record<string, string> }>(
-			`${API_BASE}/init`,
+			`${projectScope.apiBase}/init`,
 			{
 				method: "POST",
 				body: JSON.stringify(options),

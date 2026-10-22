@@ -20,6 +20,21 @@ function setup() {
 	globalThis.navigator = dom.window.navigator as Navigator;
 	(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 	Object.assign(projectScope, readProjectScope(window.location.pathname));
+	setRequestSession({
+		user: {
+			id: "archive-user",
+			username: "archive-user",
+			displayName: "Archive User",
+			role: "admin",
+			active: true,
+			mustChangePassword: false,
+		},
+		csrfToken: "csrf-archive",
+		createdAt: "2026-01-01T00:00:00Z",
+		expiresAt: "2026-01-01T12:00:00Z",
+		lastActivityAt: "2026-01-01T00:00:00Z",
+		idleExpiresAt: "2026-01-01T02:00:00Z",
+	});
 	root = createRoot(document.getElementById("root")!);
 }
 async function click(text: string) {
@@ -35,6 +50,21 @@ afterEach(async () => {
 	dom = null;
 	globalThis.fetch = originalFetch;
 	Object.assign(projectScope, originalScope);
+	setRequestSession({
+		user: {
+			id: "archive-cleanup",
+			username: "archive-cleanup",
+			displayName: "Cleanup",
+			role: "admin",
+			active: true,
+			mustChangePassword: false,
+		},
+		csrfToken: "csrf-cleanup",
+		createdAt: "2026-01-01T00:00:00Z",
+		expiresAt: "2026-01-01T12:00:00Z",
+		lastActivityAt: "2026-01-01T00:00:00Z",
+		idleExpiresAt: "2026-01-01T02:00:00Z",
+	});
 	setRequestSession(null);
 });
 
@@ -52,7 +82,9 @@ describe("project archive", () => {
 				const method = options?.method ?? "GET";
 				requests.push({ path, method });
 				if (path.endsWith("/archived"))
-					return Response.json([{ id, title: "Archived record", rawContent: "Archived text" }]);
+					return Response.json([
+						{ id, title: "Archived record", rawContent: "Archived text", recordKey: `key-${id}`, revision: "rev-1" },
+					]);
 				return Response.json({ success: true });
 			}) as typeof fetch;
 			let refreshes = 0;
@@ -104,7 +136,7 @@ describe("project archive", () => {
 				deletes++;
 				return Response.json({ error: "Existing subtasks block deletion" }, { status: 409 });
 			}
-			return Response.json([{ id: "TASK-1", title: "Parent task" }]);
+			return Response.json([{ id: "TASK-1", title: "Parent task", recordKey: "key-1", revision: "rev-1" }]);
 		}) as typeof fetch;
 		window.confirm = () => true;
 		await act(async () => {
@@ -116,16 +148,24 @@ describe("project archive", () => {
 		expect(document.body.textContent).toContain("Parent task");
 	});
 
-	it("reflects an applied deletion if only the following commit fails", async () => {
+	it("uses the durable result when an applied deletion returns 500", async () => {
 		setup();
 		let refreshes = 0;
 		let deletes = 0;
-		globalThis.fetch = (async (_input, options) => {
+		let lookups = 0;
+		globalThis.fetch = (async (input, options) => {
+			if (String(input).startsWith("/api/operations/")) {
+				lookups++;
+				return Response.json({
+					state: "completed",
+					result: { status: 200, body: { success: true }, headers: { "content-type": "application/json" } },
+				});
+			}
 			if (options?.method === "DELETE") {
 				deletes++;
 				return Response.json({ error: "Deleted, commit failed", deleteState: "applied" }, { status: 500 });
 			}
-			return Response.json([{ id: "TASK-1", title: "Gone task" }]);
+			return Response.json([{ id: "TASK-1", title: "Gone task", recordKey: "key-1", revision: "rev-1" }]);
 		}) as typeof fetch;
 		window.confirm = () => true;
 		await act(async () => {
@@ -139,8 +179,9 @@ describe("project archive", () => {
 		});
 		await click("Delete permanently");
 		expect(deletes).toBe(1);
+		expect(lookups).toBe(1);
 		expect(refreshes).toBe(1);
-		expect(document.querySelector('[role="alert"]')?.textContent).toBe("Deleted, commit failed");
+		expect(document.querySelector('[role="alert"]')).toBeNull();
 		expect(document.body.textContent).not.toContain("Gone task");
 	});
 });

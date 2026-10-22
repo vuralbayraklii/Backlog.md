@@ -9,6 +9,7 @@ import { CentralServer } from "../server/central.ts";
 import { findNextAvailablePort } from "../server/index.ts";
 import { ProjectStore } from "../server/project-store.ts";
 import type { FolderArea, ProjectPreview } from "../server/registration-types.ts";
+import { centralFixtureFetch } from "./central-test-client.ts";
 import { createTestDirOutsideRepository, initializeFilesystemTestProject, safeCleanup } from "./test-utils.ts";
 
 const PASSWORD = "registration initial password";
@@ -54,7 +55,7 @@ describe("central prepared-project registration", () => {
 		return { cookie: `backlog_session=${changed.token}`, session: changed.session };
 	}
 	async function request(path: string, who?: Actor, method = "GET", body?: unknown, headers?: Record<string, string>) {
-		return fetch(`${base}${path}`, {
+		return centralFixtureFetch(`${base}${path}`, {
 			method,
 			headers: {
 				Origin: base,
@@ -282,6 +283,30 @@ describe("central prepared-project registration", () => {
 		const duplicate = await preview(path);
 		expect(duplicate.canRegister).toBe(false);
 		expect(JSON.stringify(duplicate.issues)).not.toContain(projects.load("1")?.name ?? "unexpected");
+	});
+
+	it("replays registration once and checks current project access before revealing its result", async () => {
+		await grant();
+		const path = join(ownArea, "replay");
+		await seed(path);
+		const operationId = crypto.randomUUID();
+		const body = { name: "One registration", path };
+		const headers = { "Idempotency-Key": operationId };
+		const first = await request("/api/projects", member, "POST", body, headers);
+		expect(first.status, await first.clone().text()).toBe(201);
+		const registered = await first.json();
+		const replay = await request("/api/projects", member, "POST", body, headers);
+		expect(replay.status).toBe(201);
+		expect(await replay.json()).toEqual(registered);
+		expect(projects.list()).toHaveLength(1);
+		expect((await request(`/api/operations/${operationId}`, member)).status).toBe(200);
+		expect((await request(`/api/operations/${operationId}`, other)).status).toBe(404);
+		const history = await (await request("/api/admin/history?scope=registration", admin)).json();
+		expect(history.items).toHaveLength(1);
+		expect(history.items[0].changes.map((change: { kind: string }) => change.kind)).toEqual(["project", "membership"]);
+		auth.removeMember(registered.id, member.session.user.id);
+		expect((await request(`/api/operations/${operationId}`, member)).status).toBe(404);
+		expect((await request("/api/projects", member, "POST", body, headers)).status).toBe(404);
 	});
 
 	it("revokes a deactivated account between preview and register without a partial project", async () => {

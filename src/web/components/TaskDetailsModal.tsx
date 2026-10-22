@@ -3,7 +3,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { isReadOnlyTask, isWorkingCopyTask, type AcceptanceCriterion, type Milestone, type Task, type TaskComment } from "../../types";
 import { type TaskDetail, taskDependencyGraph, taskReadiness } from "../../core/task-detail";
 import Modal from "./Modal";
-import { apiClient, NetworkError, readDemotionFailureCause, readMovedFailureState } from "../lib/api";
+import { apiClient, NetworkError, readDemotionFailureCause, readMovedFailureState, type RecordVersionLike } from "../lib/api";
+import { MutationConflictNotice, isMutationConflict } from "./MutationConflictNotice";
 import { useTheme } from "../contexts/ThemeContext";
 import MDEditor from "@uiw/react-md-editor";
 import AcceptanceCriteriaEditor from "./AcceptanceCriteriaEditor";
@@ -203,9 +204,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const { theme } = useTheme();
   const isCreateMode = !task;
   // A task from another branch or in the archive is shown but cannot be changed here.
-  const { permissions } = useAuth();
+  const { permissions, writeState } = useAuth();
   const isRecordReadOnly = task ? isReadOnlyTask(task) : false;
-  const isReadOnly = isRecordReadOnly || !permissions.tasksWrite;
+  const isReadOnly = isRecordReadOnly || !permissions.tasksWrite || writeState !== "ready";
   // Promoting a draft replaces it with a new task ID, which the Drafts page does through its own
   // Promote action, so the popup shows the draft status without turning the field into a second one.
   const isOpenDraft = (task?.status ?? "").trim().toLowerCase() === "draft";
@@ -217,10 +218,12 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const previousTaskId = useRef(task?.id ?? "");
   const previousIsOpen = useRef(isOpen);
   const formBaselineRef = useRef<TaskDetailsFormState | null>(null);
+  const editStartRef = useRef<{ baseline: TaskDetailsFormState; version: RecordVersionLike | null } | null>(null);
   const activeDemotionRequest = useRef<{ identity: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [demoting, setDemoting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<unknown>(null);
 
   // Title field for create mode
   const [title, setTitle] = useState(task?.title || "");
@@ -453,17 +456,28 @@ export const TaskDetailsModal: React.FC<Props> = ({
     [task, availableTasks, availableStatuses],
   );
 
-  // Keep a baseline for dirty-check
+  // The edit session keeps its own baseline while live reads update the task prop.
+  const editBaseline = mode === "edit" ? editStartRef.current?.baseline : null;
   const baseline = useMemo(() => ({
-    title: task?.title || "",
-    description: task?.description || "",
-    plan: task?.implementationPlan || "",
-    notes: task?.implementationNotes || "",
-    finalSummary: task?.finalSummary || "",
-    dueDate: task?.dueDate || "",
-    criteria: JSON.stringify(task?.acceptanceCriteriaItems || []),
-    definitionOfDone: JSON.stringify(task?.definitionOfDoneItems || (isCreateMode ? defaultDefinitionOfDone : [])),
-  }), [task, defaultDefinitionOfDone, isCreateMode]);
+    title: editBaseline?.title ?? task?.title ?? "",
+    description: editBaseline?.description ?? task?.description ?? "",
+    plan: editBaseline?.plan ?? task?.implementationPlan ?? "",
+    notes: editBaseline?.notes ?? task?.implementationNotes ?? "",
+    finalSummary: editBaseline?.finalSummary ?? task?.finalSummary ?? "",
+    dueDate: editBaseline?.dueDate ?? task?.dueDate ?? "",
+	status: editBaseline?.status ?? task?.status ?? (isDraftMode ? "Draft" : availableStatuses[0] ?? "To Do"),
+	assignee: JSON.stringify(editBaseline?.assignee ?? task?.assignee ?? createModeAssignee),
+	labels: JSON.stringify(editBaseline?.labels ?? task?.labels ?? []),
+	priority: editBaseline?.priority ?? task?.priority ?? "",
+	taskType: editBaseline?.taskType ?? task?.type ?? "",
+	project: editBaseline?.project ?? task?.project ?? "",
+	dependencies: JSON.stringify(editBaseline?.dependencies ?? task?.dependencies ?? []),
+	references: JSON.stringify(editBaseline?.references ?? task?.references ?? []),
+	modifiedFiles: JSON.stringify(editBaseline?.modifiedFiles ?? task?.modifiedFiles ?? []),
+	milestone: editBaseline?.milestone ?? task?.milestone ?? "",
+    criteria: JSON.stringify(editBaseline?.criteria ?? task?.acceptanceCriteriaItems ?? []),
+    definitionOfDone: JSON.stringify(editBaseline?.definitionOfDone ?? task?.definitionOfDoneItems ?? (isCreateMode ? defaultDefinitionOfDone : [])),
+  }), [editBaseline, task, defaultDefinitionOfDone, isCreateMode, isDraftMode, availableStatuses, createModeAssignee]);
 
   const isDirty = useMemo(() => {
     return (
@@ -473,14 +487,43 @@ export const TaskDetailsModal: React.FC<Props> = ({
       notes !== baseline.notes ||
       finalSummary !== baseline.finalSummary ||
       dueDate !== baseline.dueDate ||
+	  status !== baseline.status ||
+	  JSON.stringify(assignee) !== baseline.assignee ||
+	  JSON.stringify(labels) !== baseline.labels ||
+	  priority !== baseline.priority ||
+	  taskType !== baseline.taskType ||
+	  project !== baseline.project ||
+	  JSON.stringify(dependencies) !== baseline.dependencies ||
+	  JSON.stringify(references) !== baseline.references ||
+	  JSON.stringify(modifiedFiles) !== baseline.modifiedFiles ||
+	  milestone !== baseline.milestone ||
       JSON.stringify(criteria) !== baseline.criteria ||
       JSON.stringify(definitionOfDone) !== baseline.definitionOfDone
     );
-  }, [title, description, plan, notes, finalSummary, dueDate, criteria, definitionOfDone, baseline]);
+  }, [title, description, plan, notes, finalSummary, dueDate, status, assignee, labels, priority, taskType, project, dependencies, references, modifiedFiles, milestone, criteria, definitionOfDone, baseline]);
+  const isDirtyRef = useRef(isDirty);
+  isDirtyRef.current = isDirty;
 
   useEffect(() => {
     modeRef.current = mode;
   }, [mode]);
+
+  const beginEdit = () => {
+    if (!task || isReadOnly) return;
+    editStartRef.current = {
+      baseline: formBaselineRef.current ?? buildTaskDetailsFormState({ task, isCreateMode, isDraftMode, availableStatuses, defaultDefinitionOfDone, createModeAssignee }),
+      version: { recordKey: task.recordKey, revision: task.revision },
+    };
+    setConflict(null);
+    setMode("edit");
+  };
+
+  const mutationVersion = (): RecordVersionLike | null => modeRef.current === "edit" ? editStartRef.current?.version ?? task ?? null : task ?? null;
+  const advanceOwnRevision = (updated: Task) => {
+    if (modeRef.current === "edit" && editStartRef.current && updated.revision) {
+      editStartRef.current = { ...editStartRef.current, version: { recordKey: updated.recordKey, revision: updated.revision } };
+    }
+  };
 
   useEffect(
     () => () => {
@@ -513,18 +556,20 @@ export const TaskDetailsModal: React.FC<Props> = ({
       if (!isReadOnly && e.key.toLowerCase() === "e" && !e.metaKey && !e.ctrlKey && !e.altKey) {
         e.preventDefault();
         e.stopPropagation();
-        setMode("edit");
+        beginEdit();
       }
     };
     window.addEventListener("keydown", onKey, { capture: true });
     return () => window.removeEventListener("keydown", onKey, { capture: true } as any);
-  }, [mode, title, description, plan, notes, finalSummary, criteria, definitionOfDone, status, availableStatuses, isReadOnly]);
+  }, [mode, title, description, plan, notes, finalSummary, criteria, definitionOfDone, status, availableStatuses, isReadOnly, task, isDraftMode, defaultDefinitionOfDone, createModeAssignee]);
 
   // Reset local state when task changes or modal opens
   useEffect(() => {
     const nextTaskId = task?.id ?? "";
     const modalIdentityChanged = previousTaskId.current !== nextTaskId || previousIsOpen.current !== isOpen;
     if (modalIdentityChanged) {
+	  editStartRef.current = null;
+	  setConflict(null);
       typeUpdateRequestRef.current += 1;
       typeUpdateInFlightRef.current = false;
       setIsTypeUpdating(false);
@@ -547,6 +592,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
       (modeRef.current === "edit" || preserveEditModeAfterCommentRefresh.current);
 
     if (sameOpenModalRefresh && previousFormState) {
+      if (modeRef.current === "edit" && editStartRef.current && !isDirtyRef.current) {
+        editStartRef.current = { baseline: nextFormState, version: task ? { recordKey: task.recordKey, revision: task.revision } : null };
+      }
       setTitle((current) => preserveDirtyRefreshValue(current, previousFormState.title, nextFormState.title));
       setDescription((current) =>
         preserveDirtyRefreshValue(current, previousFormState.description, nextFormState.description),
@@ -603,7 +651,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       previousTaskId.current = nextTaskId;
       previousIsOpen.current = isOpen;
       formBaselineRef.current = nextFormState;
-      setError(null);
+      if (!isDirtyRef.current) setError(null);
       return;
     }
 
@@ -636,6 +684,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
     previousIsOpen.current = isOpen;
     formBaselineRef.current = nextFormState;
     setError(null);
+    setConflict(null);
   }, [task, isOpen, isCreateMode, isDraftMode, availableStatuses, defaultDefinitionOfDone, createModeAssignee]);
 
   const refreshAfterCommentChange = useCallback(() => {
@@ -693,6 +742,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
       // In create mode, close the modal on cancel
       onClose();
     } else {
+	  editStartRef.current = null;
+	  setConflict(null);
       setTitle(task?.title || "");
       setDescription(task?.description || "");
       setPlan(task?.implementationPlan || "");
@@ -703,6 +754,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       setDueDate(task?.dueDate || "");
       setCriteria(task?.acceptanceCriteriaItems || []);
       setDefinitionOfDone(task?.definitionOfDoneItems || []);
+	  modeRef.current = "preview";
       setMode("preview");
       refreshAfterCommentChange();
     }
@@ -806,6 +858,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
     if (demoting || isReadOnly) return;
     setSaving(true);
     setError(null);
+	setConflict(null);
 
     // Validation for create mode
     if (isCreateMode && !title.trim()) {
@@ -853,7 +906,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
       } else if (task) {
         Object.assign(taskData, buildDefinitionOfDoneEditPayload());
         // Update existing task
-        await apiClient.updateTask(task.id, taskData);
+        await apiClient.updateTask(task.id, taskData, mutationVersion());
+		editStartRef.current = null;
+		modeRef.current = "preview";
         setMode("preview");
         if (onSaved) await onSaved();
         setCommentsChanged(false);
@@ -871,6 +926,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       }
 
       setError(errorMessage);
+	  setConflict(isMutationConflict(err) ? err : null);
     } finally {
       setSaving(false);
     }
@@ -884,12 +940,15 @@ export const TaskDetailsModal: React.FC<Props> = ({
     const next = (criteria || []).map((c) => (c.index === index ? { ...c, checked } : c));
     setCriteria(next);
     try {
-      await apiClient.updateTask(task.id, { acceptanceCriteriaItems: next });
+      const updated = await apiClient.updateTask(task.id, { acceptanceCriteriaItems: next }, mutationVersion());
+      advanceOwnRevision(updated);
       if (onSaved) await onSaved();
     } catch (err) {
       // rollback
       setCriteria(criteria);
       console.error("Failed to update criterion", err);
+	  setError(err instanceof Error ? err.message : String(err));
+	  setConflict(isMutationConflict(err) ? err : null);
     }
   };
 
@@ -903,11 +962,14 @@ export const TaskDetailsModal: React.FC<Props> = ({
       const updates: TaskUpdatePayload = checked
         ? { definitionOfDoneCheck: [index] }
         : { definitionOfDoneUncheck: [index] };
-      await apiClient.updateTask(task.id, updates);
+      const updated = await apiClient.updateTask(task.id, updates, mutationVersion());
+      advanceOwnRevision(updated);
       if (onSaved) await onSaved();
     } catch (err) {
       setDefinitionOfDone(definitionOfDone);
       console.error("Failed to update Definition of Done item", err);
+	  setError(err instanceof Error ? err.message : String(err));
+	  setConflict(isMutationConflict(err) ? err : null);
     }
   };
 
@@ -917,6 +979,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
     if (isReadOnly) return;
 
     setError(null);
+	setConflict(null);
+	const previous = { status, assignee, labels, priority, taskType, project, dependencies, references, modifiedFiles, milestone };
 
     // Optimistic UI
     if (updates.status !== undefined) setStatus(String(updates.status));
@@ -933,11 +997,24 @@ export const TaskDetailsModal: React.FC<Props> = ({
     // Only update server if editing existing task
     if (task) {
       try {
-        await apiClient.updateTask(task.id, updates);
+        const updated = await apiClient.updateTask(task.id, updates, mutationVersion());
+        advanceOwnRevision(updated);
         if (onSaved) await onSaved();
       } catch (err) {
         console.error("Failed to update task metadata", err);
+		if (updates.title !== undefined && modeRef.current === "preview") beginEdit();
+		if (updates.status !== undefined) setStatus(previous.status);
+		if (updates.assignee !== undefined) setAssignee(previous.assignee);
+		if (updates.labels !== undefined) setLabels(previous.labels);
+		if (updates.priority !== undefined) setPriority(previous.priority);
+		if (updates.type !== undefined) setTaskType(previous.taskType);
+		if (updates.project !== undefined) setProject(previous.project);
+		if (updates.dependencies !== undefined) setDependencies(previous.dependencies);
+		if (updates.references !== undefined) setReferences(previous.references);
+		if (updates.modifiedFiles !== undefined) setModifiedFiles(previous.modifiedFiles);
+		if (updates.milestone !== undefined) setMilestone(previous.milestone);
         setError(err instanceof Error ? err.message : String(err));
+		setConflict(isMutationConflict(err) ? err : null);
       }
     }
   };
@@ -961,7 +1038,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
     setTaskType(nextType);
 
     try {
-      const updatedTask = await apiClient.updateTask(task.id, { type: nextType });
+      const updatedTask = await apiClient.updateTask(task.id, { type: nextType }, mutationVersion());
+      advanceOwnRevision(updatedTask);
       if (typeUpdateRequestRef.current !== requestId) return;
       setTaskType(updatedTask.type ?? "");
       if (onSaved) {
@@ -975,6 +1053,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       if (typeUpdateRequestRef.current !== requestId) return;
       setTaskType(previousType);
       setTypeUpdateError(updateError instanceof Error ? updateError.message : String(updateError));
+	  setConflict(isMutationConflict(updateError) ? updateError : null);
     } finally {
       if (typeUpdateRequestRef.current === requestId) {
         typeUpdateInFlightRef.current = false;
@@ -1004,7 +1083,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
       const updatedTask = await apiClient.updateTask(task.id, {
         commentsAppend: [body],
         ...(author.length > 0 && { commentAuthor: author }),
-      });
+      }, mutationVersion());
+      advanceOwnRevision(updatedTask);
       setDisplayComments(updatedTask.comments ?? []);
       setCommentsChanged(true);
       setCommentBody("");
@@ -1012,6 +1092,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
     } catch (err) {
       preserveEditModeAfterCommentRefresh.current = false;
       setError(err instanceof Error ? err.message : String(err));
+	  setConflict(isMutationConflict(err) ? err : null);
     } finally {
       setCommentSaving(false);
     }
@@ -1045,7 +1126,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
 		setDemoting(true);
 		setError(null);
 		try {
-			const { cleanedTaskIds } = await apiClient.demoteTask(task.id);
+			const { cleanedTaskIds } = await apiClient.demoteTask(task.id, task);
 			if (!isCurrentRequest()) return;
 			onDependencyCleanup?.(task.id, cleanedTaskIds);
 			try {
@@ -1082,6 +1163,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
 				return;
 			}
 			setError(err instanceof Error ? err.message : String(err));
+			setConflict(isMutationConflict(err) ? err : null);
 		} finally {
 			if (isCurrentRequest()) {
 				activeDemotionRequest.current = null;
@@ -1099,7 +1181,22 @@ export const TaskDetailsModal: React.FC<Props> = ({
       await onArchive();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+	  setConflict(isMutationConflict(err) ? err : null);
     }
+  };
+
+  const openCurrentVersion = async () => {
+	if (hasUnsavedEdits && !window.confirm("Discard your draft and open the current version?")) return;
+	editStartRef.current = null;
+	setConflict(null);
+	setError(null);
+	modeRef.current = "preview";
+	setMode("preview");
+	try {
+		if (onSaved) await onSaved();
+	} catch (reason) {
+		setError(reason instanceof Error ? reason.message : String(reason));
+	}
   };
 
   const checkedCount = (criteria || []).filter((c) => c.checked).length;
@@ -1146,7 +1243,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
 		          )}
 		          {mode === "preview" && !isCreateMode && !isReadOnly ? (
 		            <button
-		              onClick={() => setMode("edit")}
+              onClick={beginEdit}
 		              disabled={demoting}
 		              className="inline-flex items-center px-3 py-2 sm:px-4 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors duration-200"
 		              title="Edit"
@@ -1189,6 +1286,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
       {error && (
         <div role="alert" className="mb-3 text-sm text-red-600 dark:text-red-400">{error}</div>
       )}
+      <MutationConflictNotice error={conflict} onOpenCurrent={() => void openCurrentVersion()} onDismiss={() => setConflict(null)} />
 
 		<fieldset disabled={demoting} className="contents" aria-busy={demoting}>
       {/* One banner for every read-only task; only the reason differs. */}
@@ -1199,8 +1297,12 @@ export const TaskDetailsModal: React.FC<Props> = ({
           </svg>
           <div className="flex-1">
             <span className="font-medium">Read-only:</span>{" "}
-            {task?.branch ? (
+            {writeState !== "ready" ? (
+			  "Project writes are paused for recovery."
+			) : task?.branch ? (
               <>This task exists in the <span className="font-semibold">{task.branch}</span> branch. Switch to that branch to edit it.</>
+            ) : !permissions.tasksWrite ? (
+			  "You do not have write access to this task."
             ) : (
               "This task is archived."
             )}
@@ -1748,7 +1850,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
                   setTitle(e.target.value);
                 }}
                 onBlur={() => {
-                  if (title.trim() && title !== task.title) {
+                  if (modeRef.current !== "edit" && title.trim() && title !== task.title) {
                     void handleInlineMetaUpdate({ title: title.trim() });
                   }
                 }}
@@ -1918,7 +2020,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
           </div>
 
           {/* Archive button at bottom of sidebar */}
-		          {task && onArchive && !isRecordReadOnly && permissions.archive && (
+		          {task && onArchive && !isRecordReadOnly && permissions.archive && writeState === "ready" && (
 		            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
 		              <button
 		                onClick={handleArchive}

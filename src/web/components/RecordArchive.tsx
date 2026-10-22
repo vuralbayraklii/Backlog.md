@@ -1,6 +1,6 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { apiClient, readMovedFailureState } from '../lib/api';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { apiClient, type RecordVersionLike, readMovedFailureState } from "../lib/api";
 
 /**
  * The Archive button of the document page and the decision page, and what it does. It extends the
@@ -14,16 +14,16 @@ import { apiClient, readMovedFailureState } from '../lib/api';
 /** What differs between the two pages: the noun, the list page, the CLI restore command and the route. */
 const ARCHIVABLE_PAGES = {
 	document: {
-		noun: 'document',
-		listPath: '/documentation',
-		restoreCommand: 'backlog doc restore',
-		archive: (id: string) => apiClient.archiveDoc(id),
+		noun: "document",
+		listPath: "/documentation",
+		restoreCommand: "backlog doc restore",
+		archive: (record: { id: string } & RecordVersionLike) => apiClient.archiveDoc(record.id, record),
 	},
 	decision: {
-		noun: 'decision',
-		listPath: '/decisions',
-		restoreCommand: 'backlog decision restore',
-		archive: (id: string) => apiClient.archiveDecision(id),
+		noun: "decision",
+		listPath: "/decisions",
+		restoreCommand: "backlog decision restore",
+		archive: (record: { id: string } & RecordVersionLike) => apiClient.archiveDecision(record.id, record),
 	},
 } as const;
 
@@ -38,7 +38,7 @@ export type ArchivablePageKind = keyof typeof ARCHIVABLE_PAGES;
  */
 export function useRecordArchive(
 	kind: ArchivablePageKind,
-	record: { id: string; title: string } | null,
+	record: ({ id: string; title: string } & RecordVersionLike) | null,
 	routeIdentity: string | null,
 	onRefreshData: () => Promise<void>,
 ) {
@@ -46,7 +46,7 @@ export function useRecordArchive(
 	const [isArchiving, setIsArchiving] = useState(false);
 	const route = useMemo(() => ({ identity: routeIdentity }), [routeIdentity]);
 	const currentRoute = useRef<typeof route | null>(route);
-	const [refusal, setRefusal] = useState<{ route: typeof route; message: string } | null>(null);
+	const [refusal, setRefusal] = useState<{ route: typeof route; message: string; reason: unknown } | null>(null);
 	// A ref as well as the state: two clicks in one render both see the state as it was.
 	const requestRunning = useRef(false);
 
@@ -69,12 +69,12 @@ export function useRecordArchive(
 		setRefusal(null);
 		try {
 			try {
-				await page.archive(record.id);
+				await page.archive(record);
 			} catch (error) {
-				if (!readMovedFailureState(error, 'archiveState')) {
+				if (!readMovedFailureState(error, "archiveState")) {
 					// Refused: the record is where it was, and the server's message is the answer.
 					if (currentRoute.current === route) {
-						setRefusal({ route, message: error instanceof Error ? error.message : String(error) });
+						setRefusal({ route, message: error instanceof Error ? error.message : String(error), reason: error });
 					}
 					return;
 				}
@@ -103,6 +103,7 @@ export function useRecordArchive(
 		archive,
 		isArchiving,
 		archiveError: refusal?.route === route ? refusal.message : null,
+		archiveErrorCause: refusal?.route === route ? refusal.reason : null,
 		dismissArchiveError: () => setRefusal(null),
 	};
 }
@@ -118,7 +119,12 @@ export function ArchiveButton({ onClick, disabled }: { onClick: () => void; disa
 			className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-500 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-red-400 dark:focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors duration-200"
 		>
 			<svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-				<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+				<path
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					strokeWidth={2}
+					d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
+				/>
 			</svg>
 			Archive
 		</button>

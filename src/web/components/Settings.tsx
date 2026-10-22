@@ -4,13 +4,18 @@ import { SuccessToast } from './SuccessToast';
 import type { BacklogConfig } from '../../types';
 import { projectScope } from '../lib/project-scope';
 import { useUnsavedChanges } from '../contexts/UnsavedChangesContext';
+import { useAuth } from '../contexts/AuthContext';
+import { MutationConflictNotice, isMutationConflict } from './MutationConflictNotice';
 
 const Settings: React.FC = () => {
+	const { writeState } = useAuth();
 	const [config, setConfig] = useState<BacklogConfig | null>(null);
 	const [originalConfig, setOriginalConfig] = useState<BacklogConfig | null>(null);
+	const [configRevision, setConfigRevision] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [conflict, setConflict] = useState<unknown>(null);
 	const [showSuccess, setShowSuccess] = useState(false);
 	const [statuses, setStatuses] = useState<string[]>([]);
 	const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
@@ -23,10 +28,12 @@ const Settings: React.FC = () => {
 	const loadConfig = async () => {
 		try {
 			setLoading(true);
-			const data = await apiClient.fetchConfig();
-			setConfig(data);
-			setOriginalConfig(data);
+			const snapshot = await apiClient.fetchConfigSnapshot();
+			setConfig(snapshot.config);
+			setOriginalConfig(snapshot.config);
+			setConfigRevision(snapshot.revision);
 			setError(null);
+			setConflict(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to load configuration');
 		} finally {
@@ -86,7 +93,7 @@ const Settings: React.FC = () => {
 	};
 
 	const handleSave = async () => {
-		if (!config || !validateConfig()) return;
+		if (!config || writeState !== 'ready' || !validateConfig()) return;
 
 		try {
 			setSaving(true);
@@ -100,14 +107,17 @@ const Settings: React.FC = () => {
 				...config,
 				definitionOfDone: normalizeDefinitionOfDone(config.definitionOfDone),
 			};
-			const saved = await apiClient.updateConfig(payload);
-			setConfig(saved);
-			setOriginalConfig(saved);
+			const saved = await apiClient.updateConfigSnapshot(payload, configRevision);
+			setConfig(saved.config);
+			setOriginalConfig(saved.config);
+			setConfigRevision(saved.revision);
 			setShowSuccess(true);
 			setTimeout(() => setShowSuccess(false), 3000);
 			setError(null);
+			setConflict(null);
 		} catch (err) {
 			setError(err instanceof Error ? err.message : 'Failed to save configuration');
+			setConflict(isMutationConflict(err) ? err : null);
 		} finally {
 			setSaving(false);
 		}
@@ -120,6 +130,11 @@ const Settings: React.FC = () => {
 
 	const hasUnsavedChanges = JSON.stringify(config) !== JSON.stringify(originalConfig);
 	useUnsavedChanges(hasUnsavedChanges);
+	const openCurrentVersion = () => {
+		if (hasUnsavedChanges && !window.confirm('Discard your draft and open current settings?')) return;
+		setConflict(null);
+		void loadConfig();
+	};
 
 	if (loading) {
 		return (
@@ -145,7 +160,8 @@ const Settings: React.FC = () => {
 		return (
 			<div className="page-shell mx-auto max-w-3xl space-y-6">
 				<h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Settings</h1>
-				{error && <p role="alert" className="text-red-700 dark:text-red-400">{error}</p>}
+				<MutationConflictNotice error={conflict} onOpenCurrent={openCurrentVersion} onDismiss={() => setConflict(null)} />
+				{error && !conflict && <p role="alert" className="text-red-700 dark:text-red-400">{error}</p>}
 				<div className="rounded-lg bg-white p-6 shadow dark:bg-gray-800 space-y-5">
 					<label className="block space-y-1">
 						<span>Default Status</span>
@@ -186,7 +202,7 @@ const Settings: React.FC = () => {
 				</div>
 				<div className="flex justify-end gap-3">
 					<button type="button" disabled={!hasUnsavedChanges || saving} onClick={handleCancel} className="rounded border px-4 py-2 disabled:opacity-50">Cancel</button>
-					<button type="button" disabled={!hasUnsavedChanges || saving} onClick={handleSave} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{saving ? 'Saving...' : 'Save Changes'}</button>
+					<button type="button" disabled={!hasUnsavedChanges || saving || writeState !== 'ready'} onClick={handleSave} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{saving ? 'Saving...' : 'Save Changes'}</button>
 				</div>
 				{showSuccess && <SuccessToast message="Settings saved successfully!" onDismiss={() => setShowSuccess(false)} />}
 			</div>
@@ -528,7 +544,7 @@ const Settings: React.FC = () => {
 							</button>
 							<button
 								onClick={handleSave}
-								disabled={!hasUnsavedChanges || saving}
+								disabled={!hasUnsavedChanges || saving || writeState !== 'ready'}
 								className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-500 disabled:opacity-50 transition-colors duration-200"
 							>
 								{saving ? 'Saving...' : 'Save Changes'}

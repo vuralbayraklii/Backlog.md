@@ -2,7 +2,7 @@ import { type FSWatcher, watch } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type { FileSystem } from "../file-system/operations.ts";
-import { parseDecision, parseDocument, parseTask } from "../markdown/parser.ts";
+import { recordFileSnapshot } from "../file-system/prepared-change.ts";
 import type { BacklogConfig, Decision, Document, Task, TaskListFilter } from "../types/index.ts";
 import { watchConfigFile } from "../utils/config-watcher.ts";
 import { documentIdKey, documentIdsEqual } from "../utils/document-id.ts";
@@ -10,7 +10,7 @@ import { normalizeDocumentRelativePath } from "../utils/document-path.ts";
 import { normalizePriorityValue } from "../utils/priority-config.ts";
 import { matchesProjectFilter } from "../utils/project-config.ts";
 import { normalizeStatusSet, statusMatchesSet } from "../utils/status-filter.ts";
-import { canonicalTaskId, normalizeTaskId, normalizeTaskIdentity, taskIdsEqual } from "../utils/task-path.ts";
+import { canonicalTaskId, normalizeTaskId, taskIdsEqual } from "../utils/task-path.ts";
 import { sortByTaskId } from "../utils/task-sorting.ts";
 import { matchesTaskTypeFilter } from "../utils/task-type-config.ts";
 import {
@@ -160,6 +160,7 @@ export class ContentStore {
 	private taskBatchDepth = 0;
 	private pendingTaskNotification = false;
 	private localTaskRefreshPromise: Promise<void> | null = null;
+	private managedWritePending = false;
 
 	private attachWatcherErrorHandler(watcher: FSWatcher, context: string): void {
 		watcher.on("error", (error) => {
@@ -217,8 +218,38 @@ export class ContentStore {
 		return this.initialized;
 	}
 
+	publicationVersion(): number {
+		return this.version;
+	}
+
+	/** Keep staged and partly applied central writes out of caches, search, and WebSocket notices. */
+	beginPreparedWrite(): { publish: () => Promise<void>; abort: (freeze: boolean) => Promise<void> } {
+		if (this.managedWritePending) throw new Error("A prepared write is already pending for this project.");
+		this.managedWritePending = true;
+		this.invalidateRootWatchers();
+		this.stopConfigWatcher();
+		const resume = async (publish: boolean) => {
+			if (!this.managedWritePending) return;
+			this.managedWritePending = false;
+			if (publish && this.initialized) {
+				await this.refreshTasks();
+				const [documents, decisions] = await Promise.all([
+					this.filesystem.listDocuments(),
+					this.filesystem.listDecisions(),
+				]);
+				this.replaceDocuments(documents);
+				this.replaceDecisions(decisions);
+				this.notify("documents");
+				this.notify("decisions");
+			}
+			if (this.enableWatchers) await this.ensureConfigWatcher();
+		};
+		return { publish: () => resume(true), abort: (freeze) => (freeze ? Promise.resolve() : resume(false)) };
+	}
+
 	async refreshTasks(): Promise<void> {
 		this.assertOpen();
+		if (this.managedWritePending) return;
 		if (!this.initialized) {
 			await this.ensureInitialized();
 			return;
@@ -230,6 +261,7 @@ export class ContentStore {
 	}
 
 	async refreshLocalTaskCorpus(): Promise<void> {
+		if (this.managedWritePending) return;
 		if (!this.initialized) {
 			await this.ensureInitialized();
 			return;
@@ -439,6 +471,7 @@ export class ContentStore {
 
 	/** Publish the complete result of a lifecycle move, or remove the identity when no task remains. */
 	transitionTask(taskId: string, resultingTask?: Task): void {
+		if (this.managedWritePending) return;
 		const activeTasks = this.activeTasks.filter((task) => !taskIdsEqual(task.id, taskId));
 		const archivedTasks = this.archivedTasks.filter((task) => !taskIdsEqual(task.id, taskId));
 		if (resultingTask) {
@@ -545,7 +578,7 @@ export class ContentStore {
 	}
 
 	private notify(type: ContentStoreEventType): void {
-		if (this.closed || !this.initialized) {
+		if (this.closed || this.managedWritePending || !this.initialized) {
 			return;
 		}
 		this.version += 1;
@@ -570,7 +603,7 @@ export class ContentStore {
 	}
 
 	private notifyConfig(config: BacklogConfig): void {
-		if (this.closed || !this.initialized) {
+		if (this.closed || this.managedWritePending || !this.initialized) {
 			return;
 		}
 		this.version += 1;
@@ -584,7 +617,7 @@ export class ContentStore {
 	}
 
 	private canPublishContent(): boolean {
-		return !this.closed && (this.initialized || this.initializing !== null);
+		return !this.closed && !this.managedWritePending && (this.initialized || this.initializing !== null);
 	}
 
 	private currentRoot(): string {
@@ -954,6 +987,7 @@ export class ContentStore {
 	}
 
 	private publishWatchedTask(task: Task, replacedPath?: string): void {
+		if (this.managedWritePending) return;
 		const id = normalizeTaskId(task.id);
 		this.nextContentItemGeneration("tasks", id);
 		this.nextContentItemVersion("tasks", id, this.currentRoot());
@@ -972,6 +1006,7 @@ export class ContentStore {
 	}
 
 	private removeWatchedTask(id: string, watchedPath?: string): void {
+		if (this.managedWritePending) return;
 		const normalizedId = normalizeTaskId(id);
 		const removedTasks = this.activeTasks.filter((task) =>
 			watchedPath ? task.filePath === watchedPath : taskIdsEqual(task.id, normalizedId),
@@ -1002,6 +1037,7 @@ export class ContentStore {
 
 	/** Drops one entry and versions the removal so a concurrent refresh cannot resurrect it. */
 	private dropWatchedDocument(document: Document): boolean {
+		if (this.managedWritePending) return false;
 		if (!this.documents.delete(document.id)) return false;
 		this.nextContentItemGeneration("documents", document.id);
 		this.nextContentItemVersion("documents", document.id, this.currentRoot());
@@ -1015,6 +1051,7 @@ export class ContentStore {
 	 * vacated. Only a full refresh can settle that without guessing which entry it was.
 	 */
 	private publishWatchedDocument(document: Document, replacedPath?: string): boolean {
+		if (this.managedWritePending) return false;
 		// A respelled frontmatter ID rekeys the entry, so drop the one this file used to occupy.
 		const replaced = this.findWatchedDocumentByPath(replacedPath) ?? this.findWatchedDocumentByPath(document.path);
 		if (replaced && replaced.id !== document.id) this.dropWatchedDocument(replaced);
@@ -1035,6 +1072,7 @@ export class ContentStore {
 	 * watcher event. When the event arrives, the watcher publishes the same file again.
 	 */
 	addDocument(document: Document): void {
+		if (this.managedWritePending) return;
 		this.publishWatchedDocument(document);
 	}
 
@@ -1044,6 +1082,7 @@ export class ContentStore {
 	 * and by core when it archives a document, so that change does not wait for a watcher event.
 	 */
 	removeDocument(path: string): void {
+		if (this.managedWritePending) return;
 		const existing = this.findWatchedDocumentByPath(path);
 		if (!existing || !this.dropWatchedDocument(existing)) return;
 		this.cachedDocuments = [...this.documents.values()].sort((a, b) => a.title.localeCompare(b.title));
@@ -1051,6 +1090,7 @@ export class ContentStore {
 	}
 
 	private publishWatchedDecision(decision: Decision): void {
+		if (this.managedWritePending) return;
 		this.nextContentItemGeneration("decisions", decision.id);
 		this.nextContentItemVersion("decisions", decision.id, this.currentRoot());
 		this.decisions.set(decision.id, decision);
@@ -1064,6 +1104,7 @@ export class ContentStore {
 	 * for a watcher event. When the event arrives, the watcher publishes the same file again.
 	 */
 	addDecision(decision: Decision): void {
+		if (this.managedWritePending) return;
 		this.publishWatchedDecision(decision);
 	}
 
@@ -1073,6 +1114,7 @@ export class ContentStore {
 	 * when it archives a decision, so that change does not wait for a watcher event.
 	 */
 	removeDecision(id: string): void {
+		if (this.managedWritePending) return;
 		if (!this.decisions.delete(id)) return;
 		this.nextContentItemGeneration("decisions", id);
 		this.nextContentItemVersion("decisions", id, this.currentRoot());
@@ -1102,10 +1144,7 @@ export class ContentStore {
 						epoch,
 						readEventPath: async () => {
 							if (!(await Bun.file(fullPath).exists())) return null;
-							const task = {
-								...normalizeTaskIdentity(parseTask(await this.filesystem.readText(fullPath))),
-								filePath: fullPath,
-							};
+							const task = { ...(await this.filesystem.readRecordSnapshot("task", fullPath)), filePath: fullPath };
 							return task;
 						},
 						findIdentity: async () => {
@@ -1118,7 +1157,7 @@ export class ContentStore {
 								},
 								async (candidatePath) => {
 									const task = {
-										...normalizeTaskIdentity(parseTask(await this.filesystem.readText(candidatePath))),
+										...(await this.filesystem.readRecordSnapshot("task", candidatePath)),
 										filePath: candidatePath,
 									};
 									if (!taskIdsEqual(task.id, normalizedTaskId)) throw new Error("Task identity mismatch");
@@ -1153,10 +1192,7 @@ export class ContentStore {
 						return false;
 					}
 					try {
-						const task = {
-							...normalizeTaskIdentity(parseTask(await this.filesystem.readText(fullPath))),
-							filePath: fullPath,
-						};
+						const task = { ...(await this.filesystem.readRecordSnapshot("task", fullPath)), filePath: fullPath };
 						if (!taskIdsEqual(task.id, normalizedTaskId)) {
 							this.publishWatchedTask(task);
 							return false;
@@ -1207,7 +1243,7 @@ export class ContentStore {
 						epoch,
 						readEventPath: async () => {
 							if (!(await Bun.file(fullPath).exists())) return null;
-							const decision = { ...parseDecision(await this.filesystem.readText(fullPath)), path: file };
+							const decision = { ...(await this.filesystem.readRecordSnapshot("decision", fullPath)), path: file };
 							if (decision.id !== id) throw new Error("Decision identity mismatch");
 							return decision;
 						},
@@ -1218,7 +1254,7 @@ export class ContentStore {
 								(path) => basename(path).split(" - ")[0] === id,
 								async (candidatePath, candidateRelativePath) => {
 									const decision = {
-										...parseDecision(await this.filesystem.readText(candidatePath)),
+										...(await this.filesystem.readRecordSnapshot("decision", candidatePath)),
 										path: candidateRelativePath,
 									};
 									if (decision.id !== id) throw new Error("Decision identity mismatch");
@@ -1239,7 +1275,7 @@ export class ContentStore {
 						return false;
 					}
 					try {
-						const decision = { ...parseDecision(await this.filesystem.readText(fullPath)), path: file };
+						const decision = { ...(await this.filesystem.readRecordSnapshot("decision", fullPath)), path: file };
 						if (decision.id !== id) return true;
 						const previous = this.decisions.get(id);
 						if (previous && !this.hasDecisionChanged(previous, decision)) return true;
@@ -1278,7 +1314,10 @@ export class ContentStore {
 					epoch,
 					readEventPath: async () => {
 						if (!(await Bun.file(absolutePath).exists())) return null;
-						const document = { ...parseDocument(await this.filesystem.readText(absolutePath)), path: eventPath };
+						const document = {
+							...(await this.filesystem.readRecordSnapshot("document", absolutePath)),
+							path: eventPath,
+						};
 						if (!documentIdsEqual(document.id, id)) throw new Error("Document identity mismatch");
 						return document;
 					},
@@ -1292,7 +1331,7 @@ export class ContentStore {
 							},
 							async (candidatePath, candidateRelativePath) => {
 								const document = {
-									...parseDocument(await this.filesystem.readText(candidatePath)),
+									...(await this.filesystem.readRecordSnapshot("document", candidatePath)),
 									path: normalizeDocumentRelativePath(candidateRelativePath),
 								};
 								if (!documentIdsEqual(document.id, id)) throw new Error("Document identity mismatch");
@@ -1316,7 +1355,10 @@ export class ContentStore {
 					return false;
 				}
 				try {
-					const document = { ...parseDocument(await this.filesystem.readText(absolutePath)), path: eventPath };
+					const document = {
+						...(await this.filesystem.readRecordSnapshot("document", absolutePath)),
+						path: eventPath,
+					};
 					if (!documentIdsEqual(document.id, id)) return true;
 					const previous = this.findWatchedDocumentByPath(eventPath);
 					if (previous && !this.hasDocumentChanged(previous, document)) return true;
@@ -1434,10 +1476,7 @@ export class ContentStore {
 		this.filesystem.saveTask = (async (task: Task): Promise<string> => {
 			const owner: PublicationOwner = { root: this.currentRoot() };
 			const result = await originalSaveTask.call(this.filesystem, task);
-			const savedTask = {
-				...normalizeTaskIdentity(parseTask(await this.filesystem.readText(result))),
-				filePath: result,
-			};
+			const savedTask = { ...(await this.filesystem.readRecordSnapshot("task", result)), filePath: result };
 			await this.updateTaskFromDisk(task.id, owner, savedTask);
 			return result;
 		}) as FileSystem["saveTask"];
@@ -1473,17 +1512,27 @@ export class ContentStore {
 	}
 
 	private hasTaskChanged(previous: Task, next: Task): boolean {
+		if (this.hasRecordSnapshotChanged(previous, next)) return true;
 		const { lastModified: _previousLastModified, source: _previousSource, ...previousState } = previous;
 		const { lastModified: _nextLastModified, source: _nextSource, ...nextState } = next;
 		return JSON.stringify(previousState) !== JSON.stringify(nextState);
 	}
 
 	private hasDocumentChanged(previous: Document, next: Document): boolean {
+		if (this.hasRecordSnapshotChanged(previous, next)) return true;
 		return JSON.stringify(previous) !== JSON.stringify(next);
 	}
 
 	private hasDecisionChanged(previous: Decision, next: Decision): boolean {
+		if (this.hasRecordSnapshotChanged(previous, next)) return true;
 		return JSON.stringify(previous) !== JSON.stringify(next);
+	}
+
+	private hasRecordSnapshotChanged(previous: object, next: object): boolean {
+		const before = recordFileSnapshot(previous);
+		const after = recordFileSnapshot(next);
+		if (!before || !after) return before !== after;
+		return before.recordPath !== after.recordPath || !Buffer.from(before.bytes).equals(Buffer.from(after.bytes));
 	}
 
 	private hasCollectionChanged<T>(

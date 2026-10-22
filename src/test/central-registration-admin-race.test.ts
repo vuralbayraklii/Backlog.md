@@ -9,6 +9,7 @@ import { CentralServer } from "../server/central.ts";
 import { findNextAvailablePort } from "../server/index.ts";
 import { ProjectStore } from "../server/project-store.ts";
 import type { ProjectPreview } from "../server/registration-types.ts";
+import { centralFixtureFetch } from "./central-test-client.ts";
 import { createTestDirOutsideRepository, initializeFilesystemTestProject, safeCleanup } from "./test-utils.ts";
 
 const PASSWORD = "registration review initial password";
@@ -31,7 +32,7 @@ describe("central registration authority and preview privacy", () => {
 		return auth.changePassword(login.token, PASSWORD, `${username} replacement review password`);
 	}
 	function request(path: string, who: Actor, method = "GET", body?: unknown) {
-		return fetch(`${base}${path}`, {
+		return centralFixtureFetch(`${base}${path}`, {
 			method,
 			headers: {
 				Cookie: `backlog_session=${who.token}`,
@@ -112,9 +113,9 @@ describe("central registration authority and preview privacy", () => {
 		try {
 			const signal = await reader.read();
 			expect(new TextDecoder().decode(signal.value)).toContain("locked");
-			requestAuth.removeFolderArea = (id, beforeCommit) => {
+			requestAuth.removeFolderArea = (id, beforeCommit, audit) => {
 				writeFileSync(commitSignal, "commit");
-				remove(id, beforeCommit);
+				remove(id, beforeCommit, audit);
 			};
 			const response = await request(`/api/admin/folder-areas/${area.id}`, admin, "DELETE");
 			expect(response.status).toBe(401);

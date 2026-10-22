@@ -43,7 +43,13 @@ export interface TaskCommentInput {
 	createdDate?: string;
 }
 
-export interface Task {
+/** Central-server metadata; absent from Markdown and local browser responses. */
+export interface ServerRecordVersion {
+	recordKey?: string;
+	revision?: string;
+}
+
+export interface Task extends ServerRecordVersion {
 	id: string;
 	title: string;
 	status: TaskStatus;
@@ -210,7 +216,7 @@ export interface TaskListFilter {
 	labelMatch?: LabelMatchMode;
 }
 
-export interface Decision {
+export interface Decision extends ServerRecordVersion {
 	id: string;
 	title: string;
 	date: string;
@@ -230,7 +236,7 @@ export interface Decision {
 	archived?: boolean;
 }
 
-export interface Milestone {
+export interface Milestone extends ServerRecordVersion {
 	id: string;
 	title: string;
 	dueDate?: string;
@@ -259,7 +265,7 @@ export interface ContentRecord {
 export const DOCUMENT_TYPE_VALUES = ["readme", "guide", "specification", "other"] as const;
 export type DocumentType = (typeof DOCUMENT_TYPE_VALUES)[number];
 
-export interface Document {
+export interface Document extends ServerRecordVersion {
 	id: string;
 	title: string;
 	type: DocumentType;

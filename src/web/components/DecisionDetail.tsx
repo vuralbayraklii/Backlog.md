@@ -14,6 +14,7 @@ import { sanitizeUrlTitle } from '../utils/urlHelpers';
 import StoredDate from './StoredDate';
 import { decisionIdKey } from '../../utils/decision-id';
 import { ArchiveButton, ArchivedLabel, ArchiveRefusal, useRecordArchive } from './RecordArchive';
+import { MutationConflictNotice, isMutationConflict } from './MutationConflictNotice';
 
 // Utility function for ID transformations
 const stripIdPrefix = (id: string): string => {
@@ -90,7 +91,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 	const [isSaving, setIsSaving] = useState(false);
 	const [editRequested, setEditRequested] = useState(false);
 	const [error, setError] = useState<Error | null>(null);
-	const [saveError, setSaveError] = useState<string | null>(null);
+	const [saveError, setSaveError] = useState<Error | null>(null);
 	const [isNewDecision, setIsNewDecision] = useState(false);
 	const [showSaveSuccess, setShowSaveSuccess] = useState(false);
 	// An archived decision is read-only: it shows the Archived label and no Archive button.
@@ -99,20 +100,21 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 	const isArchived = currentDecision?.archived === true;
 	// The editor opens on request (the Edit button, `?edit=true` in the URL, the new page), but never
 	// for an archived decision: the request can come before or after the record has loaded.
-	const { permissions, central } = useAuth();
-	const canWrite = permissions.decisionsWrite && (!currentDecision || currentDecision.status === "proposed" || permissions.decisionsManage);
-	const isEditing = editRequested && !isArchived && canWrite;
+	const { permissions, central, writeState } = useAuth();
+	const mayEdit = permissions.decisionsWrite && (!currentDecision || currentDecision.status === "proposed" || permissions.decisionsManage);
+	const canWrite = mayEdit && writeState === 'ready';
+	const isEditing = editRequested && !isArchived && mayEdit;
 	const hasChanges = content !== originalContent || decisionTitle !== originalDecisionTitle;
 	const clearUnsaved = useUnsavedChanges(isEditing && hasChanges);
-	const { archive, isArchiving, archiveError, dismissArchiveError } = useRecordArchive(
+	const { archive, isArchiving, archiveError, archiveErrorCause, dismissArchiveError } = useRecordArchive(
 		'decision',
-		currentDecision && !isLoading && !isNewDecision ? { id: currentDecision.id, title: currentDecision.title } : null,
+		currentDecision && !isLoading && !isNewDecision ? { id: currentDecision.id, title: currentDecision.title, recordKey: currentDecision.recordKey, revision: currentDecision.revision } : null,
 		routeIdentity,
 		onRefreshData,
 	);
 
 	useEffect(() => {
-		if (editRequested && hasChanges && (id === "new" || currentDecision)) return;
+		if (editRequested && (currentDecision || (id === "new" && hasChanges))) return;
 		let active = true;
 		if (id === 'new') {
 			// Handle new decision creation
@@ -228,7 +230,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 			} else {
 				// Update existing decision
 				if (!id) return;
-				await apiClient.updateDecision(addDecisionPrefix(id), content);
+				await apiClient.updateDecision(addDecisionPrefix(id), content, currentDecision);
 				// Refresh data from parent
 				await onRefreshData();
 				// Show success toast
@@ -240,10 +242,17 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 				navigate(`/decisions/${id}/${sanitizeUrlTitle(decisionTitle)}`);
 			}
 		} catch (error) {
-			setSaveError(error instanceof Error ? error.message : String(error));
+			setSaveError(error instanceof Error ? error : new Error(String(error)));
 		} finally {
 			setIsSaving(false);
 		}
+	};
+
+	const openCurrentVersion = async () => {
+		if (hasChanges && !window.confirm('Discard your draft and open the current version?')) return;
+		setEditRequested(false);
+		setSaveError(null);
+		await loadDecisionContent(() => true);
 	};
 
 	const handleEdit = () => {
@@ -370,7 +379,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 								</button>
 							) : null}
 							{currentDecision && !isNewDecision && !isEditing && !isArchived && permissions.archive && (
-								<ArchiveButton onClick={archive} disabled={isArchiving} />
+								<ArchiveButton onClick={archive} disabled={isArchiving || writeState !== 'ready'} />
 							)}
 							{isEditing && (
 								<div className="flex items-center space-x-2">
@@ -399,8 +408,10 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 						</div>
 					</div>
 				</div>
-				{saveError && <ArchiveRefusal message={saveError} onDismiss={() => setSaveError(null)} />}
-				{archiveError && <ArchiveRefusal message={archiveError} onDismiss={dismissArchiveError} />}
+				<MutationConflictNotice error={saveError} onOpenCurrent={() => void openCurrentVersion()} onDismiss={() => setSaveError(null)} />
+				{saveError && !isMutationConflict(saveError) && <ArchiveRefusal message={saveError.message} onDismiss={() => setSaveError(null)} />}
+				<MutationConflictNotice error={archiveErrorCause} draft={false} onOpenCurrent={() => { dismissArchiveError(); void onRefreshData(); }} onDismiss={dismissArchiveError} />
+				{archiveError && !isMutationConflict(archiveErrorCause) && <ArchiveRefusal message={archiveError} onDismiss={dismissArchiveError} />}
 			</div>
 
 			{/* Content Section */}

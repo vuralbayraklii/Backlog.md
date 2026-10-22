@@ -4,6 +4,7 @@ import { AuthStoreError } from "./auth-store.ts";
 import { DEFAULT_PERMISSIONS } from "./auth-types.ts";
 import { ServerDatabase } from "./database.ts";
 import { assertRegistrationAccess, pathsOverlap } from "./folder-areas.ts";
+import type { ManagementAuditHook } from "./mutations.ts";
 import { canonicalProjectRoot, inspectProject } from "./project-paths.ts";
 import type { ProjectPreview } from "./registration-types.ts";
 
@@ -119,6 +120,7 @@ export class ProjectStore {
 		projectRoot: string,
 		actorId?: string,
 		beforeCommit?: () => void,
+		audit?: ManagementAuditHook,
 	): Promise<ServerProject> {
 		const trimmedName = projectName(name);
 		// Refuse unsafe/unprepared input before creating metadata. Actor preview also
@@ -160,11 +162,35 @@ export class ProjectStore {
 						Number(permissions.delete),
 					);
 			}
-			return { ...row, tracking: Boolean(row.tracking) };
+			const project = { ...row, tracking: Boolean(row.tracking) };
+			audit?.(
+				database,
+				[
+					{ kind: "project", recordKey: `project:${project.id}`, visibleId: project.id, before: null, after: project },
+					...(actorId
+						? [
+								{
+									kind: "membership" as const,
+									recordKey: `membership:${project.id}:${actorId}`,
+									visibleId: actorId,
+									before: null,
+									after: { projectId: project.id, userId: actorId, permissions: DEFAULT_PERMISSIONS },
+								},
+							]
+						: []),
+				],
+				project,
+			);
+			return project;
 		});
 	}
 
-	async setTracking(projectId: string, tracking: boolean, beforeCommit?: () => void): Promise<ServerProject> {
+	async setTracking(
+		projectId: string,
+		tracking: boolean,
+		beforeCommit?: () => void,
+		audit?: ManagementAuditHook,
+	): Promise<ServerProject> {
 		if (typeof tracking !== "boolean") throw new AuthStoreError("Tracking must be a boolean.");
 		const project = this.load(projectId);
 		if (!project) throw new AuthStoreError("Project not found.", 404);
@@ -175,7 +201,13 @@ export class ProjectStore {
 			if (!current) throw new AuthStoreError("Project not found.", 404);
 			if (tracking) assertPrepared(inspectProject(current.name, current.rootPath));
 			database.query("UPDATE projects SET tracking=? WHERE id=?").run(Number(tracking), projectId);
-			return { ...current, tracking };
+			const project = { ...current, tracking };
+			audit?.(
+				database,
+				{ kind: "project", recordKey: `project:${projectId}`, visibleId: projectId, before: current, after: project },
+				project,
+			);
+			return project;
 		});
 	}
 }

@@ -7,6 +7,7 @@ import type { AuthSession } from "../server/auth-types.ts";
 import { CentralServer } from "../server/central.ts";
 import { findNextAvailablePort } from "../server/index.ts";
 import { ProjectStore } from "../server/project-store.ts";
+import { centralFixtureFetch } from "./central-test-client.ts";
 import { createUniqueTestDir, initializeFilesystemTestProject, safeCleanup } from "./test-utils.ts";
 
 const PASSWORD = "initial long password";
@@ -34,7 +35,7 @@ describe("central authentication and authorization", () => {
 		body?: unknown,
 		extra?: Record<string, string>,
 	) {
-		return fetch(`${base}${path}`, {
+		return centralFixtureFetch(`${base}${path}`, {
 			method,
 			headers: {
 				Origin: base,
@@ -397,5 +398,47 @@ describe("central authentication and authorization", () => {
 			expect((await request(path, user)).status).toBe(404);
 		}
 		expect(await Bun.file(join(alpha, "backlog", "tasks", "TASK-1.md")).exists()).toBe(false);
+	});
+
+	it("requires write preconditions and protects replay/result ownership with current permissions", async () => {
+		const task = await (await request("/api/projects/1/tasks/TASK-1", user)).json();
+		const body = JSON.stringify({ title: "One durable change" });
+		const operationId = crypto.randomUUID();
+		const write = (actor: BrowserSession, headers: Record<string, string>) =>
+			fetch(`${base}/api/projects/1/tasks/TASK-1`, {
+				method: "PUT",
+				headers: {
+					Origin: base,
+					Cookie: actor.cookie,
+					"X-CSRF-Token": actor.session.csrfToken,
+					"Content-Type": "application/json",
+					...headers,
+				},
+				body,
+			});
+		const missingKey = await write(user, { "If-Match": task.revision });
+		expect(missingKey.status).toBe(428);
+		const missingRevision = await write(user, { "Idempotency-Key": crypto.randomUUID() });
+		expect(missingRevision.status).toBe(428);
+		const headers = { "Idempotency-Key": operationId, "If-Match": task.revision };
+		const saved = await write(user, headers);
+		expect(saved.status, await saved.clone().text()).toBe(200);
+		expect((await write(user, headers)).status).toBe(200);
+		expect((await write(admin, headers)).status).toBe(409);
+		const operation = await request(`/api/operations/${operationId}`, user);
+		expect(operation.status).toBe(200);
+		expect((await operation.json()).state).toBe("completed");
+		expect((await request(`/api/operations/${operationId}`, admin)).status).toBe(200);
+		const outsiderId = (await auth.createUser({ username: "outsider", password: PASSWORD })).id;
+		const outsider = await change(await login("outsider"));
+		expect(outsider.session.user.id).toBe(outsiderId);
+		expect((await request(`/api/operations/${operationId}`, outsider)).status).toBe(404);
+		auth.setMember("1", userId, { tasksWrite: false });
+		expect((await write(user, headers)).status).toBe(403);
+		const history = await (await request(`/api/projects/1/history?recordKey=${task.recordKey}`, admin)).json();
+		expect(history.items.filter((event: { operationId: string }) => event.operationId === operationId)).toHaveLength(1);
+		auth.removeMember("1", userId);
+		expect((await request(`/api/operations/${operationId}`, user)).status).toBe(404);
+		expect((await write(user, headers)).status).toBe(404);
 	});
 });

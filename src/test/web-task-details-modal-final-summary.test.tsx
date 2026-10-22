@@ -6,7 +6,7 @@ import { renderToString } from "react-dom/server";
 import type { Milestone, Task } from "../types/index.ts";
 import { ThemeProvider } from "../web/contexts/ThemeContext";
 import { TaskDetailsModal } from "../web/components/TaskDetailsModal";
-import { apiClient } from "../web/lib/api.ts";
+import { ApiError, apiClient } from "../web/lib/api.ts";
 import { setNativeInputValue } from "./react-dom-input.ts";
 
 let activeRoot: Root | null = null;
@@ -252,6 +252,8 @@ describe("Web task popup Final Summary display", () => {
 		const originalUpdateTask = apiClient.updateTask.bind(apiClient);
 		const task: Task = {
 			id: "TASK-12B",
+			recordKey: "key-12b",
+			revision: "rev-1",
 			title: "Editable comments refresh",
 			status: "To Do",
 			assignee: [],
@@ -262,15 +264,23 @@ describe("Web task popup Final Summary display", () => {
 		};
 		const updatedTask: Task = {
 			...task,
+			revision: "rev-2",
 			comments: [
 				...(task.comments ?? []),
 				{ index: 2, author: "@reviewer", createdDate: "2025-01-03 12:00", body: "New comment" },
 			],
 		};
-		apiClient.updateTask = async (id, updates) => {
+		let fullSaveRevision: string | undefined;
+		apiClient.updateTask = async (id, updates, record) => {
 			expect(id).toBe("TASK-12B");
-			expect(updates.commentsAppend).toEqual(["New comment"]);
-			expect(updates.commentAuthor).toBe("@reviewer");
+			if (updates.commentsAppend) {
+				expect(record?.revision).toBe("rev-1");
+				expect(updates.commentsAppend).toEqual(["New comment"]);
+				expect(updates.commentAuthor).toBe("@reviewer");
+				return updatedTask;
+			}
+			fullSaveRevision = record?.revision;
+			expect(updates.title).toBe("Dirty title");
 			return updatedTask;
 		};
 
@@ -296,16 +306,25 @@ describe("Web task popup Final Summary display", () => {
 				clickElement(editButton as HTMLButtonElement);
 				await Promise.resolve();
 			});
+			await act(async () => {
+				const titleInput = findInputByValue(container as HTMLElement, "Editable comments refresh");
+				if (!titleInput) throw new Error("Task title input missing");
+				setFormValue(titleInput, "Dirty title");
+				await Promise.resolve();
+			});
 
-			const authorInput = (container as HTMLElement).querySelector("input[placeholder='Author']") as HTMLInputElement | null;
+			const authorInput = (container as HTMLElement).querySelector(
+				"input[placeholder='Author']",
+			) as HTMLInputElement | null;
 			const commentTextarea = (container as HTMLElement).querySelector(
 				"textarea[placeholder='Add a comment...']",
 			) as HTMLTextAreaElement | null;
 			expect(authorInput).toBeTruthy();
 			expect(commentTextarea).toBeTruthy();
+			if (!authorInput || !commentTextarea) throw new Error("Comment fields missing");
 			await act(async () => {
-				setFormValue(authorInput!, "@reviewer");
-				setFormValue(commentTextarea!, "New comment");
+				setFormValue(authorInput, "@reviewer");
+				setFormValue(commentTextarea, "New comment");
 				await Promise.resolve();
 			});
 
@@ -330,6 +349,13 @@ describe("Web task popup Final Summary display", () => {
 			expect(container?.textContent).toContain("New comment");
 			expect(container?.textContent).toContain("Add comment");
 			expect(container?.textContent).toContain("Save");
+			await act(async () => {
+				const saveButton = findButton(container as HTMLElement, "Save");
+				if (!saveButton) throw new Error("Save button missing");
+				clickElement(saveButton);
+				await Promise.resolve();
+			});
+			expect(fullSaveRevision).toBe("rev-2");
 		} finally {
 			apiClient.updateTask = originalUpdateTask;
 		}
@@ -340,6 +366,8 @@ describe("Web task popup Final Summary display", () => {
 
 		const task: Task = {
 			id: "TASK-13",
+			recordKey: "task-key-13",
+			revision: "rev-1",
 			title: "Original title",
 			status: "To Do",
 			assignee: [],
@@ -353,6 +381,7 @@ describe("Web task popup Final Summary display", () => {
 		};
 		const refreshedTask: Task = {
 			...task,
+			revision: "rev-2",
 			title: "External title",
 			description: "External description",
 			implementationPlan: "External plan",
@@ -409,6 +438,37 @@ describe("Web task popup Final Summary display", () => {
 		expect(findTextareaByValue(container as HTMLElement, "External plan")).toBeTruthy();
 		expect(findTextareaByValue(container as HTMLElement, "External notes")).toBeTruthy();
 		expect(container?.textContent).toContain("Save");
+		const originalUpdateTask = apiClient.updateTask.bind(apiClient);
+		let sentRevision: string | undefined;
+		let updateCalls = 0;
+		apiClient.updateTask = async (_id, _updates, record) => {
+			updateCalls++;
+			sentRevision = record?.revision;
+			throw new ApiError("Another edit was saved", 409, "REVISION_CONFLICT", { code: "REVISION_CONFLICT" });
+		};
+		try {
+			await act(async () => {
+				const titleInput = findInputByValue(container as HTMLElement, "Local title");
+				if (!titleInput) throw new Error("Task title input missing");
+				titleInput.dispatchEvent(new window.FocusEvent("focusout", { bubbles: true }));
+				await Promise.resolve();
+			});
+			expect(updateCalls).toBe(0);
+			await act(async () => {
+				const saveButton = findButton(container as HTMLElement, "Save");
+				if (!saveButton) throw new Error("Save button missing");
+				clickElement(saveButton);
+				await Promise.resolve();
+			});
+			await flushReact();
+			expect(sentRevision).toBe("rev-1");
+			expect(updateCalls).toBe(1);
+			expect(findInputByValue(container as HTMLElement, "Local title")).toBeTruthy();
+			expect(findTextareaByValue(container as HTMLElement, "Local description")).toBeTruthy();
+			expect(container?.textContent).toContain("This record changed. Your draft is kept.");
+		} finally {
+			apiClient.updateTask = originalUpdateTask;
+		}
 	});
 
 	it("preserves unsaved create fields when refreshed props change while the modal stays open", async () => {
@@ -451,7 +511,11 @@ describe("Web task popup Final Summary display", () => {
 				((container as HTMLElement).querySelector("input[placeholder='Enter task title']") as HTMLInputElement | null)
 					?.value === "Local draft title",
 		);
-		await waitFor(() => ((container as HTMLElement).querySelector("textarea") as HTMLTextAreaElement | null)?.value === "Local draft description");
+		await waitFor(
+			() =>
+				((container as HTMLElement).querySelector("textarea") as HTMLTextAreaElement | null)?.value ===
+				"Local draft description",
+		);
 
 		await act(async () => {
 			activeRoot?.render(
@@ -471,10 +535,7 @@ describe("Web task popup Final Summary display", () => {
 			"value",
 			"Local draft title",
 		);
-		expect((container as HTMLElement).querySelector("textarea")).toHaveProperty(
-			"value",
-			"Local draft description",
-		);
+		expect((container as HTMLElement).querySelector("textarea")).toHaveProperty("value", "Local draft description");
 	});
 
 	it("hides Final Summary section in preview when empty", () => {

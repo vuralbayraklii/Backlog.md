@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { realpath } from "node:fs/promises";
 import net from "node:net";
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
@@ -17,7 +18,16 @@ import type { SearchService } from "../core/search-service.ts";
 import { getTaskStatistics } from "../core/statistics.ts";
 import { loadTaskDetail } from "../core/task-detail.ts";
 import { isCreateLockError, isTaskLockError } from "../file-system/operations.ts";
+import {
+	type FileEntry,
+	type PreparedAfterFile,
+	type PreparedFileChange,
+	type PreparedRecordKeyResolver,
+	recordFileSnapshot,
+	snapshotFileEntry,
+} from "../file-system/prepared-change.ts";
 import { parseFrontmatter } from "../markdown/frontmatter.ts";
+import { parseMilestone, parseTask } from "../markdown/parser.ts";
 import { BacklogToolError } from "../mcp/errors/mcp-errors.ts";
 import { MilestoneHandlers } from "../mcp/tools/milestones/handlers.ts";
 import {
@@ -48,12 +58,14 @@ import { isAmbiguousTaskIdError, LOCAL_TASK_LOOKUP_HINT, taskNotFoundMessage } f
 import { getVersion } from "../utils/version.ts";
 import { AuthStoreError } from "./auth-store.ts";
 import type { ProjectAuthorization, ProjectPermission } from "./auth-types.ts";
+import { MutationAbortResponse, MutationError, recordRevision, taskCollectionRevision } from "./mutations.ts";
 import { assertProjectBoundary, readProjectFile } from "./project-paths.ts";
 
 // Regex pattern to match any prefix (letters followed by dash)
 const PREFIX_PATTERN = /^[a-zA-Z]+-/i;
 const DEFAULT_PREFIX = "task-";
 const DOCUMENT_TYPES = new Set<Document["type"]>(DOCUMENT_TYPE_VALUES);
+const DECISION_MANAGE_RECHECK = Symbol("decisionManageRecheck");
 
 /**
  * The task routes serve drafts too, so only an explicit DRAFT- id addresses a draft.
@@ -78,6 +90,25 @@ function formatErrorForWeb(message: string): string {
 type RecordRequest = Request & { params: { id: string } };
 type RoutePermission = ProjectPermission | "read" | "admin";
 type ProjectRouteHandler = ((req: Request) => Promise<Response>) & { permission?: RoutePermission };
+
+export interface ProjectReadContext {
+	recordKeyFor?: (
+		kind: "task" | "document" | "decision" | "milestone" | "config",
+		visibleId: string,
+		recordPath: string,
+		observed?: { lifecycle: "active" | "draft" | "archived"; bytes: Uint8Array },
+	) => string | undefined | Promise<string | undefined>;
+}
+
+export interface ProjectMutationContext extends ProjectReadContext {
+	resolveRecordKey?: PreparedRecordKeyResolver;
+	commit(
+		mutation: { action: string; files: PreparedFileChange[]; response: Response },
+		apply: (afterFile?: PreparedAfterFile) => Promise<void>,
+		publish: () => Promise<void>,
+		revalidate: () => Response | null,
+	): Promise<void>;
+}
 
 type DueDatePayloadResult = { ok: true; value: string | null | undefined } | { ok: false; error: string };
 
@@ -279,6 +310,9 @@ export class BacklogServer {
 	private taskBroadcastTimer?: ReturnType<typeof setTimeout>;
 	private pendingDataBroadcastScope: "tasks" | "milestones" = "tasks";
 	private storeReadyBroadcasted = false;
+	private preparedMutationBroadcasts = false;
+	private queuedMutationBroadcastScope: "tasks" | "milestones" | null = null;
+	private queuedConfigBroadcast = false;
 	private readonly boundaryPaths = new Set<string>();
 	private boundaryFailure: Error | null = null;
 
@@ -306,6 +340,82 @@ export class BacklogServer {
 		if (options?.projectName) this.projectName = options.projectName;
 	}
 
+	/** Guarded physical inventory for first central attachment and startup recovery. */
+	async listCentralRecordSnapshots(): Promise<
+		Array<{
+			kind: "task" | "document" | "decision" | "milestone" | "config";
+			visibleId: string;
+			lifecycle: "active" | "draft" | "archived";
+			recordPath: string;
+			entry: FileEntry;
+			bytes: Uint8Array;
+		}>
+	> {
+		this.assertBoundary();
+		const fs = this.core.filesystem;
+		type Snapshot = Awaited<ReturnType<BacklogServer["listCentralRecordSnapshots"]>>[number];
+		const snapshots: Snapshot[] = [];
+		const add = async (kind: Snapshot["kind"], visibleId: string, lifecycle: Snapshot["lifecycle"], path: string) => {
+			this.assertBoundary();
+			const entry = await snapshotFileEntry(path);
+			if (!entry) throw new Error(`Record disappeared during inventory: ${path}`);
+			const bytes = await fs.readBytes(path);
+			this.assertBoundary();
+			snapshots.push({ kind, visibleId, lifecycle, recordPath: path, entry, bytes });
+		};
+		const [tasks, archivedTasks, drafts, documents, archivedDocuments, decisions, archivedDecisions] =
+			await Promise.all([
+				fs.listTasks(),
+				fs.listArchivedTasks(),
+				fs.listHealthyDrafts(),
+				fs.listDocuments(),
+				fs.listArchivedDocuments(),
+				fs.listDecisions(),
+				fs.listArchivedDecisions(),
+			]);
+		for (const task of tasks) if (task.filePath) await add("task", task.id, "active", task.filePath);
+		for (const task of archivedTasks) if (task.filePath) await add("task", task.id, "archived", task.filePath);
+		for (const draft of drafts) if (draft.filePath) await add("task", draft.id, "draft", draft.filePath);
+		for (const document of [...documents, ...archivedDocuments]) {
+			await add(
+				"document",
+				document.id,
+				document.archived ? "archived" : "active",
+				fs.contentRecordFilePath("document", document),
+			);
+		}
+		for (const decision of [...decisions, ...archivedDecisions]) {
+			await add(
+				"decision",
+				decision.id,
+				decision.archived ? "archived" : "active",
+				fs.contentRecordFilePath("decision", decision),
+			);
+		}
+		for (const [directory, lifecycle] of [
+			[fs.milestonesDir, "active"],
+			[fs.archiveMilestonesDir, "archived"],
+		] as const) {
+			const filenames = await Array.fromAsync(new Bun.Glob("m-*.md").scan({ cwd: directory })).catch(() => []);
+			for (const filename of filenames) {
+				const path = join(directory, filename);
+				const milestone = parseMilestone(await fs.readText(path));
+				await add("milestone", milestone.id, lifecycle, path);
+			}
+		}
+		const archivedDraftsDir = join(fs.backlogDir, "archive/drafts");
+		const archivedDraftFiles = await Array.fromAsync(new Bun.Glob("draft-*.md").scan({ cwd: archivedDraftsDir })).catch(
+			() => [],
+		);
+		for (const filename of archivedDraftFiles) {
+			const path = join(archivedDraftsDir, filename);
+			const draft = parseTask(await fs.readText(path));
+			await add("task", draft.id, "archived", path);
+		}
+		if (await snapshotFileEntry(fs.configFilePath)) await add("config", "config", "active", fs.configFilePath);
+		return snapshots.sort((a, b) => a.recordPath.localeCompare(b.recordPath));
+	}
+
 	private assertBoundary(): void {
 		if (!this.centralMode) return;
 		if (this.boundaryFailure) throw this.boundaryFailure;
@@ -328,6 +438,220 @@ export class BacklogServer {
 		} catch {
 			return Response.json({ error: "Project files are unavailable" }, { status: 503 });
 		}
+	}
+
+	private async versionRecord<T extends { id: string }>(
+		record: T,
+		kind: "task" | "document" | "decision" | "milestone",
+		lifecycle: "active" | "draft" | "archived",
+		context?: ProjectReadContext,
+	): Promise<T & { recordKey?: string; revision?: string }> {
+		if (!this.centralMode) return record;
+		const snapshot = recordFileSnapshot(record);
+		if (!snapshot || !context?.recordKeyFor) {
+			throw new MutationError(
+				"Record version is unavailable. Reopen the project before editing.",
+				503,
+				"RECOVERY_REQUIRED",
+			);
+		}
+		const recordKey = await context.recordKeyFor(kind, record.id, snapshot.recordPath, {
+			lifecycle,
+			bytes: snapshot.bytes,
+		});
+		if (!recordKey) {
+			throw new MutationError(
+				"Record identity is unavailable. Reopen the project before editing.",
+				503,
+				"RECOVERY_REQUIRED",
+			);
+		}
+		return {
+			...record,
+			recordKey,
+			revision: recordRevision(recordKey, snapshot.recordPath, lifecycle, snapshot.bytes),
+		};
+	}
+
+	private async taskCollectionHeader(context?: ProjectReadContext): Promise<Record<string, string>> {
+		if (!this.centralMode) return {};
+		const store = await this.getContentStoreInstance();
+		const versions = await Promise.all(
+			store.getTasks().map(async (task) => {
+				const record = await this.versionRecord(task, "task", "active", context);
+				return { recordKey: record.recordKey as string, revision: record.revision as string };
+			}),
+		);
+		return { "X-Backlog-Tasks-Revision": taskCollectionRevision(versions) };
+	}
+
+	private async projectedTaskCollectionHeader(
+		files: PreparedFileChange[],
+		context: ProjectReadContext,
+	): Promise<string> {
+		const store = await this.getContentStoreInstance();
+		const current = await Promise.all(
+			store.getTasks().map(async (task) => {
+				const version = await this.versionRecord(task, "task", "active", context);
+				return [version.recordKey as string, version.revision as string] as const;
+			}),
+		);
+		const versions = new Map(current);
+		const taskEffects = files.filter((file) => file.record.kind === "task");
+		for (const recordKey of new Set(
+			taskEffects.map((file) => file.record.recordKey).filter((key): key is string => !!key),
+		)) {
+			const effects = taskEffects.filter((file) => file.record.recordKey === recordKey);
+			const final = effects.findLast((file) => file.after !== null && file.record.lifecycle === "active");
+			if (final) versions.set(recordKey, (await this.preparedEffectVersion(final)).revision);
+			else versions.delete(recordKey);
+		}
+		return taskCollectionRevision([...versions].map(([recordKey, revision]) => ({ recordKey, revision })));
+	}
+
+	private async versionReturnedTask(
+		task: Task,
+		files: PreparedFileChange[],
+		context: ProjectReadContext,
+	): Promise<Task> {
+		const effect = files.findLast(
+			(file) =>
+				file.record.kind === "task" &&
+				file.record.lifecycle === "active" &&
+				file.record.visibleId.toLowerCase() === task.id.toLowerCase() &&
+				file.after !== null,
+		);
+		if (effect) return { ...task, ...(await this.preparedEffectVersion(effect)) };
+		const bound = recordFileSnapshot(task)
+			? task
+			: (await this.getContentStoreInstance()).getTasks().find((candidate) => candidate.id === task.id);
+		if (!bound) throw new MutationError("Task version is unavailable for this result.", 503, "RECOVERY_REQUIRED");
+		const version = await this.versionRecord(bound, "task", "active", context);
+		return { ...task, recordKey: version.recordKey, revision: version.revision };
+	}
+
+	private async versionPreparedResponse(
+		req: Request,
+		response: Response,
+		files: PreparedFileChange[],
+		context: ProjectReadContext,
+	): Promise<Response> {
+		if (!this.centralMode || response.status >= 400) return response;
+		const body = await response
+			.clone()
+			.json()
+			.catch(() => null);
+		const bodyObject = body && typeof body === "object" && !Array.isArray(body) ? body : null;
+		const nestedMilestone =
+			bodyObject?.milestone && typeof bodyObject.milestone === "object" && !Array.isArray(bodyObject.milestone)
+				? bodyObject.milestone
+				: null;
+		const bodyId =
+			(typeof bodyObject?.id === "string" ? bodyObject.id : undefined) ??
+			(typeof nestedMilestone?.id === "string" ? nestedMilestone.id : undefined);
+		const requestPath = new URL(req.url).pathname;
+		if (requestPath.endsWith("/config")) {
+			const config = files.find((file) => file.record.kind === "config" && file.after !== null);
+			if (!config || !body || typeof body !== "object" || Array.isArray(body)) return response;
+			const version = await this.preparedEffectVersion(config);
+			const headers = new Headers(response.headers);
+			headers.set("ETag", version.revision);
+			return Response.json({ ...body, ...version }, { status: response.status, headers });
+		}
+		if ((requestPath.endsWith("/tasks/move") || requestPath.endsWith("/tasks/reorder")) && bodyObject) {
+			const headers = new Headers(response.headers);
+			headers.set("X-Backlog-Tasks-Revision", await this.projectedTaskCollectionHeader(files, context));
+			return Response.json(
+				{
+					...bodyObject,
+					...(bodyObject.task && { task: await this.versionReturnedTask(bodyObject.task as Task, files, context) }),
+					...(Array.isArray(bodyObject.tasks) && {
+						tasks: await Promise.all(
+							bodyObject.tasks.map((task: Task) => this.versionReturnedTask(task, files, context)),
+						),
+					}),
+					...(Array.isArray(bodyObject.changedTasks) && {
+						changedTasks: await Promise.all(
+							bodyObject.changedTasks.map((task: Task) => this.versionReturnedTask(task, files, context)),
+						),
+					}),
+				},
+				{ status: response.status, headers },
+			);
+		}
+		if (files.length === 0) {
+			if (req.method === "PUT" && requestPath.includes("/milestones/") && nestedMilestone && bodyId) {
+				const current = await this.core.filesystem.loadMilestone(bodyId);
+				if (!current) return response;
+				const version = await this.versionRecord(current, "milestone", "active", context);
+				const headers = new Headers(response.headers);
+				headers.set("ETag", version.revision as string);
+				return Response.json(
+					{
+						...bodyObject,
+						milestone: { ...nestedMilestone, recordKey: version.recordKey, revision: version.revision },
+					},
+					{ status: response.status, headers },
+				);
+			}
+			if (req.method !== "PUT" || !new URL(req.url).pathname.includes("/tasks/") || !bodyId) return response;
+			const current = isDraftId(bodyId)
+				? await this.core.filesystem.loadDraft(bodyId)
+				: await this.core.getTask(bodyId, { refreshCrossBranch: false });
+			if (!current) return response;
+			const versioned = await this.versionRecord(current, "task", isDraftId(bodyId) ? "draft" : "active", context);
+			const headers = new Headers(response.headers);
+			headers.set("ETag", versioned.revision as string);
+			return Response.json(
+				{ ...body, recordKey: versioned.recordKey, revision: versioned.revision },
+				{
+					status: response.status,
+					headers,
+				},
+			);
+		}
+		const pathId = requestPath.match(/\/(?:tasks|docs|decisions|drafts|milestones)\/([^/]+)(?:\/|$)/)?.[1];
+		const id = bodyId ?? pathId;
+		if (!id) return response;
+		const effect = files.find(
+			(file) => file.after !== null && file.record.visibleId.toLowerCase() === id.toLowerCase(),
+		);
+		if (!effect) return response;
+		const { recordKey, revision } = await this.preparedEffectVersion(effect);
+		const headers = new Headers(response.headers);
+		headers.set("ETag", revision);
+		if (nestedMilestone && effect.record.kind === "milestone") {
+			return Response.json(
+				{ ...bodyObject, milestone: { ...nestedMilestone, recordKey, revision } },
+				{ status: response.status, headers },
+			);
+		}
+		if (!body || typeof body !== "object" || Array.isArray(body) || !bodyId) {
+			return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+		}
+		return Response.json({ ...body, recordKey, revision }, { status: response.status, headers });
+	}
+
+	private async preparedEffectVersion(effect: PreparedFileChange): Promise<{ recordKey: string; revision: string }> {
+		const recordKey = effect.record.recordKey;
+		if (!recordKey) {
+			throw new MutationError("Record identity is unavailable for this write.", 503, "RECOVERY_REQUIRED");
+		}
+		const recordPath = effect.record.recordPath ?? effect.path;
+		const bytes =
+			effect.after?.type === "file"
+				? effect.after.bytes
+				: effect.record.transitionFromPath
+					? await this.core.filesystem.readBytes(effect.record.transitionFromPath)
+					: null;
+		if (!bytes) throw new MutationError("Record bytes are unavailable for this write.", 503, "RECOVERY_REQUIRED");
+		const revision = recordRevision(recordKey, recordPath, effect.record.lifecycle, bytes);
+		return { recordKey, revision };
+	}
+
+	private conflictResponse(error: unknown, message: string): Response {
+		const code = isAmbiguousIdError(error) || isAmbiguousTaskIdError(error) ? "AMBIGUOUS_ID" : "WRITE_LOCKED";
+		return Response.json(this.centralMode ? { error: message, code } : { error: message }, { status: 409 });
 	}
 
 	private async resolveMilestoneInput(milestone: string): Promise<string> {
@@ -420,6 +744,11 @@ export class BacklogServer {
 	}
 
 	private broadcastDataUpdated(scope: "tasks" | "milestones" = "tasks") {
+		if (this.preparedMutationBroadcasts) {
+			this.queuedMutationBroadcastScope =
+				scope === "milestones" || this.queuedMutationBroadcastScope === "milestones" ? "milestones" : "tasks";
+			return;
+		}
 		// Milestone changes widen the message so clients also refetch milestone
 		// entities; the debounce keeps the widest scope seen in the window.
 		if (scope === "milestones") this.pendingDataBroadcastScope = "milestones";
@@ -435,9 +764,25 @@ export class BacklogServer {
 	}
 
 	private broadcastConfigUpdated() {
+		if (this.preparedMutationBroadcasts) {
+			this.queuedConfigBroadcast = true;
+			return;
+		}
 		for (const ws of this.sockets.keys()) {
 			this.sendSocket(ws, "config-updated");
 		}
+	}
+
+	private finishPreparedMutationBroadcasts(publish: boolean, freeze = false): void {
+		if (freeze) return;
+		this.preparedMutationBroadcasts = false;
+		const scope = this.queuedMutationBroadcastScope;
+		const config = this.queuedConfigBroadcast;
+		this.queuedMutationBroadcastScope = null;
+		this.queuedConfigBroadcast = false;
+		if (!publish) return;
+		if (scope) this.broadcastDataUpdated(scope);
+		if (config) this.broadcastConfigUpdated();
 	}
 
 	private publishBrowserLoadingState(state: BrowserLoadingState) {
@@ -448,7 +793,10 @@ export class BacklogServer {
 		}
 	}
 
-	private apiRoutes(authorization?: ProjectAuthorization) {
+	private apiRoutes(
+		authorization?: ProjectAuthorization,
+		mutationContext?: ProjectReadContext | ProjectMutationContext,
+	) {
 		// The operation's permission lives beside its handler on both HTTP surfaces.
 		const route = <T extends Request>(permission: RoutePermission, handler: (req: T) => Promise<Response>) =>
 			Object.assign(
@@ -459,7 +807,64 @@ export class BacklogServer {
 					if (denied) return denied;
 					const unsafe = this.boundaryDenied();
 					if (unsafe) return unsafe;
-					const response = await handler(req);
+					let response: Response;
+					if (this.centralMode && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+						if (!mutationContext || !("commit" in mutationContext)) {
+							return Response.json({ error: "Central write context is unavailable" }, { status: 503 });
+						}
+						await this.ensureServicesReady();
+						this.preparedMutationBroadcasts = true;
+						let prepared: {
+							result: Response;
+							files: PreparedFileChange[];
+							apply: (afterFile?: PreparedAfterFile) => Promise<void>;
+							publish: () => Promise<void>;
+							abort: (freeze: boolean) => Promise<void>;
+						};
+						try {
+							prepared = await this.core.prepareWrite(
+								(path) => {
+									this.assertBoundary();
+									assertProjectBoundary(this.core.filesystem.rootDir, [path]);
+								},
+								mutationContext.resolveRecordKey,
+								() => handler(req),
+							);
+						} catch (error) {
+							this.finishPreparedMutationBroadcasts(false);
+							throw error;
+						}
+						try {
+							response = await this.versionPreparedResponse(req, prepared.result, prepared.files, mutationContext);
+							if (response.status >= 400) {
+								await prepared.abort(false);
+								this.finishPreparedMutationBroadcasts(false);
+							} else {
+								await mutationContext.commit(
+									{ action: `${req.method} ${new URL(req.url).pathname}`, files: prepared.files, response },
+									prepared.apply,
+									prepared.publish,
+									() =>
+										authorization?.check(permission) ??
+										((req as Request & { [DECISION_MANAGE_RECHECK]?: boolean })[DECISION_MANAGE_RECHECK]
+											? authorization?.check("decisionsManage")
+											: null) ??
+										this.boundaryDenied(),
+								);
+								this.finishPreparedMutationBroadcasts(true);
+							}
+						} catch (error) {
+							const freeze =
+								error instanceof MutationError || error instanceof MutationAbortResponse
+									? error.freezePublication
+									: true;
+							await prepared.abort(freeze);
+							this.finishPreparedMutationBroadcasts(false, freeze);
+							throw error;
+						}
+					} else {
+						response = await handler(req);
+					}
 					return authorization?.check(permission) ?? this.boundaryDenied() ?? response;
 				},
 				{ permission },
@@ -473,17 +878,17 @@ export class BacklogServer {
 			);
 		return {
 			"/api/tasks": {
-				GET: route("read", async (req: Request) => this.handleListTasks(req)),
+				GET: route("read", async (req: Request) => this.handleListTasks(req, mutationContext)),
 				POST: route("tasksWrite", async (req: Request) => this.handleCreateTask(req)),
 			},
 			"/api/tasks/archived": {
-				GET: route("read", async () => this.handleListArchived("task")),
+				GET: route("read", async () => this.handleListArchived("task", mutationContext)),
 			},
 			"/api/task/:id": {
-				GET: route("read", async (req: RecordRequest) => this.handleGetTask(req.params.id)),
+				GET: route("read", async (req: RecordRequest) => this.handleGetTask(req.params.id, mutationContext)),
 			},
 			"/api/tasks/:id": {
-				GET: route("read", async (req: RecordRequest) => this.handleGetTask(req.params.id)),
+				GET: route("read", async (req: RecordRequest) => this.handleGetTask(req.params.id, mutationContext)),
 				PUT: route("tasksWrite", async (req: RecordRequest) => this.handleUpdateTask(req, req.params.id)),
 				DELETE: route("delete", async (req: RecordRequest) =>
 					this.handleRecordLifecycle("task", req.params.id, "delete"),
@@ -504,21 +909,21 @@ export class BacklogServer {
 				GET: route("read", async () => this.handleGetStatuses()),
 			},
 			"/api/config": {
-				GET: route("read", async () => this.handleGetConfig()),
+				GET: route("read", async () => this.handleGetConfig(mutationContext)),
 				PUT: route("admin", async (req: Request) => this.handleUpdateConfig(req)),
 			},
 			"/api/docs": {
-				GET: route("read", async () => this.handleListDocs()),
+				GET: route("read", async () => this.handleListDocs(mutationContext)),
 				POST: route("docsWrite", async (req: Request) => this.handleCreateDoc(req)),
 			},
 			"/api/docs/archived": {
-				GET: route("read", async () => this.handleListArchived("document")),
+				GET: route("read", async () => this.handleListArchived("document", mutationContext)),
 			},
 			"/api/doc/:id": {
-				GET: route("read", async (req: RecordRequest) => this.handleGetDoc(req.params.id)),
+				GET: route("read", async (req: RecordRequest) => this.handleGetDoc(req.params.id, mutationContext)),
 			},
 			"/api/docs/:id": {
-				GET: route("read", async (req: RecordRequest) => this.handleGetDoc(req.params.id)),
+				GET: route("read", async (req: RecordRequest) => this.handleGetDoc(req.params.id, mutationContext)),
 				PUT: route("docsWrite", async (req: RecordRequest) => this.handleUpdateDoc(req, req.params.id)),
 				DELETE: route("delete", async (req: RecordRequest) =>
 					this.handleRecordLifecycle("document", req.params.id, "delete"),
@@ -535,17 +940,17 @@ export class BacklogServer {
 				),
 			},
 			"/api/decisions": {
-				GET: route("read", async () => this.handleListDecisions()),
+				GET: route("read", async () => this.handleListDecisions(mutationContext)),
 				POST: decisionRoute("decisionsWrite", async (req: Request) => this.handleCreateDecision(req)),
 			},
 			"/api/decisions/archived": {
-				GET: route("read", async () => this.handleListArchived("decision")),
+				GET: route("read", async () => this.handleListArchived("decision", mutationContext)),
 			},
 			"/api/decision/:id": {
-				GET: route("read", async (req: RecordRequest) => this.handleGetDecision(req.params.id)),
+				GET: route("read", async (req: RecordRequest) => this.handleGetDecision(req.params.id, mutationContext)),
 			},
 			"/api/decisions/:id": {
-				GET: route("read", async (req: RecordRequest) => this.handleGetDecision(req.params.id)),
+				GET: route("read", async (req: RecordRequest) => this.handleGetDecision(req.params.id, mutationContext)),
 				PUT: decisionRoute("decisionsWrite", async (req: RecordRequest) =>
 					this.handleUpdateDecision(req, req.params.id, authorization),
 				),
@@ -564,20 +969,20 @@ export class BacklogServer {
 				),
 			},
 			"/api/drafts": {
-				GET: route("read", async () => this.handleListDrafts()),
+				GET: route("read", async () => this.handleListDrafts(mutationContext)),
 			},
 			"/api/drafts/:id/promote": {
 				POST: route("tasksWrite", async (req: RecordRequest) => this.handlePromoteDraft(req.params.id)),
 			},
 			"/api/milestones": {
-				GET: route("read", async () => this.handleListMilestones()),
+				GET: route("read", async () => this.handleListMilestones(mutationContext)),
 				POST: route("tasksWrite", async (req: Request) => this.handleCreateMilestone(req)),
 			},
 			"/api/milestones/archived": {
-				GET: route("read", async () => this.handleListArchivedMilestones()),
+				GET: route("read", async () => this.handleListArchivedMilestones(mutationContext)),
 			},
 			"/api/milestones/:id": {
-				GET: route("read", async (req: RecordRequest) => this.handleGetMilestone(req.params.id)),
+				GET: route("read", async (req: RecordRequest) => this.handleGetMilestone(req.params.id, mutationContext)),
 				PUT: route("tasksWrite", async (req: RecordRequest) => this.handleUpdateMilestone(req, req.params.id)),
 				DELETE: route("delete", async (req: RecordRequest) => this.handleRemoveMilestone(req, req.params.id)),
 			},
@@ -613,7 +1018,7 @@ export class BacklogServer {
 				POST: route("admin", async (req: Request) => this.handleInit(req)),
 			},
 			"/api/search": {
-				GET: route("read", async (req: Request) => this.handleSearch(req)),
+				GET: route("read", async (req: Request) => this.handleSearch(req, mutationContext)),
 			},
 			"/assets/*": {
 				GET: route("read", async (req: Request) => this.handleAssetRequest(req)),
@@ -621,12 +1026,18 @@ export class BacklogServer {
 		};
 	}
 
-	async dispatchApi(req: Request, localPath: string, authorization?: ProjectAuthorization): Promise<Response> {
-		if (this.centralMode && !authorization) return Response.json({ error: "Authentication required" }, { status: 401 });
-		if (this.centralMode && localPath === "/api/init") return new Response("Not Found", { status: 404 });
+	private matchApiRoute(
+		req: Request,
+		localPath: string,
+		authorization?: ProjectAuthorization,
+		mutationContext?: ProjectReadContext | ProjectMutationContext,
+	): { handler: ProjectRouteHandler; params: Record<string, string | undefined>; url: URL } | null {
 		const url = new URL(req.url);
 		url.pathname = localPath;
-		const routes = this.apiRoutes(authorization) as unknown as Record<string, Record<string, ProjectRouteHandler>>;
+		const routes = this.apiRoutes(authorization, mutationContext) as unknown as Record<
+			string,
+			Record<string, ProjectRouteHandler>
+		>;
 		const patterns = Object.keys(routes).sort((left, right) => {
 			const dynamicCount = (path: string) => (path.match(/[:*]/g) ?? []).length;
 			return dynamicCount(left) - dynamicCount(right) || right.length - left.length;
@@ -635,15 +1046,43 @@ export class BacklogServer {
 			const match = new URLPattern({ pathname: path }).exec(url);
 			if (!match) continue;
 			const handler = routes[path]?.[req.method];
-			if (!handler) return new Response("Not Found", { status: 404 });
-			if (this.centralMode && !handler.permission) {
-				return Response.json({ error: "Operation has no permission definition" }, { status: 403 });
-			}
-			const localRequest = new Request(url, req);
-			Object.defineProperty(localRequest, "params", { value: match.pathname.groups });
-			return await handler(localRequest);
+			return handler ? { handler, params: match.pathname.groups, url } : null;
 		}
-		return new Response("Not Found", { status: 404 });
+		return null;
+	}
+
+	/** Check the matched route's existing permission before idempotent replay reveals its result. */
+	async authorizeApi(req: Request, localPath: string, authorization?: ProjectAuthorization): Promise<Response | null> {
+		if (this.centralMode && !authorization) return Response.json({ error: "Authentication required" }, { status: 401 });
+		if (this.centralMode && localPath === "/api/init") return new Response("Not Found", { status: 404 });
+		const matched = this.matchApiRoute(req, localPath, authorization);
+		if (!matched) return new Response("Not Found", { status: 404 });
+		if (this.centralMode && !matched.handler.permission)
+			return Response.json({ error: "Operation has no permission definition" }, { status: 403 });
+		const denied =
+			(matched.handler.permission ? authorization?.check(matched.handler.permission) : null) ?? this.boundaryDenied();
+		if (denied) return denied;
+		if (req.method === "PUT" && localPath.startsWith("/api/decisions/") && authorization) {
+			return (await this.checkDecisionWriteAuthorization(req, matched.params.id ?? "", authorization)).denied;
+		}
+		return null;
+	}
+
+	async dispatchApi(
+		req: Request,
+		localPath: string,
+		authorization?: ProjectAuthorization,
+		mutationContext?: ProjectReadContext | ProjectMutationContext,
+	): Promise<Response> {
+		if (this.centralMode && !authorization) return Response.json({ error: "Authentication required" }, { status: 401 });
+		if (this.centralMode && localPath === "/api/init") return new Response("Not Found", { status: 404 });
+		const matched = this.matchApiRoute(req, localPath, authorization, mutationContext);
+		if (!matched) return new Response("Not Found", { status: 404 });
+		if (this.centralMode && !matched.handler.permission)
+			return Response.json({ error: "Operation has no permission definition" }, { status: 403 });
+		const localRequest = new Request(matched.url, req);
+		Object.defineProperty(localRequest, "params", { value: matched.params });
+		return await matched.handler(localRequest);
 	}
 
 	acceptSocket(ws: ServerWebSocket<unknown>, authorize?: () => boolean): void {
@@ -930,7 +1369,7 @@ export class BacklogServer {
 	}
 
 	// Task handlers
-	private async handleListTasks(req: Request): Promise<Response> {
+	private async handleListTasks(req: Request, context?: ProjectReadContext): Promise<Response> {
 		let refreshCrossBranch = !this.centralMode && this.servicesInitialized;
 		await this.ensureServicesReady();
 		const url = new URL(req.url);
@@ -993,7 +1432,7 @@ export class BacklogServer {
 				}
 			} catch (error) {
 				if (isAmbiguousTaskIdError(error)) {
-					return Response.json({ error: error.message }, { status: 409 });
+					return this.conflictResponse(error, error.message);
 				}
 				throw error;
 			}
@@ -1004,24 +1443,32 @@ export class BacklogServer {
 			parentTaskId = parentTask.id;
 		}
 
-		// Use Core.queryTasks which handles all filtering and cross-branch logic
-		const tasks = await this.core.queryTasks({
-			filters: {
-				status,
-				excludeStatus,
-				assignee,
-				priority,
-				parentTaskId,
-				labels: labels.length > 0 ? labels : undefined,
-			},
-			includeCrossBranch: crossBranch,
-			refreshCrossBranch,
-		});
-
-		return Response.json(tasks);
+		const store = await this.getContentStoreInstance();
+		for (let attempt = 0; attempt < 3; attempt++) {
+			const version = store.publicationVersion();
+			// Use Core.queryTasks which handles all filtering and cross-branch logic.
+			const tasks = await this.core.queryTasks({
+				filters: {
+					status,
+					excludeStatus,
+					assignee,
+					priority,
+					parentTaskId,
+					labels: labels.length > 0 ? labels : undefined,
+				},
+				includeCrossBranch: crossBranch,
+				refreshCrossBranch,
+			});
+			const records = this.centralMode
+				? await Promise.all(tasks.map((task) => this.versionRecord(task, "task", "active", context)))
+				: tasks;
+			const headers = await this.taskCollectionHeader(context);
+			if (!this.centralMode || version === store.publicationVersion()) return Response.json(records, { headers });
+		}
+		throw new MutationError("Task collection changed while it was read. Retry the request.", 409, "REVISION_CONFLICT");
 	}
 
-	private async handleSearch(req: Request): Promise<Response> {
+	private async handleSearch(req: Request, context?: ProjectReadContext): Promise<Response> {
 		try {
 			const url = new URL(req.url);
 			const query = url.searchParams.get("query") ?? undefined;
@@ -1173,9 +1620,40 @@ export class BacklogServer {
 				await this.core.refreshTasksForTaskRead();
 			}
 
-			const results = searchService.search({ query, limit, types, filters });
-			return Response.json(results);
+			const store = await this.getContentStoreInstance();
+			for (let attempt = 0; attempt < 3; attempt++) {
+				const version = store.publicationVersion();
+				const results = searchService.search({ query, limit, types, filters });
+				const versioned = this.centralMode
+					? await Promise.all(
+							results.map(async (result) => {
+								switch (result.type) {
+									case "task":
+										return { ...result, task: await this.versionRecord(result.task, "task", "active", context) };
+									case "document":
+										return {
+											...result,
+											document: await this.versionRecord(result.document, "document", "active", context),
+										};
+									case "decision":
+										return {
+											...result,
+											decision: await this.versionRecord(result.decision, "decision", "active", context),
+										};
+								}
+							}),
+						)
+					: results;
+				const headers = await this.taskCollectionHeader(context);
+				if (!this.centralMode || version === store.publicationVersion()) return Response.json(versioned, { headers });
+			}
+			throw new MutationError(
+				"Search collection changed while it was read. Retry the request.",
+				409,
+				"REVISION_CONFLICT",
+			);
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			console.error("Error performing search:", error);
 			return Response.json({ error: "Search failed" }, { status: 500 });
 		}
@@ -1235,7 +1713,7 @@ export class BacklogServer {
 		} catch (error) {
 			if (isCreateLockError(error)) {
 				const message = error instanceof Error ? error.message : "Failed to create task";
-				return Response.json({ error: message }, { status: 409 });
+				return this.conflictResponse(error, message);
 			}
 			const message = formatErrorForWeb(error instanceof Error ? error.message : "Failed to create task");
 			return Response.json({ error: message }, { status: 400 });
@@ -1254,7 +1732,7 @@ export class BacklogServer {
 				return draft ?? Response.json({ error: `Task ${taskId} not found` }, { status: 404 });
 			} catch (error) {
 				if (isAmbiguousIdError(error)) {
-					return Response.json({ error: error.message }, { status: 409 });
+					return this.conflictResponse(error, error.message);
 				}
 				throw error;
 			}
@@ -1267,7 +1745,7 @@ export class BacklogServer {
 			const message = error.candidates.some((candidate) => !isAbsolute(candidate))
 				? `Task ID ${taskId} is ambiguous. Repair duplicate task IDs before opening it.`
 				: error.message;
-			return Response.json({ error: message }, { status: 409 });
+			return this.conflictResponse(error, message);
 		}
 		return resolvedTask ?? Response.json({ error: `Task ${taskId} not found` }, { status: 404 });
 	}
@@ -1276,14 +1754,26 @@ export class BacklogServer {
 	 * One task, as a detail read returns it: the record plus the relationships derived at read time,
 	 * so the browser gets the dependency graph in the same response that opens the task.
 	 */
-	private async handleGetTask(taskId: string): Promise<Response> {
+	private async handleGetTask(taskId: string, context?: ProjectReadContext): Promise<Response> {
 		const resolved = await this.resolveDetailTask(taskId);
 		if (resolved instanceof Response) return resolved;
 		await this.ensureServicesReady();
-		return Response.json({
+		const detail = {
 			...(await loadTaskDetail(this.core, resolved, { includeCrossBranch: !this.centralMode })),
 			...(resolved.source === "archived" && { archived: true }),
-		});
+		};
+		const record = await this.versionRecord(
+			resolved,
+			"task",
+			resolved.source === "archived" ? "archived" : isDraftId(resolved.id) ? "draft" : "active",
+			context,
+		);
+		return Response.json(
+			{ ...detail, ...(record.recordKey && { recordKey: record.recordKey, revision: record.revision }) },
+			{
+				headers: record.revision ? { ETag: record.revision } : undefined,
+			},
+		);
 	}
 
 	private async handleUpdateTask(req: Request, taskId: string): Promise<Response> {
@@ -1424,7 +1914,7 @@ export class BacklogServer {
 				);
 			}
 			const conflict = isAmbiguousIdError(error) || isAmbiguousTaskIdError(error) || isTaskLockError(error);
-			return Response.json({ error: message }, { status: conflict ? 409 : 400 });
+			return conflict ? this.conflictResponse(error, message) : Response.json({ error: message }, { status: 400 });
 		}
 	}
 
@@ -1445,7 +1935,7 @@ export class BacklogServer {
 			return Response.json({ success: true, ...result });
 		} catch (error) {
 			if (isAmbiguousIdError(error)) {
-				return Response.json({ error: error.message }, { status: 409 });
+				return this.conflictResponse(error, error.message);
 			}
 			if (error instanceof RecordRefusedError) {
 				return Response.json({ error: error.message }, { status: 400 });
@@ -1460,13 +1950,16 @@ export class BacklogServer {
 		}
 	}
 
-	private async handleListArchived(kind: "task" | ContentRecordKind): Promise<Response> {
+	private async handleListArchived(kind: "task" | ContentRecordKind, context?: ProjectReadContext): Promise<Response> {
 		const records = await (kind === "task"
 			? this.core.filesystem.listArchivedTasks()
 			: kind === "document"
 				? this.core.filesystem.listArchivedDocuments()
 				: this.core.filesystem.listArchivedDecisions());
-		return Response.json(records.map((record) => ({ ...record, archived: true })));
+		const versioned = this.centralMode
+			? await Promise.all(records.map((record) => this.versionRecord(record, kind, "archived", context)))
+			: records;
+		return Response.json(versioned.map((record) => ({ ...record, archived: true })));
 	}
 
 	private async handleRecordLifecycle(
@@ -1499,7 +1992,7 @@ export class BacklogServer {
 				isTaskLockError(error) ||
 				isCreateLockError(error)
 			) {
-				return Response.json({ error: message }, { status: 409 });
+				return this.conflictResponse(error, message);
 			}
 			if (error instanceof RecordRefusedError) return Response.json({ error: message }, { status: 400 });
 			if (error instanceof ChangeNotCommittedError || error instanceof TaskDeletionAppliedError) {
@@ -1533,8 +2026,8 @@ export class BacklogServer {
 				console.error("Error archiving task after it moved:", error);
 				return Response.json({ error: message, archiveState }, { status: 500 });
 			}
-			if (isAmbiguousTaskIdError(error)) {
-				return Response.json({ error: error.message }, { status: 409 });
+			if (isAmbiguousTaskIdError(error) || isTaskLockError(error) || isCreateLockError(error)) {
+				return this.conflictResponse(error, error.message);
 			}
 			throw error;
 		}
@@ -1564,6 +2057,9 @@ export class BacklogServer {
 			return Response.json(
 				{
 					error: message,
+					...(conflict && this.centralMode
+						? { code: isAmbiguousTaskIdError(error) ? "AMBIGUOUS_ID" : "WRITE_LOCKED" }
+						: {}),
 					...(knownDemotionState ? { demotionState: knownDemotionState } : {}),
 					...(demotionFailureCause ? { demotionFailureCause } : {}),
 				},
@@ -1578,11 +2074,14 @@ export class BacklogServer {
 	}
 
 	// Documentation handlers
-	private async handleListDocs(): Promise<Response> {
+	private async handleListDocs(context?: ProjectReadContext): Promise<Response> {
 		try {
 			const store = await this.getContentStoreInstance();
 			const docs = store.getDocuments();
-			const docFiles = docs.map((doc) => ({
+			const versioned = this.centralMode
+				? await Promise.all(docs.map((doc) => this.versionRecord(doc, "document", "active", context)))
+				: docs;
+			const docFiles = versioned.map((doc) => ({
 				name: doc.path?.split(/[\\/]+/).pop() ?? `${doc.title}.md`,
 				id: doc.id,
 				title: doc.title,
@@ -1592,24 +2091,28 @@ export class BacklogServer {
 				updatedDate: doc.updatedDate,
 				lastModified: doc.updatedDate || doc.createdDate,
 				tags: doc.tags || [],
+				...(doc.recordKey && { recordKey: doc.recordKey, revision: doc.revision }),
 			}));
 			return Response.json(docFiles);
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			console.error("Error listing documents:", error);
 			return Response.json([]);
 		}
 	}
 
-	private async handleGetDoc(docId: string): Promise<Response> {
+	private async handleGetDoc(docId: string, context?: ProjectReadContext): Promise<Response> {
 		try {
 			const doc = await this.core.getDocument(docId);
 			if (!doc) {
 				return Response.json({ error: "Document not found" }, { status: 404 });
 			}
-			return Response.json(doc);
+			const versioned = await this.versionRecord(doc, "document", doc.archived ? "archived" : "active", context);
+			return Response.json(versioned, { headers: versioned.revision ? { ETag: versioned.revision } : undefined });
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			if (isAmbiguousIdError(error)) {
-				return Response.json({ error: error.message }, { status: 409 });
+				return this.conflictResponse(error, error.message);
 			}
 			console.error("Error loading document:", error);
 			return Response.json({ error: "Document not found" }, { status: 404 });
@@ -1684,7 +2187,7 @@ export class BacklogServer {
 				return Response.json({ error: "Invalid request payload" }, { status: 400 });
 			}
 			if (isAmbiguousIdError(error)) {
-				return Response.json({ error: error.message }, { status: 409 });
+				return this.conflictResponse(error, error.message);
 			}
 			// Core refused the save, for example because the document is archived. Its message is the answer.
 			if (error instanceof RecordRefusedError) {
@@ -1704,11 +2207,14 @@ export class BacklogServer {
 	}
 
 	// Decision handlers
-	private async handleListDecisions(): Promise<Response> {
+	private async handleListDecisions(context?: ProjectReadContext): Promise<Response> {
 		try {
 			const store = await this.getContentStoreInstance();
 			const decisions = store.getDecisions();
-			const decisionFiles = decisions.map((decision) => ({
+			const versioned = this.centralMode
+				? await Promise.all(decisions.map((decision) => this.versionRecord(decision, "decision", "active", context)))
+				: decisions;
+			const decisionFiles = versioned.map((decision) => ({
 				id: decision.id,
 				title: decision.title,
 				status: decision.status,
@@ -1717,15 +2223,17 @@ export class BacklogServer {
 				decision: decision.decision,
 				consequences: decision.consequences,
 				alternatives: decision.alternatives,
+				...(decision.recordKey && { recordKey: decision.recordKey, revision: decision.revision }),
 			}));
 			return Response.json(decisionFiles);
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			console.error("Error listing decisions:", error);
 			return Response.json([]);
 		}
 	}
 
-	private async handleGetDecision(decisionId: string): Promise<Response> {
+	private async handleGetDecision(decisionId: string, context?: ProjectReadContext): Promise<Response> {
 		try {
 			// Resolve from disk through core, not the content store: the store keys decisions by raw ID
 			// and would silently drop one of two files that share an ID before the ambiguity check
@@ -1736,10 +2244,17 @@ export class BacklogServer {
 				return Response.json({ error: "Decision not found" }, { status: 404 });
 			}
 
-			return Response.json(decision);
+			const versioned = await this.versionRecord(
+				decision,
+				"decision",
+				decision.archived ? "archived" : "active",
+				context,
+			);
+			return Response.json(versioned, { headers: versioned.revision ? { ETag: versioned.revision } : undefined });
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			if (isAmbiguousIdError(error)) {
-				return Response.json({ error: error.message }, { status: 409 });
+				return this.conflictResponse(error, error.message);
 			}
 			console.error("Error loading decision:", error);
 			return Response.json({ error: "Decision not found" }, { status: 404 });
@@ -1758,6 +2273,28 @@ export class BacklogServer {
 		}
 	}
 
+	private async checkDecisionWriteAuthorization(
+		req: Request,
+		decisionId: string,
+		authorization: ProjectAuthorization,
+		content?: string,
+	): Promise<{ denied: Response | null; requiresManage: boolean }> {
+		let current: Awaited<ReturnType<Core["getDecision"]>>;
+		try {
+			current = await this.core.getDecision(decisionId);
+		} catch (error) {
+			if (isAmbiguousIdError(error))
+				return { denied: this.conflictResponse(error, error.message), requiresManage: false };
+			throw error;
+		}
+		if (!current)
+			return { denied: Response.json({ error: "Decision not found" }, { status: 404 }), requiresManage: false };
+		// Use Core's parser and fallback for both first execution and authorized replay.
+		const nextStatus = parseFrontmatter(content ?? (await req.clone().text())).data.status || current.status;
+		const requiresManage = current.status !== "proposed" || nextStatus !== current.status;
+		return { denied: requiresManage ? authorization.check("decisionsManage") : null, requiresManage };
+	}
+
 	private async handleUpdateDecision(
 		req: Request,
 		decisionId: string,
@@ -1767,20 +2304,17 @@ export class BacklogServer {
 
 		try {
 			if (authorization) {
-				const current = await this.core.getDecision(decisionId);
-				if (!current) return Response.json({ error: "Decision not found" }, { status: 404 });
-				// Match Core's parser and fallback exactly; raw Markdown cannot hide a state change.
-				const nextStatus = parseFrontmatter(content).data.status || current.status;
-				if (current.status !== "proposed" || nextStatus !== current.status) {
-					const denied = authorization.check("decisionsManage");
-					if (denied) return denied;
+				const permission = await this.checkDecisionWriteAuthorization(req, decisionId, authorization, content);
+				if (permission.requiresManage) {
+					(req as Request & { [DECISION_MANAGE_RECHECK]?: boolean })[DECISION_MANAGE_RECHECK] = true;
 				}
+				if (permission.denied) return permission.denied;
 			}
 			await this.core.updateDecisionFromContent(decisionId, content);
 			return Response.json({ success: true });
 		} catch (error) {
 			if (isAmbiguousIdError(error)) {
-				return Response.json({ error: error.message }, { status: 409 });
+				return this.conflictResponse(error, error.message);
 			}
 			// Core refused the save, for example because the decision is archived. Its message is the answer.
 			if (error instanceof RecordRefusedError) {
@@ -1794,14 +2328,28 @@ export class BacklogServer {
 		}
 	}
 
-	private async handleGetConfig(): Promise<Response> {
+	private async handleGetConfig(context?: ProjectReadContext): Promise<Response> {
 		try {
-			const config = await this.core.filesystem.loadConfig();
+			const fs = this.core.filesystem;
+			const path = fs.configFilePath;
+			const bytes = this.centralMode ? await fs.readBytes(path).catch(() => null) : null;
+			const config = bytes ? fs.parseConfig(new TextDecoder().decode(bytes)) : await fs.loadConfig();
 			if (!config) {
 				return Response.json({ error: "Configuration not found" }, { status: 404 });
 			}
-			return Response.json(this.centralMode ? { ...config, projectName: this.projectName } : config);
+			if (!this.centralMode) return Response.json(config);
+			if (!bytes) throw new MutationError("Configuration version is unavailable.", 503, "RECOVERY_REQUIRED");
+			const recordKey = await context?.recordKeyFor?.("config", "config", path, { lifecycle: "active", bytes });
+			if (!recordKey) {
+				throw new MutationError("Configuration version is unavailable.", 503, "RECOVERY_REQUIRED");
+			}
+			const revision = recordRevision(recordKey, path, "active", bytes);
+			return Response.json(
+				{ ...config, projectName: this.projectName, recordKey, revision },
+				{ headers: { ETag: revision } },
+			);
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			console.error("Error loading config:", error);
 			return Response.json({ error: "Failed to load configuration" }, { status: 500 });
 		}
@@ -1875,11 +2423,15 @@ export class BacklogServer {
 	}
 
 	// Draft handlers
-	private async handleListDrafts(): Promise<Response> {
+	private async handleListDrafts(context?: ProjectReadContext): Promise<Response> {
 		try {
 			const drafts = await this.core.filesystem.listDrafts();
-			return Response.json(drafts);
+			const versioned = this.centralMode
+				? await Promise.all(drafts.map((draft) => this.versionRecord(draft, "task", "draft", context)))
+				: drafts;
+			return Response.json(versioned);
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			console.error("Error listing drafts:", error);
 			return Response.json([]);
 		}
@@ -1895,7 +2447,7 @@ export class BacklogServer {
 		} catch (error) {
 			console.error("Error promoting draft:", error);
 			if (isCreateLockError(error) || isAmbiguousIdError(error) || isTaskLockError(error)) {
-				return Response.json({ error: error.message }, { status: 409 });
+				return this.conflictResponse(error, error.message);
 			}
 			return Response.json({ error: "Failed to promote draft" }, { status: 500 });
 		}
@@ -1948,34 +2500,48 @@ export class BacklogServer {
 		);
 	}
 
-	private async handleListMilestones(): Promise<Response> {
+	private async handleListMilestones(context?: ProjectReadContext): Promise<Response> {
 		try {
 			const milestones = await this.core.filesystem.listMilestones();
-			return Response.json(milestones);
+			const versioned = this.centralMode
+				? await Promise.all(
+						milestones.map((milestone) => this.versionRecord(milestone, "milestone", "active", context)),
+					)
+				: milestones;
+			return Response.json(versioned);
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			console.error("Error listing milestones:", error);
 			return Response.json([]);
 		}
 	}
 
-	private async handleListArchivedMilestones(): Promise<Response> {
+	private async handleListArchivedMilestones(context?: ProjectReadContext): Promise<Response> {
 		try {
 			const milestones = await this.core.filesystem.listArchivedMilestones();
-			return Response.json(milestones);
+			const versioned = this.centralMode
+				? await Promise.all(
+						milestones.map((milestone) => this.versionRecord(milestone, "milestone", "archived", context)),
+					)
+				: milestones;
+			return Response.json(versioned);
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			console.error("Error listing archived milestones:", error);
 			return Response.json([]);
 		}
 	}
 
-	private async handleGetMilestone(milestoneId: string): Promise<Response> {
+	private async handleGetMilestone(milestoneId: string, context?: ProjectReadContext): Promise<Response> {
 		try {
 			const milestone = await this.core.filesystem.loadMilestone(milestoneId);
 			if (!milestone) {
 				return Response.json({ error: "Milestone not found" }, { status: 404 });
 			}
-			return Response.json(milestone);
+			const versioned = await this.versionRecord(milestone, "milestone", "active", context);
+			return Response.json(versioned, { headers: versioned.revision ? { ETag: versioned.revision } : undefined });
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			console.error("Error loading milestone:", error);
 			return Response.json({ error: "Milestone not found" }, { status: 404 });
 		}
@@ -2058,6 +2624,7 @@ export class BacklogServer {
 				dueDate: "dueDate" in body ? (dueDate.value ?? null) : undefined,
 			});
 			const milestone =
+				(this.centralMode && sourceMilestone ? this.core.filesystem.preparedMilestone(sourceMilestone.id) : null) ??
 				(await this.core.filesystem.loadMilestone(sourceMilestone?.id ?? milestoneId)) ??
 				(await this.core.filesystem.loadMilestone(title));
 			this.broadcastDataUpdated("milestones");
@@ -2159,7 +2726,7 @@ export class BacklogServer {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : "Failed to reorder task";
 			if (isAmbiguousTaskIdError(error)) {
-				return Response.json({ error: message }, { status: 409 });
+				return this.conflictResponse(error, message);
 			}
 			// Cross-branch and validation errors are client errors (400), not server errors (500)
 			const isCrossBranchError = message.includes("exists in branch");
@@ -2229,8 +2796,24 @@ export class BacklogServer {
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			const status = message.includes("changed after the preview") ? 409 : 400;
-			return Response.json({ error: message }, { status });
+			return Response.json(
+				status === 409 && this.centralMode ? { error: message, code: "REVISION_CONFLICT" } : { error: message },
+				{ status },
+			);
 		}
+	}
+
+	private cleanupFingerprint(tasks: Task[]): string {
+		const hash = createHash("sha256");
+		for (const task of [...tasks].sort((a, b) => a.id.localeCompare(b.id))) {
+			const snapshot = recordFileSnapshot(task);
+			if (!snapshot) {
+				throw new MutationError("Cleanup preview version is unavailable.", 503, "RECOVERY_REQUIRED");
+			}
+			hash.update(task.id).update("\0").update(snapshot.recordPath).update("\0");
+			hash.update(String(snapshot.bytes.byteLength)).update("\0").update(snapshot.bytes).update("\0");
+		}
+		return `p1-${hash.digest("hex")}`;
 	}
 
 	private async handleCleanupPreview(req: Request): Promise<Response> {
@@ -2260,8 +2843,10 @@ export class BacklogServer {
 			return Response.json({
 				count: preview.length,
 				tasks: preview,
+				...(this.centralMode && { fingerprint: this.cleanupFingerprint(tasksToCleanup) }),
 			});
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
 			console.error("Error getting cleanup preview:", error);
 			return Response.json({ error: "Failed to get cleanup preview" }, { status: 500 });
 		}
@@ -2271,7 +2856,7 @@ export class BacklogServer {
 		try {
 			// The browser posts the IDs its preview showed, as `backlog cleanup` passes the IDs it listed,
 			// so a task that became eligible after the preview is not archived.
-			const body = (await req.json().catch(() => null)) as { taskIds?: unknown } | null;
+			const body = (await req.json().catch(() => null)) as { taskIds?: unknown; fingerprint?: unknown } | null;
 			const taskIds = body?.taskIds;
 			if (
 				!Array.isArray(taskIds) ||
@@ -2281,6 +2866,21 @@ export class BacklogServer {
 				return Response.json({ error: "taskIds must be a non-empty list of task IDs" }, { status: 400 });
 			}
 			const totalCount = taskIds.length;
+			if (this.centralMode) {
+				if (typeof body?.fingerprint !== "string" || !body.fingerprint) {
+					return Response.json(
+						{ error: "A current cleanup preview fingerprint is required.", code: "PRECONDITION_REQUIRED" },
+						{ status: 428 },
+					);
+				}
+				const selected = await Promise.all(taskIds.map((id) => this.core.filesystem.loadTask(id)));
+				if (selected.some((task) => !task) || this.cleanupFingerprint(selected as Task[]) !== body.fingerprint) {
+					return Response.json(
+						{ error: "The cleanup preview changed. Refresh it before executing.", code: "REVISION_CONFLICT" },
+						{ status: 409 },
+					);
+				}
+			}
 
 			const result = await this.core.archiveTerminalStatusTasks(taskIds);
 			const lines = formatCleanupResult(result, totalCount);
@@ -2297,6 +2897,8 @@ export class BacklogServer {
 				message: [...lines.skipped, ...lines.failed, lines.summary].join("\n"),
 			});
 		} catch (error) {
+			if (error instanceof MutationError) throw error;
+			if (isAmbiguousTaskIdError(error)) return this.conflictResponse(error, error.message);
 			console.error("Error executing cleanup:", error);
 			return Response.json({ error: "Failed to execute cleanup" }, { status: 500 });
 		}

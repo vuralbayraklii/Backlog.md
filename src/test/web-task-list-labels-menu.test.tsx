@@ -346,12 +346,7 @@ describe("TaskList labels filter menu", () => {
 			fetchCalls.push(url);
 			expect(url).toContain("/api/search");
 			expect(url).toContain("label=bug");
-			return {
-				ok: true,
-				status: 200,
-				statusText: "OK",
-				json: async () => [{ type: "task", score: 0, task: tasks[0] }],
-			} as Response;
+			return Response.json([{ type: "task", score: 0, task: tasks[0] }]);
 		}) as typeof fetch;
 
 		const container = renderTaskList(["/?label=bug"]);
@@ -379,12 +374,7 @@ describe("TaskList labels filter menu", () => {
 		globalThis.fetch = (async (input: RequestInfo | URL) => {
 			const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 			fetchCalls.push(url);
-			return {
-				ok: true,
-				status: 200,
-				statusText: "OK",
-				json: async () => [{ type: "task", score: 0, task: progressTask }],
-			} as Response;
+			return Response.json([{ type: "task", score: 0, task: progressTask }]);
 		}) as typeof fetch;
 
 		const container = renderTaskList(["/?status=In%20Progress"], {
@@ -411,15 +401,11 @@ describe("TaskList labels filter menu", () => {
 			const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 			fetchCalls.push(url);
 			const statuses = new URL(url, "http://localhost").searchParams.getAll("status");
-			return {
-				ok: true,
-				status: 200,
-				statusText: "OK",
-				json: async () =>
-					filteredTasks
-						.filter((task) => statuses.includes(task.status))
-						.map((task) => ({ type: "task", score: 0, task })),
-			} as Response;
+			return Response.json(
+				filteredTasks
+					.filter((task) => statuses.includes(task.status))
+					.map((task) => ({ type: "task", score: 0, task })),
+			);
 		}) as typeof fetch;
 
 		const container = renderTaskList(undefined, {
@@ -444,12 +430,7 @@ describe("TaskList labels filter menu", () => {
 		globalThis.fetch = (async (input: RequestInfo | URL) => {
 			const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 			fetchCalls.push(url);
-			return {
-				ok: true,
-				status: 200,
-				statusText: "OK",
-				json: async () => [{ type: "task", score: 0, task: doneTask }],
-			} as Response;
+			return Response.json([{ type: "task", score: 0, task: doneTask }]);
 		}) as typeof fetch;
 
 		const container = renderTaskList(["/?status=done&status=DONE"], {
@@ -476,15 +457,10 @@ describe("TaskList labels filter menu", () => {
 		globalThis.fetch = (async (input: RequestInfo | URL) => {
 			const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 			fetchCalls.push(url);
-			return {
-				ok: true,
-				status: 200,
-				statusText: "OK",
-				json: async () => [
-					{ type: "task", score: 0, task: filteredTasks[1] },
-					{ type: "task", score: 0, task: filteredTasks[0] },
-				],
-			} as Response;
+			return Response.json([
+				{ type: "task", score: 0, task: filteredTasks[1] },
+				{ type: "task", score: 0, task: filteredTasks[0] },
+			]);
 		}) as typeof fetch;
 
 		const container = renderTaskList(["/?status=To%20Do&status=In%20Progress"], {
@@ -519,15 +495,10 @@ describe("TaskList labels filter menu", () => {
 			const searchParams = new URL(url, "http://localhost").searchParams;
 			expect(url).toContain("/api/search");
 			expect(searchParams.getAll("excludeStatus")).toEqual(["Done"]);
-			return {
-				ok: true,
-				status: 200,
-				statusText: "OK",
-				json: async () => [
-					{ type: "task", score: 0, task: filteredTasks[1] },
-					{ type: "task", score: 0, task: filteredTasks[0] },
-				],
-			} as Response;
+			return Response.json([
+				{ type: "task", score: 0, task: filteredTasks[1] },
+				{ type: "task", score: 0, task: filteredTasks[0] },
+			]);
 		}) as typeof fetch;
 
 		const container = renderTaskList(undefined, {
@@ -572,12 +543,7 @@ describe("TaskList labels filter menu", () => {
 		globalThis.fetch = (async (input: RequestInfo | URL) => {
 			const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 			fetchCalls.push(url);
-			return {
-				ok: true,
-				status: 200,
-				statusText: "OK",
-				json: async () => [{ type: "task", score: 0, task: customTask }],
-			} as Response;
+			return Response.json([{ type: "task", score: 0, task: customTask }]);
 		}) as typeof fetch;
 
 		const container = renderTaskList(["/?priority=VeRy%20HiGh"], {
@@ -600,12 +566,7 @@ describe("TaskList labels filter menu", () => {
 		globalThis.fetch = (async (input: RequestInfo | URL) => {
 			const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 			fetchCalls.push(url);
-			return {
-				ok: true,
-				status: 200,
-				statusText: "OK",
-				json: async () => [],
-			} as Response;
+			return Response.json([]);
 		}) as typeof fetch;
 
 		const container = renderTaskList(["/?priority=urgent"]);
@@ -624,12 +585,7 @@ describe("TaskList labels filter menu", () => {
 			fetchCalls.push(url);
 			expect(url).toContain("/api/search");
 			expect(url).toContain("status=Closed");
-			return {
-				ok: true,
-				status: 200,
-				statusText: "OK",
-				json: async () => [{ type: "task", score: 0, task: closedTask }],
-			} as Response;
+			return Response.json([{ type: "task", score: 0, task: closedTask }]);
 		}) as typeof fetch;
 
 		const container = renderTaskList(undefined, {
@@ -650,12 +606,7 @@ describe("TaskList labels filter menu", () => {
 			fetchCalls.push(url);
 			expect(url).toContain("/api/search");
 			expect(url).toContain("status=Review");
-			return {
-				ok: true,
-				status: 200,
-				statusText: "OK",
-				json: async () => [{ type: "task", score: 0, task: reviewTask }],
-			} as Response;
+			return Response.json([{ type: "task", score: 0, task: reviewTask }]);
 		}) as typeof fetch;
 
 		const container = renderTaskList(undefined, {
