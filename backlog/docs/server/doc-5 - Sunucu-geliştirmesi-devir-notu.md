@@ -3,13 +3,17 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-22 10:42'
+updated_date: '2026-10-22 10:53'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje sunucusuna yeni sohbetten devam etmek içindir. A-00–A-04 tamamlandı; BACK-799–BACK-805 Done. Güncel dal tasks/server-a04-write-history; kaynak tabanı adb84179c3e639140c270504e75841f96cb4f4d0. Kaynak, kabul kanıtı ve CLI kayıt değişiklikleri yereldir; commit/push/merge yapılmadı. Önce Git durumunu doğrula ve yerel çalışmayı koru.
+Bu not Backlog.md çoklu proje sunucusuna yeni sohbetten devam etmek içindir. A-00–A-04 tamamlandı; BACK-799–BACK-805 Done. Güncel dal tasks/server-a04-write-history; kaynak tabanı adb84179c3e639140c270504e75841f96cb4f4d0. A-04 uygulaması ve kabul kayıtları 09e336fb28f28dcef9a94ac162666cfc5662a20b commit’iyle origin/tasks/server-a04-write-history dalına gönderildi; uzak baş eşitliği doğrulandı. Bu gönderim sonucunun kapanış metaverisi aynı dalda ayrı bir kayıt commit’iyle taşınır; son HEAD için Git ve uzak dal esas alınır. Merge yapılmadı. Önce Git durumunu doğrula ve yerel çalışmayı koru.
+
+## A-04 Git teslimi — 22 Ekim 2026
+
+Kullanıcı commit ve push için açık onay verdi. Uygulama/kabul commit’i 09e336fb28f28dcef9a94ac162666cfc5662a20b, origin/tasks/server-a04-write-history dalına normal push ile gönderildi; git ls-remote eşitliği doğrulandı. Ön commit kancası geçti ve test edilen 632 dosyanın özeti commit sonrasında aynı kaldı: c53431ce1c370f25366f06cbad9215b5e084d99e2251d11735132b22406b126c. Bu teslim metaverisi ayrı kapanış commit’idir; uygulama kodunu değiştirmez. origin/server değiştirilmedi.
 
 ## Tamamlanan A-04 — ortak yazım, işlem sonucu ve tarihçe
 
@@ -253,7 +257,7 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00–A-04 uygulaması ve kabulü tamamlandı. A-04'ün yerel teslimi tasks/server-a04-write-history dalındadır; commit/push yapılmadı. Yeni aşama veya gerçek proje bağlama bu çalışmada başlatılmadı. A-05 agent kimliği/dış değişiklik olayları, A-06 kullanıcı geçmişi ve doğrulama/kabul iş akışları doc-4'teki ayrı aşamalardır.
+A-00–A-04 uygulaması ve kabulü tamamlandı. A-04 uygulaması ve kabulü 09e336fb28f28dcef9a94ac162666cfc5662a20b commit’iyle origin/tasks/server-a04-write-history dalındadır; kapanış kayıtları aynı dalda takip commit’iyle taşınır. Yeni aşama veya gerçek proje bağlama bu çalışmada başlatılmadı. A-05 agent kimliği/dış değişiklik olayları, A-06 kullanıcı geçmişi ve doğrulama/kabul iş akışları doc-4'teki ayrı aşamalardır.
 
 Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-6, a00-baseline.json ve a04-verification.json okumalı; BACK-799–805'i CLI ile doğrulamalı. Git durumunu ve yerel dosyaları korumadan dal değiştirmemeli. Sonraki kapsamı mevcut kullanıcı vuralbayraklii belirler; önceki öneriler kendiliğinden onaylanmış sayılmaz.
 
@@ -269,7 +273,7 @@ Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-6, a00-basel
 ```text
 Backlog.md çoklu proje sunucusunda A-04 tamamlandı; BACK-799–805 Done.
 Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5/doc-6 ve verification/server/a04-verification.json oku; görevleri CLI ile doğrula.
-Güncel dal tasks/server-a04-write-history; taban adb84179c3e639140c270504e75841f96cb4f4d0. Kaynak/kabul/görev kayıtları yerel; commit/push/merge yapılmadı. Git durumunu doğrula ve yerel çalışmayı koru.
+Güncel dal tasks/server-a04-write-history; taban adb84179c3e639140c270504e75841f96cb4f4d0. Uygulama/kabul commit’i 09e336fb28f28dcef9a94ac162666cfc5662a20b, origin/tasks/server-a04-write-history dalına push edildi ve uzak eşitliği doğrulandı. Kapanış metaverisi aynı dalda takip commit’indedir; son HEAD’i Git ve uzak daldan doğrula. Merge yapılmadı; yerel çalışmayı koru.
 Üç alt ajanlı uygulama, gerçek SIGKILL ve derlenmiş sunucuda Chromium kabulü tamamlandı. Yeni aşama veya gerçek proje/Finbee bağlama başlatılmadı.
 A-05/A-06 kapsamlarını ve açık ürün kararlarını mevcut kullanıcı vuralbayraklii ile belirle; yeni çalışmaya başlamadan güncel görevi üzerine al ve CLI planını kaydet.
 ```

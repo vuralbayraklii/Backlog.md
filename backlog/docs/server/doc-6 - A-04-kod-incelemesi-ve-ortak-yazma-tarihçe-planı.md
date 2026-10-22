@@ -3,7 +3,7 @@ id: doc-6
 title: A-04 kod incelemesi ve ortak yazma tarihçe planı
 type: specification
 created_date: '2026-10-22 07:51'
-updated_date: '2026-10-22 10:42'
+updated_date: '2026-10-22 10:53'
 tags:
   - server
   - a-04
@@ -215,4 +215,4 @@ BACK-799–805 Done. Yukarıdaki araştırma sırasında önerilen yüzeylerin u
 
 Son kaynak sabitken 3908 başarılı/13 atlanan/0 başarısız Bun testi (351 dosya), tip, depo kapsamındaki yazmasız Biome, build ve derlenmiş smoke geçti. Gerçek Chromium 21 kontrol/0 işlenmemiş hata. TSX ayrı taraması eski HEAD tanılarını açık tutar, yeni tanı 0; ham tarama ve fark kapısı ayrıdır. Altı gerçek SIGKILL kesintisi ve ayrı exception testi birbirine karıştırılmadı. Kalıcı kabul eşlemesi/kaynak/test/günlük SHA-256: verification/server/a04-verification.json. Ayrıntılı devir doc-5.
 
-Sadelik: tek SQLite/finalize, mevcut parser/serializer/allocator/kilitlerin ortak capture içinde kullanılması, watcher dahil tek ham snapshot okuyucusu, tek operation GET, ortak frontend request istemcisi ve mevcut envanterle recovery. Ek geçmiş CRUD veya A-05/A-06 iş akışı eklenmedi. Kaynak/kayıtlar tasks/server-a04-write-history dalında yerel; commit/push yapılmadı. /tmp ham kanıtları kalıcı yedek değildir.
+Sadelik: tek SQLite/finalize, mevcut parser/serializer/allocator/kilitlerin ortak capture içinde kullanılması, watcher dahil tek ham snapshot okuyucusu, tek operation GET, ortak frontend request istemcisi ve mevcut envanterle recovery. Ek geçmiş CRUD veya A-05/A-06 iş akışı eklenmedi. Uygulama/kabul kayıtları 09e336fb28f28dcef9a94ac162666cfc5662a20b commit’iyle origin/tasks/server-a04-write-history dalına gönderildi; uzak baş eşitliği doğrulandı. Bu gönderimin kapanış metaverisi aynı dalda ayrı takip commit’iyle taşınır. Test edilen kaynak commit sonrasında değişmedi; son HEAD için Git esas alınır. /tmp ham kanıtları kalıcı yedek değildir.

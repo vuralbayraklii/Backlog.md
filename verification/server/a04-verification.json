@@ -340,7 +340,10 @@
 			"src/test/web-mutation-request.test.ts": "3dd350060733190e2ff86aa1cc1a425f2c00e115c39626ceb2ad7676b4b50f42"
 		},
 		"nativeExecutableSha256": "7c31abcfba77c124853fe5f179b6bf2420e7e21c991b820dc14f995f1bac0693",
-		"testCliSha256": "3c5d50c09ab1a3e2d61b987d7ffd23656b4314c16a7ce25a9357c8fc23e7d303"
+		"testCliSha256": "3c5d50c09ab1a3e2d61b987d7ffd23656b4314c16a7ce25a9357c8fc23e7d303",
+		"headAtVerification": "adb84179c3e639140c270504e75841f96cb4f4d0",
+		"implementationCommit": "09e336fb28f28dcef9a94ac162666cfc5662a20b",
+		"unchangedAfterCommit": true
 	},
 	"approvedDecisions": [
 		"One logical operation produces one immutable event envelope containing all record changes; preserve existing bulk input partial success.",
@@ -1664,14 +1667,79 @@
 			"path": "/tmp/backlog-a04-web-cdp.mjs",
 			"bytes": 29017,
 			"sha256": "91a1908a2a51e07f4832606402e0f25dfc3a17c577b14e2fc736ab58fcfcfaea"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/doc-5-delivery.body",
+			"bytes": 44847,
+			"sha256": "c48297fb1e55877a78e5535701c1b91516efcbf1a2d76f9850b714697bc861f4"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/doc-5-delivery.log",
+			"bytes": 92,
+			"sha256": "fed7c0d0d46c258c84be074cf997d216ca0ca233b49663b7540d367fca2b5d8d"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/doc-6-delivery.body",
+			"bytes": 33598,
+			"sha256": "0654fd4c1d8a687ed16ce46b751a7c919cc6ea79e2a5cb0456a3ee4af1a929e1"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/doc-6-delivery.log",
+			"bytes": 111,
+			"sha256": "ce9d10fd4fe8a2466467cbead1b4b0451b7e70086c5fc7e714c1976f31551278"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/head-before.txt",
+			"bytes": 41,
+			"sha256": "2f6ee8b87cfa3611075e7d38e1be7c6064185490cc00660a796f6fb26c453bb8"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/implementation-commit.log",
+			"bytes": 3464,
+			"sha256": "425b2b10a35a30b55a68c9cc9fa39d91a0551d287224e76f981b3ee6272a1164"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/implementation-commit.txt",
+			"bytes": 41,
+			"sha256": "d2b90ea9e1a3412f3c1e0bf89f459a1d483d3dd126df1ec45baa19c6fe3ba06a"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/implementation-push.log",
+			"bytes": 457,
+			"sha256": "333ad92509291f1f031915bfa500c0480cdba78f328615a54ae5627e2ac93d3d"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/remote-implementation-head.txt",
+			"bytes": 83,
+			"sha256": "439980d8532b82a7bd0ea014f2516c30999524f06a5461f576f8a608896548dc"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/stage-paths.json",
+			"bytes": 3967,
+			"sha256": "e370b2a0380df047ffc745887aa5ed8c43585cd479613494d9e570c6c86c0308"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/task-804-delivery.log",
+			"bytes": 22,
+			"sha256": "ab04437be913d033c2d81f674ee20213c905a18e924bc670d2eb00e5a7685748"
+		},
+		{
+			"path": "/tmp/backlog-a04-delivery/task-805-delivery.log",
+			"bytes": 22,
+			"sha256": "9ff7e2b9713027c6755dbcdef704d72f957784ba50e9a3a1bcfa0b1a004cbd50"
 		}
 	],
 	"gitDelivery": {
+		"result": "verified",
 		"branch": "tasks/server-a04-write-history",
-		"head": "adb84179c3e639140c270504e75841f96cb4f4d0",
-		"committed": false,
-		"pushed": false,
+		"implementationCommit": "09e336fb28f28dcef9a94ac162666cfc5662a20b",
+		"remoteImplementationHead": "09e336fb28f28dcef9a94ac162666cfc5662a20b",
+		"committed": true,
+		"pushed": true,
 		"merged": false,
-		"status": "Local source, task and documentation changes; origin/server unchanged."
+		"implementationPushExitCode": 0,
+		"testedSourceUnchangedAfterCommit": true,
+		"verifiedAt": "2026-10-22T10:53:39.071354+00:00",
+		"closingRecord": "Delivery metadata is carried by a separate follow-up commit on the same branch. Use Git and the remote branch for the latest HEAD. origin/server was not modified."
 	}
 }
