@@ -463,6 +463,11 @@
 			"sha256": "64563000ebb67b1aaf67ba098fe75350322d5205822d3f25f2b38499ba6762b2"
 		},
 		{
+			"path": "BACK-795-delivery-finalization.txt",
+			"bytes": 5791,
+			"sha256": "54d6095add799f9347309c4d88c993c171c816c4daa9c9081394da5580a215ed"
+		},
+		{
 			"path": "BACK-795-finalization.txt",
 			"bytes": 4688,
 			"sha256": "1702a297dc4f8fa178df8ffb7818effb9ab0779cfa2926431b08bb2cbb2be3b3"
@@ -611,6 +616,11 @@
 			"path": "biome.log",
 			"bytes": 64,
 			"sha256": "b0d309855e95fef252faf78348628afc7e8df8ff98e60ce17ea258e161181144"
+		},
+		{
+			"path": "browser.log",
+			"bytes": 1438,
+			"sha256": "3d4caa15be7915b5b3d35625deba8eb5df30abcf2e143f6b28d6474d61d488c6"
 		},
 		{
 			"path": "browser/latest-result.json",
@@ -818,11 +828,6 @@
 			"sha256": "2dc6c604912554c301f1d39884bfdf484b2ac9622320268b620e306b138cdd73"
 		},
 		{
-			"path": "browser.log",
-			"bytes": 1438,
-			"sha256": "3d4caa15be7915b5b3d35625deba8eb5df30abcf2e143f6b28d6474d61d488c6"
-		},
-		{
 			"path": "build-browser-initial.log",
 			"bytes": 23,
 			"sha256": "a20e7a648db258ad689394e88df95db8b5e00f446c7b9e47b6e9878838cf4db6"
@@ -883,6 +888,16 @@
 			"sha256": "ba44fe07120bfacf149063baa9d8efbf2054cc5cbc4a71e6a7b1da59207d120f"
 		},
 		{
+			"path": "git-implementation-commit.log",
+			"bytes": 2282,
+			"sha256": "38424ebc5c498742821db1ed9e721838bdb217f3e80d46e9300eac7f23a5f8f8"
+		},
+		{
+			"path": "git-staged-paths.json",
+			"bytes": 1806,
+			"sha256": "248faadd66c8e9ff61176e63adf7cd3761b2b409f81a5a1f694fee8ceb9b08b0"
+		},
+		{
 			"path": "git-status-start.txt",
 			"bytes": 92,
 			"sha256": "7610dcc5066b8b13e6fcedb8edbbe8967a8f65dc210eea2ed7a2fc360e21029f"
@@ -891,6 +906,11 @@
 			"path": "head-start.txt",
 			"bytes": 41,
 			"sha256": "de8da95194f7fb7f50ec680d97a2229a048b56792aee1936648f380876cdf91a"
+		},
+		{
+			"path": "implementation-commit.txt",
+			"bytes": 41,
+			"sha256": "05ed6a7723628b4ac97a9b63fff9c17dacc6b128185c9d9e2892849494b8b806"
 		},
 		{
 			"path": "independent-reviews.json",
@@ -916,6 +936,16 @@
 			"path": "make-report.py",
 			"bytes": 9681,
 			"sha256": "304f649c2f5d26f20dd75fa460f6e0407ca08aed1d529be213dcd6e1466bfe15"
+		},
+		{
+			"path": "push-implementation.log",
+			"bytes": 499,
+			"sha256": "dd10ac9eac96d95c11922d24ddad2652b6f3f7a6231f63002509f7ed5bfcaef7"
+		},
+		{
+			"path": "remote-implementation-head.txt",
+			"bytes": 90,
+			"sha256": "43ec5dcaca759e6948f53b818007b29ce0c0701b3f712beef79fba23532c6300"
 		},
 		{
 			"path": "review-biome-format.log",
@@ -956,6 +986,11 @@
 			"path": "smoke.log",
 			"bytes": 84,
 			"sha256": "ab6cb6de71650a7ba106e06d9b35a721b2a0161859ab25746ecc2c6cf73cc95f"
+		},
+		{
+			"path": "source-after-implementation-commit.json",
+			"bytes": 103039,
+			"sha256": "27bb1dbae1446c621e30bdd2213db08a2da14b2cd2e7ef22d292b5d49c6afba4"
 		},
 		{
 			"path": "source-after-tests-before-alias-preview.json",
@@ -1069,8 +1104,10 @@
 		}
 	],
 	"gitDelivery": {
-		"result": "pending",
-		"targetBranch": "tasks/server-a03-project-registration",
-		"next": "Commit and normal push only after all checks and independent review; record verified implementation commit in follow-up delivery record."
+		"result": "verified",
+		"branch": "tasks/server-a03-project-registration",
+		"implementationCommit": "18e554082aa46057747685cf998e564d710935a1",
+		"remoteImplementationHead": "18e554082aa46057747685cf998e564d710935a1",
+		"verification": "git ls-remote after normal feature-branch push; closing record is delivered by a follow-up commit on the same branch. origin/server was not modified."
 	}
 }

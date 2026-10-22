@@ -1,11 +1,11 @@
 ---
 id: BACK-795
 title: A-03 — Hazır proje bağlama CLI/API entegrasyonu ve kabul doğrulaması
-status: In Progress
+status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-22 06:30'
-updated_date: '2026-10-22 07:19'
+updated_date: '2026-10-22 07:21'
 labels:
   - server
   - a-03
@@ -32,7 +32,7 @@ Hazır bağımsız Backlog projelerini merkezi uygulamaya güvenli biçimde bağ
 - [x] #1 CLI ve oturum/CSRF korumalı API önizleme, kayıt, kişisel alan ve takip yönetimini ortak semantiklerle sunar; mevcut register/list/view korunur.
 - [x] #2 Güncel hesap/alan/yol/çakışma denetimi, atomik standart üyelik, takip iptali ve yeniden etkinleştirme entegrasyon testlerinde doğrulanır.
 - [x] #3 Admin ve normal kullanıcıyla gerçek Chromium akışları, kaynak içerik özetleri ve bağımsız inceleme kanıtları kaydedilir.
-- [ ] #4 Son birleşmiş kaynak üzerinde tam Bun, tip, yazmasız Biome, build ve derlenmiş smoke geçer; görevler, devir ve a03-verification.json güncellenir; commit/push ve uzak HEAD doğrulanır.
+- [x] #4 Son birleşmiş kaynak üzerinde tam Bun, tip, yazmasız Biome, build ve derlenmiş smoke geçer; görevler, devir ve a03-verification.json güncellenir; commit/push ve uzak HEAD doğrulanır.
 <!-- AC:END -->
 
 ## Definition of Done
@@ -56,4 +56,12 @@ Başlangıç Git temiz, uzak A-02 HEAD 4e67653bb76723cb93ff299ac12f99fd10b36a87 
 Tam Bun: 3814 başarılı / 13 atlanan / 0 başarısız; 3827 test / 337 dosya / 18724 beklenti. Tip, yazmasız Biome, native build ve derlenmiş CLI/web/MCP smoke geçti. Gerçek Chromium 20 kontrol, 0 işlenmemiş hata; 6 geçici kaynak için dosya listesi/SHA-256 özetleri eşleşti. Kanıt: verification/server/a03-verification.json. Üç bağımsız inceleme açık engelleyici bırakmadı. Sadelik: tek SQLite ve alan/yol denetimi; mevcut Markdown/parser/CRUD/arama/pano korunuyor. Groma yoktu; gerçek proje bağlanmadı.
 
 Tam Bun: 3814 başarılı / 13 atlanan / 0 başarısız; 3827 test / 337 dosya / 18728 beklenti. Tip, yazmasız Biome, native build ve derlenmiş CLI/web/MCP smoke geçti. Gerçek Chromium 21 kontrol, 0 işlenmemiş hata; 6 geçici kaynak için dosya listesi/SHA-256 özetleri eşleşti. Kanıt: verification/server/a03-verification.json. Üç bağımsız inceleme açık engelleyici bırakmadı. Sadelik: tek SQLite ve alan/yol denetimi; mevcut Markdown/parser/CRUD/arama/pano korunuyor. Groma yoktu; gerçek proje bağlanmadı.
+
+Git teslimi: 18e554082aa46057747685cf998e564d710935a1 origin/tasks/server-a03-project-registration dalına normal push ile gönderildi, uzak HEAD eşit. Kapanış kayıtları aynı dalda ayrı takip commit’iyle tamamlanır; origin/server değişmedi.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Hazır Backlog proje bağlama tamamlandı: salt okunur önizleme/kayıt, kişisel alanlar, atomik standart üyelik, takip durdurma/yeniden açma ve CLI/API/UI entegrasyonu. Mevcut Markdown/parser/CRUD/arama/pano korunur; kaynak dosyaları değişmez. Tam Bun: 3814 başarılı / 13 atlanan / 0 başarısız; 3827 test / 337 dosya / 18728 beklenti. Tip, yazmasız Biome, native build ve derlenmiş CLI/web/MCP smoke geçti. Gerçek Chromium 21 kontrol, 0 işlenmemiş hata; 6 geçici kaynak için dosya listesi/SHA-256 özetleri eşleşti. Üç bağımsız inceleme geçti. Uygulama commit’i 18e554082aa46057747685cf998e564d710935a1 özellik dalına push edildi; git ls-remote eşitliği doğrulandı. Kanıt a03-verification.json, devir doc-5. Groma yoktu; sonraki A-04 başlatılmadı.
+<!-- SECTION:FINAL_SUMMARY:END -->

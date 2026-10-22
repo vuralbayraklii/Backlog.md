@@ -3,13 +3,13 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-22 07:19'
+updated_date: '2026-10-22 07:21'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje sunucusuna yeni sohbetten devam etmek içindir. A-00–A-03 uygulaması ve kabul kontrolleri tamamlandı. Güncel dal tasks/server-a03-project-registration; başlangıç A-02 HEAD’i 4e67653bb76723cb93ff299ac12f99fd10b36a87. Git teslimi henüz kaydedilmedi; aşağıdaki A-03 durumunu ve Git HEAD/temizliğini doğrula. Sonraki ürün aşaması A-04; bu teslimde başlatılmadı. Eski aşamalar aşağıda tarihsel kanıtlarıyla korunur.
+Bu not Backlog.md çoklu proje sunucusuna yeni sohbetten devam etmek içindir. A-00–A-03 uygulaması ve kabul kontrolleri tamamlandı. Güncel dal tasks/server-a03-project-registration; başlangıç A-02 HEAD’i 4e67653bb76723cb93ff299ac12f99fd10b36a87. Uygulama commit/push ve uzak HEAD eşitliği doğrulandı; aşağıdaki Git kaydını, güncel HEAD/temizliği doğrula. Sonraki ürün aşaması A-04; bu teslimde başlatılmadı. Eski aşamalar aşağıda tarihsel kanıtlarıyla korunur.
 
 ## Tamamlanan A-03 kabulü — BACK-795–BACK-798 (22 Ekim 2026)
 
@@ -27,7 +27,7 @@ Tam Bun: 3814 başarılı / 13 atlanan / 0 başarısız; 3827 test / 337 dosya /
 
 Sadelik: tek SQLite politikası, ortak alan/yol denetimi, mevcut veri ve arayüz akışları kullanıldı; central içindeki yinelenen async okunabilirlik denetimi ortak guard lehine kaldırıldı. Groma bulunamadı; tarama/yönetilen dosya değişikliği yapılmadı. Yalnız geçici Linux örnekleri kullanıldı, kaynak envanteri ve içerikleri değişmedi; Finbee/gerçek proje yok. Atlanan platform/PTY testleri geçmiş sayılmadı. /tmp kalıcı yedek değildir.
 
-Git teslimi: kontroller tamamlandı; özellik dalı commit/push ve uzak HEAD kaydı bekliyor.
+Git teslimi: uygulama ve kabul kanıtları 18e554082aa46057747685cf998e564d710935a1 commit’iyle origin/tasks/server-a03-project-registration dalına normal push ile gönderildi; git ls-remote eşitliği doğrulandı. BACK-795–BACK-798 Done; kabul/DoD kanıtları işaretli. Kapanış metaverisi aynı dalda ayrı takip commit’iyle gönderilir; son HEAD’i Git ve uzak dal üzerinden doğrula. origin/server değiştirilmedi.
 
 ## A-02 inceleme düzeltmeleri — BACK-794 (21 Ekim 2026)
 
@@ -213,10 +213,10 @@ A-00–A-03 uygulaması ve kabul kontrolleri tamamlandı. A-03 Git teslimi aşa�
 
 Devam sırası:
 
-1. MANIFESTO.md, AGENTS.md, doc-4, doc-5 ve A-00–A-02 ve a02-review-fixes.json doğrulama raporlarını oku; BACK-785–BACK-794 görevlerini CLI ile doğrula.
-2. Git durumunu ve A-02 özellik dalının HEAD’ini doğrula, yerel kayıtları koru. A-02 inceleme düzeltmesinin son kaynak özetleri a02-review-fixes.json içindedir; origin/server kendiliğinden değiştirilmez.
-3. A-03 kapsamını mevcut kullanıcı vuralbayraklii ile ele al. A-02’nin yukarıdaki kesin kararlarını yeniden belirsiz sayma; diğer açık önerileri onaylanmış karar sayma.
-4. Yeni görevi yalnız kullanıcı yetkilendirdiğinde CLI allocator ile aç; Groma varsa yönergelerini, yoksa sınırlamayı kaydet. Kabul kanıtlarını ve bu devri güncelle.
+1. MANIFESTO.md, AGENTS.md, doc-4/doc-5, sabit A-00 kanıtı ve a03-verification.json dosyalarını oku; BACK-795–BACK-798 görevlerini CLI ile doğrula.
+2. tasks/server-a03-project-registration dalında güncel HEAD, uzak dal eşitliği ve temizliği doğrula; yerel kayıtları koru. origin/server kendiliğinden değiştirilmez.
+3. Yeni bir aşama yalnız mevcut kullanıcı vuralbayraklii yetkilendirdiğinde başlar. Sıradaki A-04 kapsamını ve henüz açık kurtarma/tarihçe kararlarını onunla netleştir; A-02/A-03 kesin kararlarını yeniden belirsiz sayma.
+4. Yeni görevleri CLI allocator ile oluştur, görevi üzerine al ve planını kaydet. Groma varsa yönergelerini, yoksa sınırlamayı kaydet; kabul kanıtlarıyla bu devri güncelle.
 
 ## Karar bekleyen inceleme önerileri
 
