@@ -1,13 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
-import { realpath, stat } from "node:fs/promises";
 import { isIP } from "node:net";
 import type { Server, ServerWebSocket } from "bun";
-import { FileSystem } from "../file-system/operations.ts";
 import { launchBrowser } from "../utils/browser-launch.ts";
 import { getVersion } from "../utils/version.ts";
 import { AuthStore, AuthStoreError } from "./auth-store.ts";
 import type { AuthSession, ProjectAuthorization, ProjectPermissions } from "./auth-types.ts";
 import { BacklogServer, spaIndexHtml } from "./index.ts";
+import { assertProjectBoundary } from "./project-paths.ts";
 import { ProjectStore, type ServerProject } from "./project-store.ts";
 
 const HOST = "127.0.0.1";
@@ -97,6 +96,7 @@ export class CentralServer {
 	private readonly store: ProjectStore;
 	private readonly auth: AuthStore;
 	private readonly handlers = new Map<string, BacklogServer>();
+	private readonly retiring = new Set<Promise<void>>();
 	private readonly sockets = new Set<ServerWebSocket<SocketData>>();
 	private server: Server<SocketData> | null = null;
 	private closing: Promise<void> | null = null;
@@ -190,6 +190,7 @@ export class CentralServer {
 				if (server) await server.stop(true);
 				await Promise.all([...this.handlers.values()].map((handler) => handler.stop()));
 				this.handlers.clear();
+				await Promise.all(this.retiring);
 			} finally {
 				this.closing = null;
 			}
@@ -213,8 +214,19 @@ export class CentralServer {
 				const session = this.auth.loadSession(token);
 				if (!session) return errorResponse("Authentication required.", 401);
 				if (session.user.mustChangePassword) return errorResponse("Password change required.", 403);
+				const project = this.project(projectId);
+				if (!project?.tracking) {
+					void this.retireProject(projectId);
+					return errorResponse("Not Found", 404);
+				}
 				const permissions = this.auth.permissions(session.user, projectId);
 				if (!permissions) return errorResponse("Not Found", 404);
+				try {
+					assertProjectBoundary(project.rootPath);
+				} catch {
+					void this.retireProject(projectId);
+					return errorResponse("Project is unavailable.", 503);
+				}
 				if (
 					permission === "admin" ? session.user.role !== "admin" : permission !== "read" && !permissions[permission]
 				) {
@@ -225,19 +237,32 @@ export class CentralServer {
 		};
 	}
 
+	private requireCurrentSession(token: string, admin = false): AuthSession {
+		const session = this.auth.loadSession(token);
+		if (!session) throw new AuthStoreError("Authentication required.", 401);
+		if (session.user.mustChangePassword) throw new AuthStoreError("Password change required.", 403);
+		if (admin && session.user.role !== "admin") throw new AuthStoreError("Permission denied.", 403);
+		return session;
+	}
+
+	private async retireProject(projectId: string): Promise<void> {
+		for (const ws of this.sockets) {
+			if (ws.data.projectId === projectId) ws.close(1008, "Project unavailable");
+		}
+		const handler = this.handlers.get(projectId);
+		this.handlers.delete(projectId);
+		if (!handler) return;
+		const stopping = handler.stop();
+		this.retiring.add(stopping);
+		try {
+			await stopping;
+		} finally {
+			this.retiring.delete(stopping);
+		}
+	}
+
 	private project(projectId: string): ServerProject | null {
 		return /^[1-9]\d*$/.test(projectId) ? this.store.load(projectId) : null;
-	}
-	private async readable(project: ServerProject): Promise<boolean> {
-		try {
-			if ((await realpath(project.rootPath)) !== project.rootPath || !(await stat(project.rootPath)).isDirectory())
-				return false;
-			const filesystem = new FileSystem(project.rootPath);
-			if (!(await filesystem.loadConfig())) return false;
-			return (await stat(filesystem.backlogDir)).isDirectory();
-		} catch {
-			return false;
-		}
 	}
 	private handler(project: ServerProject): BacklogServer {
 		let handler = this.handlers.get(project.id);
@@ -306,7 +331,38 @@ export class CentralServer {
 		return errorResponse("Not Found", 404);
 	}
 
-	private async adminRequest(req: Request, path: string): Promise<Response> {
+	private async adminRequest(req: Request, path: string, token: string): Promise<Response> {
+		if (path === "/api/admin/folder-areas") {
+			if (req.method === "GET") return Response.json(this.auth.listFolderAreas());
+			if (req.method === "POST") {
+				const body = await jsonBody(req);
+				fields(body, ["userId", "path"]);
+				return Response.json(
+					await this.auth.upsertFolderArea(stringField(body, "userId"), stringField(body, "path"), () => {
+						this.requireCurrentSession(token, true);
+					}),
+				);
+			}
+		}
+		const area = path.match(/^\/api\/admin\/folder-areas\/([^/]+)$/);
+		if (area && req.method === "DELETE") {
+			this.auth.removeFolderArea(decodeURIComponent(area[1] ?? ""), () => {
+				this.requireCurrentSession(token, true);
+			});
+			return Response.json({ success: true });
+		}
+		if (path === "/api/admin/projects" && req.method === "GET") return Response.json(this.store.list());
+		const tracking = path.match(/^\/api\/admin\/projects\/([^/]+)\/tracking$/);
+		if (tracking && req.method === "PUT") {
+			const body = await jsonBody(req);
+			fields(body, ["tracking"]);
+			if (typeof body.tracking !== "boolean") throw new AuthStoreError("tracking must be a boolean.", 400);
+			const project = await this.store.setTracking(tracking[1] ?? "", body.tracking, () => {
+				this.requireCurrentSession(token, true);
+			});
+			await this.retireProject(project.id);
+			return Response.json(project);
+		}
 		if (path === "/api/admin/users") {
 			if (req.method === "GET") return Response.json(this.auth.listUsers());
 			if (req.method === "POST") {
@@ -395,17 +451,37 @@ export class CentralServer {
 		}
 		if (path.startsWith("/api/admin/")) {
 			if (session.user.role !== "admin") return errorResponse("Permission denied.", 403);
-			return this.adminRequest(req, path);
+			return this.adminRequest(req, path, token);
 		}
 		if (path === "/" && req.method === "GET") return Response.redirect(`${this.origin}/projects`, 302);
 		if (path === "/projects" && req.method === "GET") return this.html();
 		if ((path === "/admin/users" || path === "/admin") && req.method === "GET")
 			return session.user.role === "admin" ? this.html() : errorResponse("Permission denied.", 403);
+		if (path === "/api/projects/registration" && req.method === "GET") {
+			const areas = this.auth.listFolderAreas(session.user.id);
+			return Response.json({ allowed: session.user.role === "admin" || areas.length > 0, areas });
+		}
+		if ((path === "/api/projects/preview" || path === "/api/projects") && req.method === "POST") {
+			const body = await jsonBody(req);
+			fields(body, ["name", "path"]);
+			const name = stringField(body, "name");
+			const root = stringField(body, "path");
+			const actor = this.requireCurrentSession(token);
+			if (path === "/api/projects/preview") {
+				const preview = await this.store.preview(name, root, actor.user.id);
+				this.requireCurrentSession(token);
+				return Response.json(preview);
+			}
+			const project = await this.store.register(name, root, actor.user.id, () => {
+				this.requireCurrentSession(token);
+			});
+			return Response.json(project, { status: 201 });
+		}
 		if (path === "/api/projects" && req.method === "GET") {
 			return Response.json(
 				this.store
 					.list()
-					.filter((project) => this.auth.permissions(session.user, project.id))
+					.filter((project) => project.tracking && this.auth.permissions(session.user, project.id))
 					.map(({ id, name }) => ({ id, name })),
 			);
 		}
@@ -417,7 +493,6 @@ export class CentralServer {
 			if (denied) return denied;
 			const project = this.project(projectId);
 			if (!project) return errorResponse("Not Found", 404);
-			if (!(await this.readable(project))) return errorResponse("Project is unavailable.", 503);
 			if (!api[2])
 				return req.method === "GET"
 					? Response.json({
@@ -436,7 +511,14 @@ export class CentralServer {
 					? undefined
 					: errorResponse("WebSocket upgrade failed", 400);
 			}
-			return handler.dispatchApi(req, api[2].startsWith("assets/") ? `/${api[2]}` : `/api/${api[2]}`, authorization);
+			const response = await handler.dispatchApi(
+				req,
+				api[2].startsWith("assets/") ? `/${api[2]}` : `/api/${api[2]}`,
+				authorization,
+			);
+			const latestDenied = authorization.check("read");
+			if (latestDenied || response.status === 503) await this.retireProject(projectId);
+			return latestDenied ?? response;
 		}
 		const page = path.match(/^\/projects\/([^/]+)(?:\/(.*))?$/);
 		if (page && req.method === "GET") {
@@ -444,7 +526,6 @@ export class CentralServer {
 			if (denied) return denied;
 			const project = this.project(page[1] ?? "");
 			if (!project) return errorResponse("Not Found", 404);
-			if (!(await this.readable(project))) return errorResponse("Project is unavailable.", 503);
 			const remainder = page[2] ?? "";
 			if (!remainder) return Response.redirect(`${this.origin}/projects/${project.id}/board`, 302);
 			if (!PROJECT_PAGES.has(remainder.split("/")[0] ?? "")) return errorResponse("Not Found", 404);

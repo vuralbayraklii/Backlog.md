@@ -111,12 +111,12 @@ export function watchConfigFile(filesystem: FileSystem, callbacks: ConfigWatcher
 			}
 
 			try {
-				const firstContent = await Bun.file(configPath).text();
+				const firstContent = await filesystem.readText(configPath);
 				await delay(CONFIG_STABILITY_DELAY_MS);
 				if (stopped || eventGeneration !== generation) {
 					return;
 				}
-				const secondContent = await Bun.file(configPath).text();
+				const secondContent = await filesystem.readText(configPath);
 				if (firstContent !== secondContent) {
 					continue;
 				}

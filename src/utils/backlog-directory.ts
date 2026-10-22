@@ -66,14 +66,20 @@ function parseBacklogConfigMetadata(content: string): BacklogConfigMetadata {
 	return { projectName, backlogDirectory };
 }
 
-function readRootBacklogConfigMetadata(rootConfigPath: string): BacklogConfigMetadata | null {
+function readRootBacklogConfigMetadata(
+	rootConfigPath: string,
+	fileReader?: (path: string) => Buffer,
+): BacklogConfigMetadata | null {
 	if (!fileExists(rootConfigPath)) {
 		return null;
 	}
 	try {
-		const metadata = parseBacklogConfigMetadata(readFileSync(rootConfigPath, "utf8"));
+		const metadata = parseBacklogConfigMetadata(
+			fileReader ? fileReader(rootConfigPath).toString("utf8") : readFileSync(rootConfigPath, "utf8"),
+		);
 		return metadata.projectName ? metadata : null;
-	} catch {
+	} catch (error) {
+		if (fileReader) throw error;
 		return null;
 	}
 }
@@ -205,12 +211,15 @@ export function normalizeProjectBacklogDirectory(value: string | null | undefine
 	return normalized;
 }
 
-export function resolveBacklogDirectory(projectRoot: string): BacklogDirectoryResolution {
+export function resolveBacklogDirectory(
+	projectRoot: string,
+	fileReader?: (path: string) => Buffer,
+): BacklogDirectoryResolution {
 	const rootConfigPath = join(projectRoot, DEFAULT_FILES.ROOT_CONFIG);
 	const rootConfigExists = fileExists(rootConfigPath);
 
 	if (rootConfigExists) {
-		const metadata = readRootBacklogConfigMetadata(rootConfigPath);
+		const metadata = readRootBacklogConfigMetadata(rootConfigPath, fileReader);
 		if (metadata) {
 			return resolveBacklogDirectoryFromRootConfig(projectRoot, metadata.backlogDirectory);
 		}

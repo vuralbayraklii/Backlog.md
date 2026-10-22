@@ -1102,7 +1102,10 @@ export class ContentStore {
 						epoch,
 						readEventPath: async () => {
 							if (!(await Bun.file(fullPath).exists())) return null;
-							const task = { ...normalizeTaskIdentity(parseTask(await Bun.file(fullPath).text())), filePath: fullPath };
+							const task = {
+								...normalizeTaskIdentity(parseTask(await this.filesystem.readText(fullPath))),
+								filePath: fullPath,
+							};
 							return task;
 						},
 						findIdentity: async () => {
@@ -1115,7 +1118,7 @@ export class ContentStore {
 								},
 								async (candidatePath) => {
 									const task = {
-										...normalizeTaskIdentity(parseTask(await Bun.file(candidatePath).text())),
+										...normalizeTaskIdentity(parseTask(await this.filesystem.readText(candidatePath))),
 										filePath: candidatePath,
 									};
 									if (!taskIdsEqual(task.id, normalizedTaskId)) throw new Error("Task identity mismatch");
@@ -1150,7 +1153,10 @@ export class ContentStore {
 						return false;
 					}
 					try {
-						const task = { ...normalizeTaskIdentity(parseTask(await Bun.file(fullPath).text())), filePath: fullPath };
+						const task = {
+							...normalizeTaskIdentity(parseTask(await this.filesystem.readText(fullPath))),
+							filePath: fullPath,
+						};
 						if (!taskIdsEqual(task.id, normalizedTaskId)) {
 							this.publishWatchedTask(task);
 							return false;
@@ -1201,7 +1207,7 @@ export class ContentStore {
 						epoch,
 						readEventPath: async () => {
 							if (!(await Bun.file(fullPath).exists())) return null;
-							const decision = { ...parseDecision(await Bun.file(fullPath).text()), path: file };
+							const decision = { ...parseDecision(await this.filesystem.readText(fullPath)), path: file };
 							if (decision.id !== id) throw new Error("Decision identity mismatch");
 							return decision;
 						},
@@ -1212,7 +1218,7 @@ export class ContentStore {
 								(path) => basename(path).split(" - ")[0] === id,
 								async (candidatePath, candidateRelativePath) => {
 									const decision = {
-										...parseDecision(await Bun.file(candidatePath).text()),
+										...parseDecision(await this.filesystem.readText(candidatePath)),
 										path: candidateRelativePath,
 									};
 									if (decision.id !== id) throw new Error("Decision identity mismatch");
@@ -1233,7 +1239,7 @@ export class ContentStore {
 						return false;
 					}
 					try {
-						const decision = { ...parseDecision(await Bun.file(fullPath).text()), path: file };
+						const decision = { ...parseDecision(await this.filesystem.readText(fullPath)), path: file };
 						if (decision.id !== id) return true;
 						const previous = this.decisions.get(id);
 						if (previous && !this.hasDecisionChanged(previous, decision)) return true;
@@ -1272,7 +1278,7 @@ export class ContentStore {
 					epoch,
 					readEventPath: async () => {
 						if (!(await Bun.file(absolutePath).exists())) return null;
-						const document = { ...parseDocument(await Bun.file(absolutePath).text()), path: eventPath };
+						const document = { ...parseDocument(await this.filesystem.readText(absolutePath)), path: eventPath };
 						if (!documentIdsEqual(document.id, id)) throw new Error("Document identity mismatch");
 						return document;
 					},
@@ -1286,7 +1292,7 @@ export class ContentStore {
 							},
 							async (candidatePath, candidateRelativePath) => {
 								const document = {
-									...parseDocument(await Bun.file(candidatePath).text()),
+									...parseDocument(await this.filesystem.readText(candidatePath)),
 									path: normalizeDocumentRelativePath(candidateRelativePath),
 								};
 								if (!documentIdsEqual(document.id, id)) throw new Error("Document identity mismatch");
@@ -1310,7 +1316,7 @@ export class ContentStore {
 					return false;
 				}
 				try {
-					const document = { ...parseDocument(await Bun.file(absolutePath).text()), path: eventPath };
+					const document = { ...parseDocument(await this.filesystem.readText(absolutePath)), path: eventPath };
 					if (!documentIdsEqual(document.id, id)) return true;
 					const previous = this.findWatchedDocumentByPath(eventPath);
 					if (previous && !this.hasDocumentChanged(previous, document)) return true;
@@ -1428,7 +1434,10 @@ export class ContentStore {
 		this.filesystem.saveTask = (async (task: Task): Promise<string> => {
 			const owner: PublicationOwner = { root: this.currentRoot() };
 			const result = await originalSaveTask.call(this.filesystem, task);
-			const savedTask = { ...normalizeTaskIdentity(parseTask(await Bun.file(result).text())), filePath: result };
+			const savedTask = {
+				...normalizeTaskIdentity(parseTask(await this.filesystem.readText(result))),
+				filePath: result,
+			};
 			await this.updateTaskFromDisk(task.id, owner, savedTask);
 			return result;
 		}) as FileSystem["saveTask"];

@@ -1,5 +1,8 @@
 import type { Database } from "bun:sqlite";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
+import { realpathSync, statSync } from "node:fs";
+import { realpath, stat } from "node:fs/promises";
+import { resolve } from "node:path";
 import {
 	ADMIN_PERMISSIONS,
 	type AuthSession,
@@ -10,6 +13,8 @@ import {
 	type ServerUser,
 } from "./auth-types.ts";
 import { ServerDatabase } from "./database.ts";
+import { pathsOverlap } from "./folder-areas.ts";
+import type { FolderArea } from "./registration-types.ts";
 
 const ABSOLUTE_LIFETIME = 12 * 60 * 60 * 1000;
 const IDLE_LIFETIME = 2 * 60 * 60 * 1000;
@@ -21,6 +26,7 @@ const USER_COLUMNS =
 	"id, username, display_name AS displayName, role, active, password_hash AS passwordHash, must_change_password AS mustChangePassword";
 const MEMBER_COLUMNS =
 	"CAST(project_id AS TEXT) AS projectId, user_id AS userId, tasks_write AS tasksWrite, docs_write AS docsWrite, decisions_write AS decisionsWrite, decisions_manage AS decisionsManage, archive, permanent_delete AS 'delete'";
+const AREA_COLUMNS = "id, user_id AS userId, root_path AS rootPath, created_at AS createdAt";
 
 interface UserRow extends Omit<ServerUser, "active" | "mustChangePassword"> {
 	active: number;
@@ -122,7 +128,7 @@ export class AuthStore {
 		return this.database.read(
 			false,
 			(database, version) =>
-				version === 2 && Boolean(database.query("SELECT 1 FROM users WHERE role='admin' AND active=1 LIMIT 1").get()),
+				version >= 2 && Boolean(database.query("SELECT 1 FROM users WHERE role='admin' AND active=1 LIMIT 1").get()),
 		);
 	}
 
@@ -158,7 +164,7 @@ export class AuthStore {
 
 	listUsers(): ServerUser[] {
 		return this.database.read([], (database, version) =>
-			version === 2
+			version >= 2
 				? database.query<UserRow, []>(`SELECT ${USER_COLUMNS} FROM users ORDER BY username`).all().map(publicUser)
 				: [],
 		);
@@ -166,7 +172,7 @@ export class AuthStore {
 
 	loadUser(id: string): ServerUser | null {
 		return this.database.read(null, (database, version) => {
-			const row = version === 2 ? this.userRow(database, id) : null;
+			const row = version >= 2 ? this.userRow(database, id) : null;
 			return row ? publicUser(row) : null;
 		});
 	}
@@ -256,7 +262,7 @@ export class AuthStore {
 	}
 
 	loadSession(token: string): AuthSession | null {
-		return this.database.read(null, (database, version) => (version === 2 ? this.session(database, token) : null));
+		return this.database.read(null, (database, version) => (version >= 2 ? this.session(database, token) : null));
 	}
 
 	logout(token: string): void {
@@ -307,7 +313,12 @@ export class AuthStore {
 
 	permissions(user: ServerUser, projectId: string): ProjectPermissions | null {
 		return this.database.read(null, (database, version) => {
-			if (version !== 2 || !database.query("SELECT 1 FROM projects WHERE CAST(id AS TEXT)=?").get(projectId))
+			if (
+				version < 2 ||
+				!database
+					.query(`SELECT 1 FROM projects WHERE CAST(id AS TEXT)=?${version >= 3 ? " AND tracking=1" : ""}`)
+					.get(projectId)
+			)
 				return null;
 			const current = this.userRow(database, user.id);
 			if (!current?.active) return null;
@@ -324,7 +335,7 @@ export class AuthStore {
 	listMembers(projectId: string): ProjectMember[] {
 		const rows = this.database.read<MemberRow[] | null>(null, (database, version) => {
 			this.requireProject(database, projectId);
-			return version === 2
+			return version >= 2
 				? database
 						.query<MemberRow, [string]>(
 							`SELECT ${MEMBER_COLUMNS} FROM project_members WHERE CAST(project_id AS TEXT)=? ORDER BY user_id`,
@@ -368,6 +379,68 @@ export class AuthStore {
 			database
 				.query("DELETE FROM project_members WHERE CAST(project_id AS TEXT)=? AND user_id=?")
 				.run(projectId, userId);
+		});
+	}
+
+	listFolderAreas(userId?: string): FolderArea[] {
+		return this.database.read([], (database, version) => {
+			if (version < 3) return [];
+			return userId === undefined
+				? database.query<FolderArea, []>(`SELECT ${AREA_COLUMNS} FROM folder_areas ORDER BY root_path,id`).all()
+				: database
+						.query<FolderArea, [string]>(
+							`SELECT ${AREA_COLUMNS} FROM folder_areas WHERE user_id=? ORDER BY root_path,id`,
+						)
+						.all(userId);
+		});
+	}
+
+	async upsertFolderArea(userId: string, path: string, beforeCommit?: () => void): Promise<FolderArea> {
+		if (!this.loadUser(userId)) throw new AuthStoreError("User not found.", 404);
+		if (typeof path !== "string" || !path.trim()) throw new AuthStoreError("Folder path is required.");
+		const requestedPath = resolve(path);
+		let rootPath: string;
+		try {
+			rootPath = await realpath(requestedPath);
+			if (!(await stat(rootPath)).isDirectory()) throw new Error("Not a directory.");
+		} catch {
+			throw new AuthStoreError("Folder path must name an existing directory.");
+		}
+		return this.database.write((database) => {
+			beforeCommit?.();
+			const user = this.requireUser(database, userId);
+			if (!user.active) throw new AuthStoreError("User is inactive.");
+			try {
+				if (
+					realpathSync(requestedPath) !== rootPath ||
+					realpathSync(rootPath) !== rootPath ||
+					!statSync(rootPath).isDirectory()
+				)
+					throw new Error("Changed directory.");
+			} catch {
+				throw new AuthStoreError("Folder path changed during registration.", 409);
+			}
+			const areas = database.query<FolderArea, []>(`SELECT ${AREA_COLUMNS} FROM folder_areas`).all();
+			for (const area of areas) {
+				if (area.userId !== userId && pathsOverlap(area.rootPath, rootPath))
+					throw new AuthStoreError("Folder area overlaps another user's area.", 409);
+			}
+			const existing = areas.find((area) => area.userId === userId && area.rootPath === rootPath);
+			if (existing) return existing;
+			const area = { id: randomUUID(), userId, rootPath, createdAt: new Date(this.now()).toISOString() };
+			database
+				.query("INSERT INTO folder_areas(id,user_id,root_path,created_at) VALUES(?,?,?,?)")
+				.run(area.id, userId, rootPath, area.createdAt);
+			return area;
+		});
+	}
+
+	removeFolderArea(id: string, beforeCommit?: () => void): void {
+		if (!this.listFolderAreas().some((area) => area.id === id)) throw new AuthStoreError("Folder area not found.", 404);
+		this.database.write((database) => {
+			beforeCommit?.();
+			if (!database.query("DELETE FROM folder_areas WHERE id=?").run(id).changes)
+				throw new AuthStoreError("Folder area not found.", 404);
 		});
 	}
 

@@ -1,0 +1,77 @@
+{
+	"stage": "A-03",
+	"base": "4e67653bb76723cb93ff299ac12f99fd10b36a87",
+	"branch": "tasks/server-a03-project-registration",
+	"tasks": {
+		"integration": "BACK-795",
+		"areas": "BACK-796",
+		"binding": "BACK-797",
+		"ui": "BACK-798"
+	},
+	"types": "src/server/registration-types.ts is owned only by the main agent. ServerProject in project-store.ts gains tracking:boolean; all existing records default true.",
+	"api": {
+		"POST /api/projects/preview": "{name,path} -> ProjectPreview. Authenticated active session; folder access checked before reading any project content. Invalid prepared content returns a preview with canRegister=false and issues. Unauthorized paths return generic 403 without other project names/paths.",
+		"POST /api/projects": "{name,path} -> ServerProject (201). Actor ID comes only from session. Never accept actor/user ID from request. Current account, folder grants, real paths and root collisions checked again. Project and DEFAULT_PERMISSIONS membership created in one SQLite transaction. No membership is needed for local trusted CLI register without actor.",
+		"GET /api/projects/registration": "ProjectRegistrationAccess {allowed,areas}; own areas only; admin allowed=true.",
+		"GET /api/projects": "Existing [{id,name}], only tracking projects visible to current user.",
+		"GET /api/admin/folder-areas": "FolderArea[] (admin)",
+		"POST /api/admin/folder-areas": "{userId,path} -> FolderArea; upsert exact existing own area, reject inter-user overlaps",
+		"DELETE /api/admin/folder-areas/:id": "{success:true}; membership unaffected",
+		"GET /api/admin/projects": "ServerProject[] includes untracked projects for admin management",
+		"PUT /api/admin/projects/:id/tracking": "{tracking:boolean} -> ServerProject; true revalidates prepared folder and all boundaries, false never touches source files; preserves identity/memberships"
+	},
+	"errors": "Existing {error:string} and session/Origin/CSRF rules. 400 malformed/unprepared input; 401 expired session; 403 unauthorized folder/admin operation; 404 hidden/missing/untracked project on normal routes; 409 project/area overlap; 503 authorized project files unavailable. Never disclose foreign paths/names in ordinary-user errors or preview issues.",
+	"folderMeaning": "Canonical existing directory, inclusive descendant access, registered per user in central SQLite. Different owners cannot have equal/nested areas. Revoking a folder area revokes future registration only. Changed symlink aliases do not move an area. Admin uses service-account filesystem access; all actual project content must still remain inside project root.",
+	"storeInterfaces": {
+		"AuthStore": "listFolderAreas(userId?:string):FolderArea[]; upsertFolderArea(userId,path,beforeCommit?):Promise<FolderArea>; removeFolderArea(id,beforeCommit?):void. Guard runs inside write transaction; auth reads accept v2/v3, permissions rejects untracked.",
+		"folder-areas.ts": "assertRegistrationAccess(database:Database,userId:string,rootPath:string):void (sync, current account/area inside caller's transaction, AuthStoreError with generic message); containsPath(root,path):boolean and pathsOverlap(a,b):boolean reused for real path rules. CLI without actor is trusted admin.",
+		"ProjectStore": "preview(name,path,actorId?):Promise<ProjectPreview>; register(name,path,actorId?,beforeCommit?):Promise<ServerProject>; setTracking(id,tracking,beforeCommit?):Promise<ServerProject>; list/load include tracked and untracked. Collision checked before reading source; ordinary actor receives no existing project metadata.",
+		"project-paths.ts": "assertProjectBoundary(rootPath:string):void synchronous runtime guard usable before every cached/API/WS access. Ensure config candidates, resolved Backlog directories, record files and attachments cannot escape, including changed links. Binding agent owns BacklogServer safety guards if required and reports needed central hooks to main."
+	},
+	"schema": "Areas agent exclusively owns additive v3 migration: projects.tracking INTEGER NOT NULL DEFAULT 1 CHECK(tracking IN(0,1)); folder_areas canonical id/user_id/root_path/created_at. Recognize old project-only v0 and auth v2 exactly; create/upgrade only in successful write transaction. Preserve all existing data and reject lookalike/broken schemas.",
+	"ownership": {
+		"main": [
+			"src/server/central.ts",
+			"src/commands/server.ts",
+			"src/server/registration-types.ts",
+			"src/server/auth-types.ts",
+			"README.md",
+			"src/test/central-project-registration.test.ts",
+			"src/test/cli-server-registration.test.ts",
+			"verification/server/a03*.json",
+			"server handoff via CLI"
+		],
+		"areas": [
+			"src/server/database.ts",
+			"src/server/auth-store.ts",
+			"src/server/folder-areas.ts",
+			"src/test/server-folder-areas.test.ts",
+			"src/test/server-auth-store.test.ts",
+			"src/test/server-registration-review.test.ts"
+		],
+		"binding": [
+			"src/server/project-store.ts",
+			"src/server/project-paths.ts and project inspection helper if needed",
+			"src/server/index.ts if safety requires",
+			"src/test/server-project-store.test.ts",
+			"src/test/server-project-registration.test.ts",
+			"src/test/server-project-boundary.test.ts",
+			"src/core/backlog.ts (optional fileReader propagation)",
+			"src/core/content-store.ts (existing watcher reads use shared reader)",
+			"src/file-system/operations.ts (shared reader hook)",
+			"src/utils/config-watcher.ts",
+			"src/utils/backlog-directory.ts (guarded config discovery)"
+		],
+		"ui": [
+			"src/web/**",
+			"src/test/web-project-registration.test.tsx",
+			"src/test/web-project-selector.test.tsx",
+			"other UI DOM tests only as needed",
+			"src/test/central-registration-admin-race.test.ts"
+		]
+	},
+	"workflow": "Use source CLI bun run cli for task reads/plans/notes, assign your stated @codex-* name and activate your own task. Never directly edit Backlog markdown. No agent spawns further agents, switches branch, commits or reverts others. Ask main for shared-file changes. Each agent runs scoped meaningful tests, simplifies, records evidence, then independently reviews another area when main requests. Main runs full final checks, actual Chromium, finalization, handoff, commit/push.",
+	"boundaries": "Only ready projects, no init/create/migration of source Backlog. No history/A-04/agent mode/A-05. Existing A-02 defaults and session/draft behavior retained. No descriptive copy beneath headings unless required to prevent an error. Groma command unavailable at start; no owned files edited.",
+	"evidenceDirectory": "/tmp/backlog-a03-8vr8jlkz",
+	"sharedCodeRequirement": "A-03 requires every configuration/record/attachment read to remain inside the project root, including changed links and caches/watchers. Optional central opened-file reader is injected into existing FileSystem, Core, ContentStore/config watcher and config discovery. Existing parsers, record CRUD, search and board implementations remain canonical; no alternative content surface is introduced. Existing local filesystem/cache/config/discovery/task-corpus/API tests preserve normal behavior."
+}

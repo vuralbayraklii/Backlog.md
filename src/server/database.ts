@@ -36,17 +36,34 @@ CREATE INDEX sessions_user ON sessions(user_id);
 PRAGMA user_version = 2;
 `;
 
+const TRACKING_COLUMN = "tracking INTEGER NOT NULL DEFAULT 1 CHECK(tracking IN(0,1))";
+const REGISTRATION_SCHEMA = `
+ALTER TABLE projects ADD COLUMN ${TRACKING_COLUMN};
+CREATE TABLE folder_areas (
+	id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
+	root_path TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL
+) STRICT;
+PRAGMA user_version = 3;
+`;
+
 function normalizedSql(sql: string): string {
 	return sql
 		.replace(/'(?:''|[^'])*'|[^']+/g, (part) => (part.startsWith("'") ? part : part.replace(/\s+/g, "").toLowerCase()))
 		.replace(/;$/, "");
 }
 
-const SCHEMA_SQL = Object.fromEntries(
-	`${PROJECT_SCHEMA};${AUTH_SCHEMA}`
-		.matchAll(/CREATE (?:TABLE|INDEX) (\w+)[\s\S]*?;/g)
-		.map((match) => [match[1], normalizedSql(match[0])]),
-);
+function declarations(schema: string): Record<string, string> {
+	return Object.fromEntries(
+		schema.matchAll(/CREATE (?:TABLE|INDEX) (\w+)[\s\S]*?;/g).map((match) => [match[1], normalizedSql(match[0])]),
+	);
+}
+
+const SCHEMA_V2 = declarations(`${PROJECT_SCHEMA};${AUTH_SCHEMA}`);
+const SCHEMA_V3: Record<string, string> = {
+	...SCHEMA_V2,
+	...declarations(REGISTRATION_SCHEMA),
+	projects: normalizedSql(PROJECT_SCHEMA.replace("\n) STRICT", `, ${TRACKING_COLUMN}) STRICT`)),
+};
 
 function schemaVersion(database: Database, allowEmpty = false): number {
 	const version = database.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version;
@@ -56,7 +73,8 @@ function schemaVersion(database: Database, allowEmpty = false): number {
 		)
 		.all();
 	if (allowEmpty && version === 0 && objects.length === 0) return -1;
-	const expected = version === 0 ? ["projects"] : version === 2 ? Object.keys(SCHEMA_SQL).sort() : [];
+	const schema = version === 3 ? SCHEMA_V3 : SCHEMA_V2;
+	const expected = version === 0 ? ["projects"] : version === 2 || version === 3 ? Object.keys(schema).sort() : [];
 	if (
 		!expected.length ||
 		expected.length !== objects.length ||
@@ -66,7 +84,7 @@ function schemaVersion(database: Database, allowEmpty = false): number {
 	}
 	for (const { name, sql } of objects) {
 		// Exact known declarations also protect PK/UNIQUE/FK/CHECK/STRICT semantics and reject added triggers/views.
-		if (normalizedSql(sql) !== SCHEMA_SQL[name]) throw new Error(`Unrecognized server database schema for ${name}.`);
+		if (normalizedSql(sql) !== schema[name]) throw new Error(`Unrecognized server database schema for ${name}.`);
 	}
 	return version ?? 0;
 }
@@ -99,7 +117,8 @@ export class ServerDatabase {
 				.transaction(() => {
 					const version = schemaVersion(database, !existed);
 					if (version === -1) database.exec(PROJECT_SCHEMA);
-					if (version !== 2) database.exec(AUTH_SCHEMA);
+					if (version < 2) database.exec(AUTH_SCHEMA);
+					if (version !== 3) database.exec(REGISTRATION_SCHEMA);
 					return action(database);
 				})
 				.immediate();

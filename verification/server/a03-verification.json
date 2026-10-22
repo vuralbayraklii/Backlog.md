@@ -1,0 +1,1076 @@
+{
+	"schemaVersion": 1,
+	"stage": "A-03",
+	"taskIds": ["BACK-795", "BACK-796", "BACK-797", "BACK-798"],
+	"result": "passed",
+	"recordedAtUtc": "2026-10-22T07:19:56.440553+00:00",
+	"source": {
+		"fork": "https://github.com/vuralbayraklii/Backlog.md",
+		"baseCommit": "4e67653bb76723cb93ff299ac12f99fd10b36a87",
+		"branch": "tasks/server-a03-project-registration",
+		"bunVersion": "1.4.3",
+		"packageVersion": "1.53.0",
+		"sourceTreeSha256": "4ad65dc50bc1a7f6c758a033c02dc6fc0aaa8d1d61b54f4f0985a334220d72c2",
+		"sourceFileCount": 612,
+		"sourceManifest": "/tmp/backlog-a03-8vr8jlkz/source-freeze.json",
+		"treeHashAlgorithm": "SHA256 of sorted path + NUL + file SHA256 + newline, for Git-tracked/nonignored src/, scripts/, README.md and root package/lock/Bun/TypeScript/Biome config inputs",
+		"changedSourceFiles": [
+			{
+				"path": "README.md",
+				"sha256": "2574aad4ac1fa9ae14b01cd5c4dcd07e71f4476ce3bec5f2fd5e84e469563fcd",
+				"bytes": 31758
+			},
+			{
+				"path": "src/commands/server.ts",
+				"sha256": "abdec045495ee6550d4b5c7339d2876a45daf8f2d797a74b34e20b337ae1ce8d",
+				"bytes": 24090
+			},
+			{
+				"path": "src/core/backlog.ts",
+				"sha256": "e088d6b232e176c0d4806bc3f514499272a29bf97faa89cc4f715d762421710b",
+				"bytes": 197835
+			},
+			{
+				"path": "src/core/content-store.ts",
+				"sha256": "36672291741e8c5f1377bc07b5bea69160e74dfb7db861835c6bb97e16629783",
+				"bytes": 74848
+			},
+			{
+				"path": "src/file-system/operations.ts",
+				"sha256": "7d46bff9ebfc5f528ed975e7d89ab9101b97f7df1c081b2062353e33ae39a495",
+				"bytes": 99702
+			},
+			{
+				"path": "src/server/auth-store.ts",
+				"sha256": "b716b42c14c1e0bff3fa861a5b3417f3eef06ce286201998e189ce1b62412577",
+				"bytes": 21220
+			},
+			{
+				"path": "src/server/central.ts",
+				"sha256": "2920d43e14dc820ddd57fe26230164c2bb994cddb7a42e7a3c4e8d61e6659fcf",
+				"bytes": 21054
+			},
+			{
+				"path": "src/server/database.ts",
+				"sha256": "ae925a64a4ab6f13bd96eb1306896688aa7b5a60555332e765f25c764cc23fdb",
+				"bytes": 5445
+			},
+			{
+				"path": "src/server/folder-areas.ts",
+				"sha256": "c9ea005e16504262fdabf42bbfd9ed4107b38682b9a40a28ff50688e132164b0",
+				"bytes": 1970
+			},
+			{
+				"path": "src/server/index.ts",
+				"sha256": "1e8956c5d59070dcef612364154390921e06643b11ed8e44b98b4d712a2b2254",
+				"bytes": 90116
+			},
+			{
+				"path": "src/server/project-paths.ts",
+				"sha256": "be0280eae2eec1fbc92d7b0b7f157af41d93c330abf456b710df50bb3d4bc6e0",
+				"bytes": 11239
+			},
+			{
+				"path": "src/server/project-store.ts",
+				"sha256": "3816378025f0e43491ac2b92fc2388da940b4ccf66efebf1672da67afecdabed",
+				"bytes": 7422
+			},
+			{
+				"path": "src/server/registration-types.ts",
+				"sha256": "5ebcc2a697927a51cd2d6e53aecbbd4b476c205654d8cff66091f24300bf145f",
+				"bytes": 696
+			},
+			{
+				"path": "src/test/central-project-registration.test.ts",
+				"sha256": "ac5254c4db7217d98c882b3b5adc9101e0c50072701bc30e1c1ec60c1a140f82",
+				"bytes": 16737
+			},
+			{
+				"path": "src/test/central-registration-admin-race.test.ts",
+				"sha256": "d71d526fd22e6d3b632fea18785c6874c48c5bf3cc74200406adaed7c4bb67a5",
+				"bytes": 6538
+			},
+			{
+				"path": "src/test/cli-server-registration.test.ts",
+				"sha256": "6ad9055bd7bc01ea4e9d3c3acc576b27ac980f9653a9275a836d1f1de41cd61d",
+				"bytes": 6652
+			},
+			{
+				"path": "src/test/server-auth-store.test.ts",
+				"sha256": "6de5c88def666a503add9f8eadbb3d18a024a94cdd39849683f602f52cae0d23",
+				"bytes": 17378
+			},
+			{
+				"path": "src/test/server-folder-areas.test.ts",
+				"sha256": "02ea48be6540d3a09c89e90ea81aa35adafb45d26abe6e787d9c37077a934cd9",
+				"bytes": 14866
+			},
+			{
+				"path": "src/test/server-project-boundary.test.ts",
+				"sha256": "9f9fa77d4270c9fb2ebe7065232f4dcd0a3953eac7e896e3a4efc72f795a4d4d",
+				"bytes": 11224
+			},
+			{
+				"path": "src/test/server-project-registration.test.ts",
+				"sha256": "b2fe8d668c4f498e302fec97be80d6ea7f6d4fed078795c94d24be88f25209b9",
+				"bytes": 14206
+			},
+			{
+				"path": "src/test/server-project-store.test.ts",
+				"sha256": "75eeecfb0a56328accff41192d0bf576482f2e06db95712fab237036b1a0be00",
+				"bytes": 9161
+			},
+			{
+				"path": "src/test/server-registration-review.test.ts",
+				"sha256": "37e1a8aa071e44a6cb9ad43c298caca7fee01f3a1ec7cfc7fedf6a2e2146b5c8",
+				"bytes": 3556
+			},
+			{
+				"path": "src/test/web-project-registration.test.tsx",
+				"sha256": "84e117e4b08d9995abeca329648357b11c6bc44864c55f8183257da15ec90b45",
+				"bytes": 24663
+			},
+			{
+				"path": "src/utils/backlog-directory.ts",
+				"sha256": "e8aa47c9d7191b5c500fb680458b150049a52bf29b17a7cb5d18cb48407a87f3",
+				"bytes": 6701
+			},
+			{
+				"path": "src/utils/config-watcher.ts",
+				"sha256": "63b00bf36ebeb24c587420d10888fd17e4a34a4ab3458beef30b383c7943e49e",
+				"bytes": 6934
+			},
+			{
+				"path": "src/web/components/AdminProjectRegistration.tsx",
+				"sha256": "cf17afba0bbf9d6ca4c6063fa22addf07f0ec4921b78a77f8eb007f83ea396a9",
+				"bytes": 8523
+			},
+			{
+				"path": "src/web/components/AdminUsers.tsx",
+				"sha256": "157bbf94965eba3a9e2997ec65fc45fb6f95c0ae7ce659f6723daedea296ce4b",
+				"bytes": 6416
+			},
+			{
+				"path": "src/web/components/ProjectRegistration.tsx",
+				"sha256": "6a1372784845a1205c045b891088dd2b208d0f86fac1ee926e5f66b15af8765b",
+				"bytes": 7612
+			},
+			{
+				"path": "src/web/components/ProjectSelector.tsx",
+				"sha256": "d18d9dd43db59c7cf0e223da55dd881cc9442c1e092a0f9316deaf7260efde7a",
+				"bytes": 3764
+			},
+			{
+				"path": "src/web/contexts/UnsavedChangesContext.tsx",
+				"sha256": "be2e2e8d57845eb9f82a8bb6fbc3ec669f47e0fbc549f25152d6b3a857ccda4e",
+				"bytes": 2731
+			}
+		],
+		"unchangedAfterChecks": true,
+		"nativeExecutableSha256": "7d0771399a99b093d3a3b1e5d4bd3f7280ea18efab2a5e2451812b558df50fe1",
+		"testCliSha256": "fed62222811df8e6b1419340fc3d7a5df997ed10667f9a6e3dfde9f526d0a0b7"
+	},
+	"scope": {
+		"newSurfaces": [
+			"prepared-project preview and registration",
+			"personal folder assignment/removal",
+			"stop/resume project tracking"
+		],
+		"existingSurfacesReused": [
+			"task/document/decision operations",
+			"Markdown parsers and FileSystem loaders",
+			"ContentStore and SearchService",
+			"existing board and editors",
+			"session/CSRF client",
+			"project selector and Users layout"
+		],
+		"sourceInitialization": false,
+		"sourceMarkdownOrConfigMutationsByRegistration": false
+	},
+	"sharedCodeRationale": [
+		{
+			"files": [
+				"src/file-system/operations.ts",
+				"src/core/backlog.ts",
+				"src/core/content-store.ts",
+				"src/utils/config-watcher.ts",
+				"src/utils/backlog-directory.ts"
+			],
+			"requirement": "A-03 configuration, records, assets and later changed symbolic links must stay within the same project root, including cached/watched content.",
+			"change": "Optional central-only opened-file reader passes bytes into existing parsers/loaders/watchers and config discovery. Local readers retain existing defaults.",
+			"regressions": "255-test binding group plus final full suite; existing filesystem/cache/content-store/config-watcher/discovery/task-corpus/permissions tests"
+		},
+		{
+			"files": ["src/web/contexts/UnsavedChangesContext.tsx"],
+			"requirement": "Successful registration must navigate immediately to the existing board after the form is saved.",
+			"change": "Beforeunload checks current dirty registry, so synchronous clearUnsaved takes effect before React effect cleanup; other dirty editors still warn.",
+			"regressions": "Pre-fix synchronous-navigation regression fails;56 final UI/auth/selector tests pass; real Chromium succeeds with only intended admin confirmations."
+		}
+	],
+	"checks": {
+		"fullBun": {
+			"command": "BACKLOG_TEST_CLI_BUNDLE=/tmp/backlog-a03-8vr8jlkz/test-cli/cli.js bun run test",
+			"exitCode": 0,
+			"result": "passed",
+			"passed": 3814,
+			"failed": 0,
+			"skipped": 13,
+			"total": 3827,
+			"files": 337,
+			"duration": "542.58s",
+			"expectations": 18728,
+			"evidence": "full-tests.log"
+		},
+		"types": {
+			"command": "bun run check:types",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "types.log",
+			"writes": false
+		},
+		"biome": {
+			"command": "bun run check .",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "biome.log",
+			"writes": false
+		},
+		"diffCheck": {
+			"command": "git diff --check",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "diff-check.log",
+			"writes": false
+		},
+		"build": {
+			"command": "bun run build",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "build.log"
+		},
+		"testBundle": {
+			"command": "BACKLOG_BUILD_OUTDIR=/tmp/backlog-a03-8vr8jlkz/test-cli bun scripts/build.ts",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "test-cli-build.log"
+		},
+		"compiledSmoke": {
+			"command": "bun scripts/smoke-compiled-build.ts ./dist/backlog 1.53.0",
+			"exitCode": 0,
+			"result": "passed",
+			"evidence": "smoke.log"
+		}
+	},
+	"chromium": {
+		"result": "passed",
+		"browser": "HeadlessChrome/153.0.8010.12",
+		"viewport": {
+			"width": 1440,
+			"height": 1000
+		},
+		"assertions": [
+			"normal user without assigned folders has no registration action",
+			"admin assigns member personal folder through existing Users screen",
+			"overlapping inter-user folder assignment displays409",
+			"unprepared folder preview blocks registration with readable error",
+			"unprepared folder remains empty after preview",
+			"preview displays existing configuration, counts and malformed-record warning",
+			"member registration opens existing board with standard permissions",
+			"hidden Backlog layout registers and opens existing board",
+			"admin registers service-accessible custom layout outside personal areas",
+			"member cannot read admin-only registered project",
+			"foreign folder preview displays403 without disclosing foreign project metadata",
+			"permission revoked after preview blocks registration and retains entered name/path",
+			"failed registration leaves no partial project",
+			"admin stop-tracking closes member live connection",
+			"untracked project direct API and page return404",
+			"admin retains same untracked project ID",
+			"unsafe changed source blocks UI reactivation",
+			"reactivation preserves member access and existing ID",
+			"private project alias preview conceals canonical path and metadata",
+			"all prepared/unprepared source paths and SHA256 contents unchanged by preview/register/tracking",
+			"no unhandled browser runtime errors"
+		],
+		"runtimeErrors": 0,
+		"sourceHashMatch": true,
+		"responsesMocked": false,
+		"runDirectory": "/tmp/backlog-a03-8vr8jlkz/browser/run-2026-10-22T07-08-57-569Z",
+		"evidence": "browser/latest-result.json"
+	},
+	"acceptanceEvidence": [
+		{
+			"requirement": "Ready standard, hidden and custom Backlog folders register; unprepared folders create nothing",
+			"tests": [
+				"src/test/server-project-registration.test.ts",
+				"src/test/central-project-registration.test.ts",
+				"src/test/cli-server-registration.test.ts"
+			],
+			"browser": "Standard/hidden/custom registration and unprepared error"
+		},
+		{
+			"requirement": "Own folder access only; inter-user overlaps, outside links and foreign metadata blocked",
+			"tests": [
+				"src/test/server-folder-areas.test.ts",
+				"src/test/server-project-boundary.test.ts",
+				"src/test/server-registration-review.test.ts",
+				"src/test/central-registration-admin-race.test.ts"
+			],
+			"browser": "Assigned folder, overlap409 and foreign403"
+		},
+		{
+			"requirement": "Grant/account/path changes after preview and concurrent duplicate registrations rechecked",
+			"tests": [
+				"src/test/server-project-registration.test.ts",
+				"src/test/central-project-registration.test.ts",
+				"src/test/server-registration-review.test.ts"
+			],
+			"browser": "Grant removed after preview; register403 and no partial project"
+		},
+		{
+			"requirement": "Project and creator standard membership form one SQLite transaction; refused operations roll back",
+			"tests": [
+				"src/test/server-project-registration.test.ts",
+				"src/test/server-folder-areas.test.ts",
+				"src/test/central-project-registration.test.ts"
+			],
+			"browser": "Creator standard permissions and failed registration leaves3 prior projects"
+		},
+		{
+			"requirement": "Stop tracking closes normal list, directAPI/page and WS; reactivation validates then retains IDs/memberships",
+			"tests": ["src/test/central-project-registration.test.ts", "src/test/cli-server-registration.test.ts"],
+			"browser": "Live1008 closure, direct404, unsafe resume400, sameID/membership after safe resume"
+		},
+		{
+			"requirement": "Source file inventories and SHA256 contents unchanged by preview/register/tracking",
+			"tests": ["src/test/server-project-registration.test.ts", "src/test/central-project-registration.test.ts"],
+			"browser": "source-before.json equals source-after.json for6 temporary project paths"
+		},
+		{
+			"requirement": "Changed persistent/transient links never publish outside cache/watcher/API/WS content",
+			"tests": ["src/test/server-project-boundary.test.ts", "src/test/central-project-registration.test.ts"],
+			"details": "Opened-fd read validation; transient task/config links restored before any subsequent request; prior handler layout also guarded"
+		}
+	],
+	"independentReview": {
+		"result": "passed",
+		"openBlockers": [],
+		"reviews": [
+			{
+				"reviewer": "codex-areas",
+				"task": "BACK-796",
+				"scope": "Binding correctness, migration and data preservation; final read-only source confirmation",
+				"result": "no remaining blocker",
+				"evidence": ["areas-review-regressions.log", "areas-review-removal-guard.log", "areas-review-biome.log"],
+				"confirmed": [
+					"v2 read-only no-area denial",
+					"generic unauthorized paths",
+					"guarded configuration discovery",
+					"atomic current account/grant and membership",
+					"tracking identity and memberships retained"
+				]
+			},
+			{
+				"reviewer": "codex-registration-ui",
+				"task": "BACK-798",
+				"scope": "Folder data and central API/CLI user flow; independently reproduced in-lock admin revocation and private preview disclosure",
+				"result": "both findings fixed and regression-tested",
+				"evidence": [
+					"review-regressions.log",
+					"review-delete-race.log",
+					"review-delete-race-after.log",
+					"review-preview-privacy.log",
+					"review-preview-privacy-after.log"
+				]
+			},
+			{
+				"reviewer": "codex-binding",
+				"task": "BACK-797",
+				"scope": "Selector/Users integration, shared client, form lifecycle and final beforeunload delta",
+				"result": "no remaining blocker",
+				"evidence": ["binding-ui-review-tests.log", "binding-final-unload-review.log"],
+				"assertions": 259,
+				"passed": 56
+			}
+		],
+		"chromiumFollowup": {
+			"finding": "Successful register saved metadata but stale beforeunload listener blocked synchronous board navigation",
+			"fix": "Existing shared listener checks current dirty token registry; no navigation delay",
+			"beforeEvidence": "ui-register-unload-before.log",
+			"afterEvidence": "ui-register-unload-after.log",
+			"browserEvidence": "browser/latest-result.json"
+		},
+		"finalAliasNormalizationReview": {
+			"reviewer": "codex-areas",
+			"result": "no compatibility issue",
+			"scope": "Submitted path on blocked actor response, canonical successful/trusted snapshots, preserved409, fresh actor/transaction checks",
+			"tests": "51 scoped tests,232 assertions; final full suite repeated",
+			"evidence": [
+				"binding-final-alias-privacy-tests.log",
+				"binding-final-alias-types.log",
+				"binding-final-alias-biome.log"
+			]
+		}
+	},
+	"verificationHistory": [
+		{
+			"result": "superseded_pass",
+			"evidence": "full-tests-before-alias-preview.log",
+			"passed": 3814,
+			"skipped": 13,
+			"failed": 0,
+			"reason": "Final blocker-preview alias normalization added after this pass; final source rebuilt and full run repeated."
+		},
+		{
+			"result": "interrupted",
+			"evidence": "full-tests-before-unload-fix.log",
+			"exitCode": 130,
+			"reason": "Initial Chromium found stale unload listener after registration; corrected before final build/full run."
+		},
+		{
+			"result": "failed_then_fixed",
+			"evidence": "ui-register-unload-before.log",
+			"reason": "Synchronous registration navigation regression reproduced the real browser issue; fixed final tests and Chromium pass."
+		}
+	],
+	"limits": [
+		"Only temporary Linux fixtures; no Finbee or other real project attached.",
+		"Opened-fd containment targets the specified single Linux server environment.",
+		"Skipped platform/PTY tests are listed below and are not counted as passed.",
+		"Groma command unavailable; no architecture scan or Groma-owned file edits.",
+		"Existing upstream10 duplicate task identity groups were preserved; no repair in this stage.",
+		"Raw evidence is under /tmp and must be copied elsewhere for long-term retention."
+	],
+	"skippedCases": [
+		"(skip) interactive draft picker collision guard > renders unrelated healthy drafts beside an unparsable twin",
+		"(skip) interactive TUI editor handoff > shows a CLI mutation in the open board within a bounded time",
+		"(skip) interactive TUI editor handoff > selects the next neighbor when the open task is removed",
+		"(skip) interactive TUI editor handoff > launches terminal editor from board view and marks task updated",
+		"(skip) interactive TUI editor handoff > launches terminal editor from task list view and marks task updated",
+		"(skip) interactive TUI editor handoff > keeps j and k moving the task list selection after each of two editor sessions",
+		"(skip) interactive task list --ready > filters blocked tasks out of the very first render",
+		"(skip) Cursor init PTY behavior > uses AGENTS.md and completes without opening an editor",
+		"(skip) interactive task list order > shows the rows --plain prints, in the same order, for the default order and every option",
+		"(skip) interactive task list order > shows the default order when the list is reached from the board, a task view, or search",
+		"(skip) interactive task list order > keeps an open list sorted and its selection on the same task when tasks change on disk",
+		"(skip) interactive task list order > marks each configured priority with an arrow, and with an ASCII arrow without Unicode",
+		"(skip) interactive board multi-select move > walks the highlight with real xterm shift-arrows and recruits the task the fallback cannot reach"
+	],
+	"evidenceDirectory": "/tmp/backlog-a03-8vr8jlkz",
+	"evidenceManifest": [
+		{
+			"path": "BACK-795-before-final.json",
+			"bytes": 5702,
+			"sha256": "64563000ebb67b1aaf67ba098fe75350322d5205822d3f25f2b38499ba6762b2"
+		},
+		{
+			"path": "BACK-795-finalization.txt",
+			"bytes": 4688,
+			"sha256": "1702a297dc4f8fa178df8ffb7818effb9ab0779cfa2926431b08bb2cbb2be3b3"
+		},
+		{
+			"path": "BACK-796-before-final.json",
+			"bytes": 9204,
+			"sha256": "e54d0e97cd9820b40e1a204b3de1c4ac91d7f7a6d135a9a54e5e9924ef2e4976"
+		},
+		{
+			"path": "BACK-796-finalization.txt",
+			"bytes": 8263,
+			"sha256": "f9f381c286dda77009c372c7471d2fc85ddada6818b73615d6dd125b54c62b55"
+		},
+		{
+			"path": "BACK-797-before-final.json",
+			"bytes": 11003,
+			"sha256": "d69c192378d6643e46f980e29e19ed814da6a35ef972be104bc256a7cc85d18c"
+		},
+		{
+			"path": "BACK-797-finalization.txt",
+			"bytes": 9977,
+			"sha256": "ad2f5857a907e809c2ab3e3e5b499bbbac69f226a498430d6213a46903644103"
+		},
+		{
+			"path": "BACK-798-before-final.json",
+			"bytes": 11410,
+			"sha256": "077478e673b45df15c4649d53b24b7d3c7bd102828af8aad0f2a53c3166135c0"
+		},
+		{
+			"path": "BACK-798-finalization.txt",
+			"bytes": 10461,
+			"sha256": "f32f69c96a9179ddffcb27623afd2fb226291cc88edab926628af8028800269a"
+		},
+		{
+			"path": "areas-auth-first.log",
+			"bytes": 3307,
+			"sha256": "80484fa5d804d5bff0fc9615f39219e3d412a04c7ec2be3105859eb5641d8f8b"
+		},
+		{
+			"path": "areas-biome.log",
+			"bytes": 43,
+			"sha256": "bccc3edd2d5488a93c28e898532efd5a03ebebd86dd0fda566963c0c4b9a344f"
+		},
+		{
+			"path": "areas-review-biome.log",
+			"bytes": 43,
+			"sha256": "820a627bc056f3545844e69c5ecd2c1cb1cc7eafc214f87b2ad79157d003231f"
+		},
+		{
+			"path": "areas-review-regressions.log",
+			"bytes": 5804,
+			"sha256": "c3ccc15d7e5527e4da498d6854f0e6faf2a8d1c3636af1662c13526dfb283d51"
+		},
+		{
+			"path": "areas-review-removal-guard.log",
+			"bytes": 5954,
+			"sha256": "204c6fa47b6de5f10e88ca0124b42dde9a625df494a124193845c819e2400a39"
+		},
+		{
+			"path": "areas-review-repro.log",
+			"bytes": 1819,
+			"sha256": "d1c7f02eafece948ae60b680a2a306a01dfca1cc047004836633c05eebad7a75"
+		},
+		{
+			"path": "areas-review-write-race.log",
+			"bytes": 929,
+			"sha256": "7a3c75aabbaf27f21c5833127cefd3022261c6296012027daf2626d5d89e5824"
+		},
+		{
+			"path": "areas-scoped-tests.log",
+			"bytes": 5175,
+			"sha256": "313011b1f4b7193db05182973deb54d221a81c43dc5bf043818407f9ee401065"
+		},
+		{
+			"path": "areas-types.log",
+			"bytes": 1694,
+			"sha256": "2e5f805bc190388fb4456a42610c4445f850de065a20c170f8b7f722028f5995"
+		},
+		{
+			"path": "binding-biome.log",
+			"bytes": 44,
+			"sha256": "304169748af26373293a6b66707f92ca2f98a4d88a90571e488b4d1acaaf3fe0"
+		},
+		{
+			"path": "binding-boundary-tests.log",
+			"bytes": 3874,
+			"sha256": "36d90de9caa0d771be5576464a11e338660a2f6035622674cbaf7693cdb4e1f8"
+		},
+		{
+			"path": "binding-final-alias-biome.log",
+			"bytes": 44,
+			"sha256": "52a878bb972dac7bb0b0b7662c63c85c361e360c8642ea5c4303c0da557ee391"
+		},
+		{
+			"path": "binding-final-alias-privacy-tests.log",
+			"bytes": 6544,
+			"sha256": "8a558e6e82721b7d6bd57d81865ab309e50cf980750e200297d929f1abdcc9e3"
+		},
+		{
+			"path": "binding-final-alias-types.log",
+			"bytes": 55,
+			"sha256": "3ef2e2655e7fcb1ae7e7b3245e9396748dc955a194393847bf6ccb8ba61ce8f5"
+		},
+		{
+			"path": "binding-final-unload-review.log",
+			"bytes": 6436,
+			"sha256": "17309c49f8ccabc9b507d0181595813f7964db2cc3d47cfaa6618c0c6c407f68"
+		},
+		{
+			"path": "binding-format.log",
+			"bytes": 42,
+			"sha256": "288a928a4dc5cb8ada3bb0fd68613e23a46076d5ce13149cf4ad5026b930d540"
+		},
+		{
+			"path": "binding-initial-tests.log",
+			"bytes": 3046,
+			"sha256": "b9df4ce0b7dfb25ddf2e1d8bdf85e30349925c220e2c5bf7fe35f3fa5c1cbf1c"
+		},
+		{
+			"path": "binding-promote-isolation.log",
+			"bytes": 268,
+			"sha256": "40026a644af57696bfc61a81ab86cd5211b914b6cf3d9172366be9424c5ca203"
+		},
+		{
+			"path": "binding-registration-tests.log",
+			"bytes": 8886,
+			"sha256": "6c15958c8f410293d2aa60e70efebe963ae19bdb98ad597ec339c03b8a8db235"
+		},
+		{
+			"path": "binding-regressions-authorized.log",
+			"bytes": 28351,
+			"sha256": "b21906d13a978e0a3d2b2e3454d6bbb293b40b6b9e0b420baad1ad4b06d8e434"
+		},
+		{
+			"path": "binding-regressions.log",
+			"bytes": 32438,
+			"sha256": "2d8f9d6f57bfaaf0865ae49f8c59042fc08d8be508ac912767091fc44966ae76"
+		},
+		{
+			"path": "binding-ui-review-tests.log",
+			"bytes": 3005,
+			"sha256": "f9912cbb2865b781f1a1e4d6409d120d86aa43f9bbc5561c406a79078e9fe974"
+		},
+		{
+			"path": "biome.log",
+			"bytes": 64,
+			"sha256": "b0d309855e95fef252faf78348628afc7e8df8ff98e60ce17ea258e161181144"
+		},
+		{
+			"path": "browser/latest-result.json",
+			"bytes": 19917,
+			"sha256": "1d4654cfb3f300eb581862f3c8fd38c5a0a86793b9fe2021b4da130f6ee38357"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/admin-failure.png",
+			"bytes": 71296,
+			"sha256": "4223d40235a0b108678b501b6240acf9fff56a3d4474f6aaaa0608c6102292df"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/admin-failure.txt",
+			"bytes": 808,
+			"sha256": "76333d3e0c2e5ad2cf44cb25d52decfa3cab465da4836faeae0bdb71c66eeabd"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/admin-folder-management.png",
+			"bytes": 79665,
+			"sha256": "2d66c6bbfca2a17f7cb96aa54e5e454df8d7e27eee59566786c388738bd826c5"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/browser-result.json",
+			"bytes": 660,
+			"sha256": "302bc585fce1b5f7a858927c640f93e3b82cb724dcf771bf1535968628402b29"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/chromium.log",
+			"bytes": 241,
+			"sha256": "a1e52f2460cbfdab888fe20569af541e851e207051747b32d640acf775c7a3e8"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/member-failure.png",
+			"bytes": 30063,
+			"sha256": "07175789d5e3177a13ec4482d6e1a0160b4169ae2a96aacca3e3c1dafd961a1b"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/member-failure.txt",
+			"bytes": 160,
+			"sha256": "c0340cf044a47c631f5f65c214355d2205b3c71d7d3d3e1bb95c7c35906cec41"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/member-ready-preview.png",
+			"bytes": 92983,
+			"sha256": "089cc961936ab439d102022ee62fc7cc82b93c4c33734c0c3680582c5831307d"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/server-error.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/server.log",
+			"bytes": 61,
+			"sha256": "ab6fa21208d154ecadb6e9f41dc2024b8aa879da2c336845534984761a275965"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/source-before.json",
+			"bytes": 5385,
+			"sha256": "79c2761e7ed49a09bb7962760a39828130e1b3f9d1082735d88d9cc120fb3f2d"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-50-53-918Z/unprepared-preview-error.png",
+			"bytes": 72060,
+			"sha256": "fa79ab2ff3a69c1fd6fea9338e11d5ef205668ad7839fc1b9f38879f9a63cf46"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/admin-folder-management.png",
+			"bytes": 80283,
+			"sha256": "2f3410cb3b2e63ec05fbaf0d268aabce1aa98eceb2fbe86632582ee2869e56cb"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/admin-stopped-tracking.png",
+			"bytes": 86000,
+			"sha256": "fc38d5715152889f4a9b7ff8b09e27a4d2d31910c715d549c51508fa886340b8"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/browser-result.json",
+			"bytes": 18979,
+			"sha256": "b46c5cf7e5ae08bec78c72d09eb313bf57cb04dd1d1a150c54ebe5ca63a0f2c4"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/chromium.log",
+			"bytes": 241,
+			"sha256": "a7b6f9826b0f33df731b2d0c65206344b72f8b5445cff9424d1ab992a2465b83"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/member-existing-board.png",
+			"bytes": 71883,
+			"sha256": "62ac27f2d808ea7a8f7691b676f215fdc4b0201f51a081980791795e6e138c80"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/member-ready-preview.png",
+			"bytes": 92527,
+			"sha256": "41f227c52d6222cac86d1bca8829ada2946457422708766fed4b04afce159509"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/outside.txt",
+			"bytes": 15,
+			"sha256": "7c092c3d49646888ee182bfd2a300c070328c314f446bb5bb7e09e74b9cae11e"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/revoked-after-preview-error.png",
+			"bytes": 93213,
+			"sha256": "d94a201e679a8315edbe254e7816f39f196dd586bf1c8972894c8e6d131c777f"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/server-error.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/server.log",
+			"bytes": 61,
+			"sha256": "ab6fa21208d154ecadb6e9f41dc2024b8aa879da2c336845534984761a275965"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/source-after.json",
+			"bytes": 5385,
+			"sha256": "af668c5e6e082073d64dc29049ace3e9f578b037954bc8ef0608eaec2a1c17f4"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/source-before.json",
+			"bytes": 5385,
+			"sha256": "af668c5e6e082073d64dc29049ace3e9f578b037954bc8ef0608eaec2a1c17f4"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/unprepared-preview-error.png",
+			"bytes": 71893,
+			"sha256": "3e0b878f3a887d4d92d4edce2d161763518d3cae6447dbfd4bf351c808dbd4ed"
+		},
+		{
+			"path": "browser/run-2026-10-22T06-54-08-871Z/unsafe-resume-error.png",
+			"bytes": 88387,
+			"sha256": "bc0b0e7a15e109758be10317c8b64d3bcaefb5a27c34c361b41a8cd5c7545029"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/admin-folder-management.png",
+			"bytes": 79670,
+			"sha256": "d117afff6876910d7723e15aeecf6040103501e2a80a0ea0aef41f561cef69ea"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/admin-stopped-tracking.png",
+			"bytes": 85639,
+			"sha256": "3f8cac7135aab0e2f718c48b84ecbc97b86c93508582c4eeef9bcc2a789bb3e6"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/browser-result.json",
+			"bytes": 19839,
+			"sha256": "59dd6953c51d451813d74f2cdb26bba2ff4cd096fe67fc5a53a70e66bdcde34d"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/chromium.log",
+			"bytes": 241,
+			"sha256": "5e839ece6c05cf29f39b3e9fa527af7e6bed515fbac4166173335c7381f9e966"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/member-existing-board.png",
+			"bytes": 71883,
+			"sha256": "62ac27f2d808ea7a8f7691b676f215fdc4b0201f51a081980791795e6e138c80"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/member-ready-preview.png",
+			"bytes": 92291,
+			"sha256": "ce0c5baa3631c376d80aa1dc6763f920a09d171ef7da285b86f90c2c5f3fc6a1"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/outside.txt",
+			"bytes": 15,
+			"sha256": "7c092c3d49646888ee182bfd2a300c070328c314f446bb5bb7e09e74b9cae11e"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/revoked-after-preview-error.png",
+			"bytes": 93023,
+			"sha256": "8c050a5e3a334b1f2718a8522380d0bd279c62906e52ebb9bb483880838b4ffc"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/server-error.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/server.log",
+			"bytes": 61,
+			"sha256": "ab6fa21208d154ecadb6e9f41dc2024b8aa879da2c336845534984761a275965"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/source-after.json",
+			"bytes": 5385,
+			"sha256": "95b58d98feac122828f2c8445f59f6cd7b27dd4982e5731199cd6059fdb2e7e6"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/source-before.json",
+			"bytes": 5385,
+			"sha256": "95b58d98feac122828f2c8445f59f6cd7b27dd4982e5731199cd6059fdb2e7e6"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/unprepared-preview-error.png",
+			"bytes": 71764,
+			"sha256": "a1e2864ff257c342b75dc23602db06a604f3083b59155d12de52acac909e9817"
+		},
+		{
+			"path": "browser/run-2026-10-22T07-08-57-569Z/unsafe-resume-error.png",
+			"bytes": 88011,
+			"sha256": "2dc6c604912554c301f1d39884bfdf484b2ac9622320268b620e306b138cdd73"
+		},
+		{
+			"path": "browser.log",
+			"bytes": 1438,
+			"sha256": "3d4caa15be7915b5b3d35625deba8eb5df30abcf2e143f6b28d6474d61d488c6"
+		},
+		{
+			"path": "build-browser-initial.log",
+			"bytes": 23,
+			"sha256": "a20e7a648db258ad689394e88df95db8b5e00f446c7b9e47b6e9878838cf4db6"
+		},
+		{
+			"path": "build.log",
+			"bytes": 23,
+			"sha256": "a20e7a648db258ad689394e88df95db8b5e00f446c7b9e47b6e9878838cf4db6"
+		},
+		{
+			"path": "cdp-registration.mjs",
+			"bytes": 22805,
+			"sha256": "444ae568a2800bf4461c78da3f9e749e1d7c3e6315db14e852f5b3583229b56c"
+		},
+		{
+			"path": "diff-check.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "final-static-checks.json",
+			"bytes": 413,
+			"sha256": "cdd280ec9ba930e4e4dd89fdf2f33bde02676d45d6f39dc385bc549a923787ec"
+		},
+		{
+			"path": "finalize-records.py",
+			"bytes": 15872,
+			"sha256": "eabf8c73636e5d21c25ae3bb87d6c165e6a90e17fd59e0357d68647b8210d2a7"
+		},
+		{
+			"path": "freeze-source.py",
+			"bytes": 1104,
+			"sha256": "1562d7e5190161a2694b1c64168c67c263fdaa2e719f7d4bc8086ac647aa7d78"
+		},
+		{
+			"path": "full-tests-before-alias-preview-exit.json",
+			"bytes": 69,
+			"sha256": "9b79739573afee53815b91d8d0e00fa9a85b5df5c7d3ad7ca4058d10ea3b5196"
+		},
+		{
+			"path": "full-tests-before-alias-preview.log",
+			"bytes": 539262,
+			"sha256": "c7e2f7c478712f7e9ea583c5500fc3e3ba2037caae3438fcf1550e73d513ef56"
+		},
+		{
+			"path": "full-tests-before-unload-fix.log",
+			"bytes": 93360,
+			"sha256": "7f3308bce67db7c586e319932347199a78440b54b1d1519c6b96eeedfe132d3b"
+		},
+		{
+			"path": "full-tests-exit.json",
+			"bytes": 69,
+			"sha256": "687ea9cec72efc07c70ab3552969f54f4cd6a4a3b39efc57c29e45fa1cef078c"
+		},
+		{
+			"path": "full-tests.log",
+			"bytes": 538738,
+			"sha256": "ba44fe07120bfacf149063baa9d8efbf2054cc5cbc4a71e6a7b1da59207d120f"
+		},
+		{
+			"path": "git-status-start.txt",
+			"bytes": 92,
+			"sha256": "7610dcc5066b8b13e6fcedb8edbbe8967a8f65dc210eea2ed7a2fc360e21029f"
+		},
+		{
+			"path": "head-start.txt",
+			"bytes": 41,
+			"sha256": "de8da95194f7fb7f50ec680d97a2229a048b56792aee1936648f380876cdf91a"
+		},
+		{
+			"path": "independent-reviews.json",
+			"bytes": 2446,
+			"sha256": "5e5e77bb2a503079196d7d511337ac394bf641831f9a6066b763ab1846eb7999"
+		},
+		{
+			"path": "interrupted-full-run.json",
+			"bytes": 250,
+			"sha256": "4d4fa26568858aa689b647c09600b70c44d553991d6b13409fe3bc85ceac6898"
+		},
+		{
+			"path": "local-diff-start.patch",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "main-integration-tests.log",
+			"bytes": 10042,
+			"sha256": "5972c92287aebf3224cbf28846038850cd736dd1119fb69bfccdc34cb8d29364"
+		},
+		{
+			"path": "make-report.py",
+			"bytes": 9681,
+			"sha256": "304f649c2f5d26f20dd75fa460f6e0407ca08aed1d529be213dcd6e1466bfe15"
+		},
+		{
+			"path": "review-biome-format.log",
+			"bytes": 38,
+			"sha256": "fcc7cc44f6f6d388477a89da3c38b0ca7436fcaf9e3bdc7746a5b0be577ef8af"
+		},
+		{
+			"path": "review-biome.log",
+			"bytes": 41,
+			"sha256": "fd06ed1906864d862af1b302e14f95710bd4ba5d86680bb0976e34e5bf20f03a"
+		},
+		{
+			"path": "review-delete-race-after.log",
+			"bytes": 131,
+			"sha256": "d0b5990bea05ba1024177ba61014a5d97177a30156b2ae5ee459ffcb6dfbdc62"
+		},
+		{
+			"path": "review-delete-race.log",
+			"bytes": 112,
+			"sha256": "9c25c300a098e742b45291755b9a6a8961094443b2cfb30cb196d193f9794d6d"
+		},
+		{
+			"path": "review-preview-privacy-after.log",
+			"bytes": 179,
+			"sha256": "942bbc9561f9987fc1bda780ae6eb935682ac57d70e7bef3d905912689bff5e8"
+		},
+		{
+			"path": "review-preview-privacy.log",
+			"bytes": 306,
+			"sha256": "330333ec2acaf45d38e37df5bca8226cb060d23bd2864167d91b4e68204191f9"
+		},
+		{
+			"path": "review-regressions.log",
+			"bytes": 591,
+			"sha256": "55be20e466803c8b94cc86db23c2acb811134b55a5ea4ee626504fb9575b62ef"
+		},
+		{
+			"path": "smoke.log",
+			"bytes": 84,
+			"sha256": "ab6cb6de71650a7ba106e06d9b35a721b2a0161859ab25746ecc2c6cf73cc95f"
+		},
+		{
+			"path": "source-after-tests-before-alias-preview.json",
+			"bytes": 103039,
+			"sha256": "728c390fcf8e6349dd9d5eab89a12f0f21e8a24873df88e264f39db0f8839b0a"
+		},
+		{
+			"path": "source-after-tests.json",
+			"bytes": 103039,
+			"sha256": "a8f8e6019a20c27c4ff6191057d8d1fc88f4d8f1ee548973860814a87565bfd9"
+		},
+		{
+			"path": "source-before-alias-preview.json",
+			"bytes": 103039,
+			"sha256": "94c2220d2c9fc1125432f986d8999efe24d50c1ae319060c33ce72de8440dac0"
+		},
+		{
+			"path": "source-before-unload-fix.json",
+			"bytes": 103039,
+			"sha256": "004764952db76a335d5466309e0db865ba22c7f6fe6c762f191c86ed690b0796"
+		},
+		{
+			"path": "source-freeze.json",
+			"bytes": 103039,
+			"sha256": "c98c7223dda3949921f5281a5864f3aa72cf8169f3507ddbb1d05d9e2d1f7d98"
+		},
+		{
+			"path": "task-795-before-final.json",
+			"bytes": 5090,
+			"sha256": "4da0d84526aee6b16742fe3afc8e31d8badc0d93d6febf379080175d41f376db"
+		},
+		{
+			"path": "task-creation.json",
+			"bytes": 9270,
+			"sha256": "dd0c1ba4f43f90745a56efd3998daaf18d3eef40ff626a24783585b67414854c"
+		},
+		{
+			"path": "test-cli-build.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "types.log",
+			"bytes": 57,
+			"sha256": "d1f76c415d850081e304f76a82bcde553795df8558fcccace9cb93a65b1fda63"
+		},
+		{
+			"path": "ui-biome-format.log",
+			"bytes": 40,
+			"sha256": "011d58c56c880f6cf48f667f1c7941d9597570bc5e592d67499c567dbd193bb0"
+		},
+		{
+			"path": "ui-biome.json",
+			"bytes": 824,
+			"sha256": "7c4589657b6d2595a1ba90e80b51d49fa56b370841d8b3bdd950492981569aab"
+		},
+		{
+			"path": "ui-biome.log",
+			"bytes": 43,
+			"sha256": "f65613ff89fe5a8c265461f74d75d18cd6ef323fe8beca7eaedc4639954d63ac"
+		},
+		{
+			"path": "ui-register-unload-after.log",
+			"bytes": 6437,
+			"sha256": "bede2ea81bcf55d1350ebb5a1c9909aae9d58509ebbe293c88401afc044743b8"
+		},
+		{
+			"path": "ui-register-unload-before.log",
+			"bytes": 748,
+			"sha256": "7d7b70b61b0ec9c638d0eccdbf8c2e86ba72dc8932b69abb5238574a1db3dbb6"
+		},
+		{
+			"path": "ui-register-unload-biome.log",
+			"bytes": 43,
+			"sha256": "25147e6f4a722df9fb652be4e9574ae396d13c6b081ca936e39e92b15250e70a"
+		},
+		{
+			"path": "ui-register-unload-format.log",
+			"bytes": 39,
+			"sha256": "0fbb9cacc43b40f51074443389b8784b09fc7f1499b7c8304917e67d79f46fb1"
+		},
+		{
+			"path": "ui-register-unload-notes.log",
+			"bytes": 9937,
+			"sha256": "df572c4c1592cdc3f67119fb01b2a0ef7a14ee26c5525ddafb6d6bd99ec96e3f"
+		},
+		{
+			"path": "ui-register-unload-types.log",
+			"bytes": 57,
+			"sha256": "aa254abd82fe77508f6417e9aaf826a49761cc0015f9dc05f45a38158ecb10ca"
+		},
+		{
+			"path": "ui-task-notes.log",
+			"bytes": 9141,
+			"sha256": "4893eff99d465cbd59c40ea3eb1774be7e644ee0ef708379dea06d499c7d3925"
+		},
+		{
+			"path": "ui-tests.log",
+			"bytes": 6325,
+			"sha256": "94a03db77f45ac44402b22966089ffd9f116a1c3903e73bb13648dc1c8d7d8ea"
+		},
+		{
+			"path": "ui-types.log",
+			"bytes": 410,
+			"sha256": "959c26bf6b6d6df0c4739a126abbb64dbfc36934ed7abb3c42a1f8e6aa184a65"
+		},
+		{
+			"path": "verification-before-alias-preview.json",
+			"bytes": 33422,
+			"sha256": "aca38d36f85a10b8935b0c1b1e6daea4c038d0e553f6747c9f2e4fd454555a31"
+		}
+	],
+	"gitDelivery": {
+		"result": "pending",
+		"targetBranch": "tasks/server-a03-project-registration",
+		"next": "Commit and normal push only after all checks and independent review; record verified implementation commit in follow-up delivery record."
+	}
+}

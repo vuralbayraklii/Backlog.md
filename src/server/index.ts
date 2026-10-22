@@ -46,7 +46,9 @@ import { formatValidStatuses, getCanonicalStatuses, getValidStatuses } from "../
 import { isValidTaskId } from "../utils/task-id.ts";
 import { isAmbiguousTaskIdError, LOCAL_TASK_LOOKUP_HINT, taskNotFoundMessage } from "../utils/task-path.ts";
 import { getVersion } from "../utils/version.ts";
+import { AuthStoreError } from "./auth-store.ts";
 import type { ProjectAuthorization, ProjectPermission } from "./auth-types.ts";
+import { assertProjectBoundary, readProjectFile } from "./project-paths.ts";
 
 // Regex pattern to match any prefix (letters followed by dash)
 const PREFIX_PATTERN = /^[a-zA-Z]+-/i;
@@ -277,11 +279,55 @@ export class BacklogServer {
 	private taskBroadcastTimer?: ReturnType<typeof setTimeout>;
 	private pendingDataBroadcastScope: "tasks" | "milestones" = "tasks";
 	private storeReadyBroadcasted = false;
+	private readonly boundaryPaths = new Set<string>();
+	private boundaryFailure: Error | null = null;
 
 	constructor(projectPath: string, options?: { centralMode?: boolean; projectName?: string }) {
 		this.centralMode = options?.centralMode ?? false;
-		this.core = new Core(projectPath, { enableWatchers: true, serverMode: this.centralMode });
+		// Config discovery itself reads a candidate file, so check before constructing Core.
+		if (this.centralMode) assertProjectBoundary(projectPath);
+		this.core = new Core(projectPath, {
+			enableWatchers: true,
+			serverMode: this.centralMode,
+			fileReader: this.centralMode
+				? (path) => {
+						try {
+							return readProjectFile(projectPath, path);
+						} catch (error) {
+							// Normal file deletion can race a watcher read. Only an actual boundary
+							// refusal invalidates the handler and its previously published caches.
+							if (error instanceof AuthStoreError) this.boundaryFailure = error;
+							throw error;
+						}
+					}
+				: undefined,
+		});
+		this.assertBoundary();
 		if (options?.projectName) this.projectName = options.projectName;
+	}
+
+	private assertBoundary(): void {
+		if (!this.centralMode) return;
+		if (this.boundaryFailure) throw this.boundaryFailure;
+		try {
+			// Config changes can rebind FileSystem while a previous watcher or pending read
+			// still holds the old layout. Keep every observed path guarded until retirement.
+			this.boundaryPaths.add(this.core.filesystem.backlogDir);
+			this.boundaryPaths.add(this.core.filesystem.configFilePath);
+			assertProjectBoundary(this.core.filesystem.rootDir, [...this.boundaryPaths]);
+		} catch (error) {
+			this.boundaryFailure = error instanceof Error ? error : new Error(String(error));
+			throw error;
+		}
+	}
+
+	private boundaryDenied(): Response | null {
+		try {
+			this.assertBoundary();
+			return null;
+		} catch {
+			return Response.json({ error: "Project files are unavailable" }, { status: 503 });
+		}
 	}
 
 	private async resolveMilestoneInput(milestone: string): Promise<string> {
@@ -293,10 +339,14 @@ export class BacklogServer {
 	}
 
 	private async ensureServicesReady(): Promise<void> {
+		this.assertBoundary();
 		if (!this.servicesReadyPromise) {
 			this.publishBrowserLoadingState({ type: "loading", message: null });
 			const readyPromise = this.initializeServices()
-				.then(() => this.publishBrowserLoadingState({ type: "loaded" }))
+				.then(() => {
+					this.assertBoundary();
+					this.publishBrowserLoadingState({ type: "loaded" });
+				})
 				.catch((error) => {
 					if (this.servicesReadyPromise === readyPromise) this.servicesReadyPromise = null;
 					this.publishBrowserLoadingState({
@@ -308,16 +358,19 @@ export class BacklogServer {
 			this.servicesReadyPromise = readyPromise;
 		}
 		await this.servicesReadyPromise;
+		this.assertBoundary();
 	}
 
 	private async initializeServices(): Promise<void> {
 		const store = await this.core.getContentStore((message) => {
 			this.publishBrowserLoadingState({ type: "loading", message });
 		});
+		this.assertBoundary();
 		this.contentStore = store;
 
 		if (!this.unsubscribeContentStore) {
 			this.unsubscribeContentStore = store.subscribe((event) => {
+				if (this.boundaryDenied()) return;
 				if (event.type === "config") {
 					this.storeReadyBroadcasted = true;
 					if (!this.centralMode) this.projectName = event.config.projectName;
@@ -341,6 +394,7 @@ export class BacklogServer {
 		}
 
 		const search = await this.core.getSearchService();
+		this.assertBoundary();
 		this.searchService = search;
 		this.servicesInitialized = true;
 	}
@@ -402,7 +456,11 @@ export class BacklogServer {
 					if (this.centralMode && !authorization)
 						return Response.json({ error: "Authentication required" }, { status: 401 });
 					const denied = authorization?.check(permission);
-					return denied ?? (await handler(req));
+					if (denied) return denied;
+					const unsafe = this.boundaryDenied();
+					if (unsafe) return unsafe;
+					const response = await handler(req);
+					return authorization?.check(permission) ?? this.boundaryDenied() ?? response;
 				},
 				{ permission },
 			);
@@ -597,7 +655,12 @@ export class BacklogServer {
 	private sendSocket(ws: ServerWebSocket<unknown>, message: string): boolean {
 		try {
 			const authorize = this.sockets.get(ws);
-			if (!this.sockets.has(ws) || (this.centralMode && !authorize) || (authorize && !authorize())) {
+			if (
+				!this.sockets.has(ws) ||
+				(this.centralMode && !authorize) ||
+				(authorize && !authorize()) ||
+				this.boundaryDenied()
+			) {
 				this.removeSocket(ws);
 				ws.close(1008, "Authorization expired");
 				return false;
@@ -834,7 +897,11 @@ export class BacklogServer {
 			// SVG, HTML, scripts and other active formats must never execute on the application origin.
 			if (!mimeMap[ext])
 				headers.set("Content-Disposition", `attachment; filename="${basename(filePath).replace(/["\r\n]/g, "_")}"`);
-			return new Response(file, { headers });
+			// A Bun.file response reads lazily after authorization; central delivery uses
+			// bytes checked through an opened file before releasing the response.
+			return new Response(this.centralMode ? new Uint8Array(await this.core.filesystem.readBytes(filePath)) : file, {
+				headers,
+			});
 		} catch (error) {
 			if (
 				error instanceof URIError ||

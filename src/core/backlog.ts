@@ -1,4 +1,4 @@
-import { mkdir, rename as moveFile, readFile, stat, unlink } from "node:fs/promises";
+import { mkdir, rename as moveFile, stat, unlink } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative } from "node:path";
 import {
 	ARCHIVED_TASK_DIRECTORIES,
@@ -666,9 +666,14 @@ export class Core {
 	private lastRemoteRefRefreshAt = 0;
 
 	private readonly serverMode: boolean;
+	private readonly fileReader?: (path: string) => Buffer;
 
-	constructor(projectRoot: string, options?: { enableWatchers?: boolean; serverMode?: boolean }) {
-		this.fs = new FileSystem(projectRoot);
+	constructor(
+		projectRoot: string,
+		options?: { enableWatchers?: boolean; serverMode?: boolean; fileReader?: (path: string) => Buffer },
+	) {
+		this.fileReader = options?.fileReader;
+		this.fs = new FileSystem(projectRoot, this.fileReader);
 		this.git = new GitOperations(projectRoot, null, () => this.fs.loadConfig());
 		this.branchTaskLoader = new BranchTaskLoader(this.git);
 		this.serverMode = options?.serverMode ?? false;
@@ -1583,7 +1588,7 @@ export class Core {
 		const task = await this.fs.loadTask(taskId);
 		const filePath = task?.filePath ?? null;
 		if (!filePath) return null;
-		return await Bun.file(filePath).text();
+		return await this.fs.readText(filePath);
 	}
 
 	/**
@@ -1629,7 +1634,7 @@ export class Core {
 
 		let content: string;
 		try {
-			content = await Bun.file(this.fs.contentRecordFilePath("document", document)).text();
+			content = await this.fs.readText(this.fs.contentRecordFilePath("document", document));
 		} catch {
 			return null;
 		}
@@ -1644,7 +1649,7 @@ export class Core {
 		this.projectGeneration += 1;
 		this.disposeSearchService();
 		this.disposeContentStore();
-		this.fs = new FileSystem(projectRoot);
+		this.fs = new FileSystem(projectRoot, this.fileReader);
 		this.git = new GitOperations(projectRoot, null, () => this.fs.loadConfig());
 		this.branchTaskLoader = new BranchTaskLoader(this.git);
 	}
@@ -1795,7 +1800,7 @@ export class Core {
 	private async extractLegacyConfigMilestones(): Promise<string[]> {
 		try {
 			const configPath = this.fs.configFilePath;
-			const content = await Bun.file(configPath).text();
+			const content = await this.fs.readText(configPath);
 			const lines = content.split("\n");
 			for (let i = 0; i < lines.length; i += 1) {
 				const line = lines[i] ?? "";
@@ -2120,7 +2125,7 @@ export class Core {
 
 	private async readFileIfPresent(filePath: string): Promise<Buffer | null> {
 		try {
-			return await readFile(filePath);
+			return await this.fs.readBytes(filePath);
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
 			throw error;
@@ -2278,7 +2283,7 @@ export class Core {
 			const targetPath = await this.fs.getTaskWritePath(task, isDraft);
 			const previousIndexEntries = autoCommitEnabled ? await this.git.getIndexEntries(targetPath) : undefined;
 			const filePath = await this.writePreparedTask(task, isDraft);
-			const createdContent = await readFile(filePath);
+			const createdContent = await this.fs.readBytes(filePath);
 			const write: CreatedTaskWrite = {
 				filePath,
 				createdContent,
@@ -4861,7 +4866,7 @@ export class Core {
 		// known on-disk path is attached to reloaded tasks so contentStore publication works.
 		const reloadTaskAfterEdit = async (path: string): Promise<{ task: Task } | { failure: "unreadable" }> => {
 			try {
-				const content = await Bun.file(path).text();
+				const content = await this.fs.readText(path);
 				const reparsed = normalizeTaskIdentity(parseTask(content));
 				return { task: { ...reparsed, filePath: path } };
 			} catch {
@@ -4871,7 +4876,7 @@ export class Core {
 
 		let beforeContent: string;
 		try {
-			beforeContent = await Bun.file(filePath).text();
+			beforeContent = await this.fs.readText(filePath);
 		} catch {
 			return { changed: false, task: editableTask, reason: "not_found" };
 		}
@@ -4883,7 +4888,7 @@ export class Core {
 
 		let afterContent: string;
 		try {
-			afterContent = await Bun.file(filePath).text();
+			afterContent = await this.fs.readText(filePath);
 		} catch {
 			return { changed: false, task: editableTask, reason: "not_found" };
 		}
@@ -4917,7 +4922,7 @@ export class Core {
 			const canonicalId = extractDraftIdFromFilename(basename(filePath)) ?? "";
 			try {
 				return await this.fs.withDraftLock({ filePath, canonicalId }, async () => {
-					const currentOnDisk = await Bun.file(filePath).text();
+					const currentOnDisk = await this.fs.readText(filePath);
 					if (currentOnDisk !== afterContent) {
 						throw newTaskLockError(canonicalId);
 					}

@@ -3,7 +3,7 @@ id: doc-4
 title: Backlog.md çoklu proje takip sistemi planı
 type: specification
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-21 07:50'
+updated_date: '2026-10-22 07:05'
 tags:
   - server
   - requirements
@@ -211,3 +211,16 @@ Kullanıcı, genel yol haritasıyla birlikte ilk küçük teslimin ayrıntıland
 - `project register/list/view`, okunabilir metin ve `schemaVersion: 1` JSON sunar. Kayıt, belirtilen kökteki mevcut Backlog yapısını yalnız okuyarak doğrular; kaynak Markdown/yapılandırmayı değiştirmez. Okuma komutları dosya oluşturmaz; bozuk veritabanı kendiliğinden yenilenmez.
 - Aynı gerçek klasörün tekrar kaydı ve birbirini içeren kökler tek SQLite işlemiyle reddedilir; yazma kilidi en fazla beş saniye beklenir.
 - İlk teslim örnek projelerle geliştirilir. HTTP/UI, hesap/yetki, tarihçe ve gerçek projelerin bağlanması sonraki ürün işleridir. Yol haritasının A-01–A-08 sırası korunur.
+
+
+## 7. Onaylanan A-03 kararları — 22 Ekim 2026
+
+Kullanıcının A-03 talebi ve ek kapsam yönergesi, bu aşamada başlangıç planındaki ayrı Backlog oluşturma önerisinin yerine geçer. Projeler ayrı olarak yapılandırılır; merkezi uygulama yalnız hazır klasörü önizler/kaydeder. Önizleme/kayıt/takip işlemleri kaynak Markdown ve yapılandırmayı değiştirmez veya eksik yapı oluşturmaz.
+
+- Admin servis hesabının erişebildiği klasörleri kaydedebilir. Normal kullanıcıya verilen kişisel gerçek klasör alanı kayıt yetkisidir; farklı kullanıcı alanları çakışamaz. Alan iptali mevcut üyelikleri silmez.
+- Normal kaydeden kullanıcı standart üyedir: görev/belge/karar taslağı yazma açık; karar yönetimi/arşiv/silme kapalı. Kimlik sunucu oturumundan gelir; hesap/alan/gerçek yollar/çakışmalar kayıt işleminde yeniden denetlenir, ilk üyelikle proje atomiktir.
+- Sembolik bağlantılar yalnız aynı proje kökünde kalan gerçek hedeflere açılır. Denetim yapılandırma/kayıt/ekler ile çalışma sırasında değişen bağlantılardan gelebilecek önbellek/izleyici içeriklerini kapsar.
+- Admin takibi durdurur veya klasörü yeniden doğrulayıp açar; kimlik ve üyelik korunur. Takip dışında normal liste, doğrudan API/sayfa ve canlı erişim kapanır.
+- Yeni ekran/endpoint kapsamı yalnız proje önizleme/kayıt, kişisel alan ve takip yönetimidir. Görev/belge/karar, Markdown okuma, arama ve pano mevcut Backlog.md uygulamasından kullanılır. Yönetim mevcut seçici/Users bileşen ve düzenine eklenir. Ortak kod değişikliği ilgili A-03 gereksinimi ve mevcut davranış regresyonlarıyla açıklanır.
+
+Kanonik CLI/API ve kabul kanıtları README, doc-5 ve verification/server/a03-verification.json içinde korunur. A-04 tarihçe/kurtarma ve A-05 agent bağlantı modu bu aşamanın dışındadır.

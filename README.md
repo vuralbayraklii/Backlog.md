@@ -267,6 +267,7 @@ Choose an explicit data directory for the server's `server.sqlite` database:
 
 ```bash
 backlog server --data-dir ./server-data project register /path/to/project --name "Example"
+backlog server --data-dir ./server-data project preview /path/to/project --name "Example" --json
 backlog server --data-dir ./server-data project list --json
 backlog server --data-dir ./server-data project view 1
 backlog server --data-dir ./server-data user init-admin admin
@@ -280,7 +281,7 @@ Duplicate directory aliases and overlapping project roots are rejected. Paths re
 
 All three commands accept `--json`. Single-record responses use `{ schemaVersion: 1, kind: "server-project", project }`;
 lists use `{ schemaVersion: 1, kind: "server-project-list", projects }`. A project contains `id` (string), `name`, `rootPath`,
-and `createdAt` (UTC). Reads return stored metadata, including when the source directory is unavailable. Reading a missing
+`createdAt` (UTC), and `tracking` (boolean). Reads return stored metadata, including untracked projects and when the source directory is unavailable. Reading a missing
 database produces an empty list or a not-found error without creating files. Invalid databases are reported without being rebuilt.
 
 `start` listens on `127.0.0.1` at port `6420` by default and opens a browser only with `--open`. Visit `/projects` to
@@ -289,7 +290,55 @@ select a registered project; project switching reloads the page. The selected bo
 Central mode reads tasks only from each registered working directory. Its settings screen edits the default status,
 Definition of Done, date format, empty-column visibility, and maximum column width. Git fetch, cross-branch task merging,
 automatic commits, and status commands are disabled in this mode. The existing `backlog browser` command keeps its local
-behavior. Browser-based project registration is planned for A-03.
+behavior.
+
+The project selector offers **Register project** to administrators and users with personal folder areas. Projects must
+already be configured separately with Backlog.md. Preview shows the selected configuration, record counts and issues;
+registration never creates a Backlog structure or changes source Markdown/configuration. Invalid configuration and unsafe
+paths prevent registration; individual malformed records and identity collisions appear as warnings. A preview does not
+reserve a project or grant permission: registration checks the current session, account, folder area, paths and existing
+project roots again. The project and its creator's standard membership are recorded in one SQLite transaction.
+
+Administrators manage personal areas and tracking in **Users**, or through the local CLI:
+
+```bash
+backlog server --data-dir ./server-data folder-area set <userId> /srv/projects/alice --json
+backlog server --data-dir ./server-data folder-area list --user <userId> --json
+backlog server --data-dir ./server-data folder-area remove <areaId> --json
+backlog server --data-dir ./server-data project tracking 1 --enabled false --json
+backlog server --data-dir ./server-data project tracking 1 --enabled true --json
+```
+
+A personal area permits registration inside its canonical directory; different users' areas cannot overlap. Removing an
+area affects future registration and preserves existing memberships. Administrators can register directories accessible
+to the server's service account. All project files, including configuration, records and attachments, must resolve inside
+the same project root. Central reads check opened files as well as paths, so changed symbolic links cannot publish outside
+content through an index, cache or live connection. The central server's guarded file reader targets the supported Linux
+server environment.
+
+Stopping tracking hides a project from the normal selector and closes its API, page and live access. The admin list and
+CLI metadata commands retain it. Resuming tracking validates the prepared directory again and preserves its ID and
+memberships. Source directories and files stay unchanged in both operations. New registrations also reserve untracked
+project roots against duplicates and overlaps.
+
+The existing cookie, Origin and CSRF requirements apply to these API operations:
+
+| Operation | Request | Result |
+| --- | --- | --- |
+| Preview | `POST /api/projects/preview` with `{name,path}` | Configuration, counts, issues, `canRegister` |
+| Register | `POST /api/projects` with `{name,path}` | Project metadata (201); identity comes from the session |
+| Registration access | `GET /api/projects/registration` | `{allowed,areas}`; only the current user's areas |
+| Admin areas | `GET/POST /api/admin/folder-areas`; POST `{userId,path}` | Area list or assigned area |
+| Remove area | `DELETE /api/admin/folder-areas/:id` | `{success:true}` |
+| Admin projects | `GET /api/admin/projects` | Tracked and untracked project metadata |
+| Change tracking | `PUT /api/admin/projects/:id/tracking` with `{tracking:boolean}` | Updated project metadata |
+
+API errors keep `{error:string}`. Unauthorized folders return 403 without disclosing other project names or paths;
+duplicates/overlaps return 409, invalid prepared projects 400, and unavailable authorized project content 503. Untracked,
+hidden and missing projects return 404 on normal project routes. Preview CLI JSON uses
+`{schemaVersion:1,kind:"server-project-preview",preview}`; folder-area JSON uses `server-folder-area` (field `area`),
+`server-folder-area-list` (field `areas`) and `server-folder-area-remove` (field `id`). Local management commands run with
+the invoking service account's access; remote user registration uses the authenticated API.
 
 ### Server accounts and permissions
 

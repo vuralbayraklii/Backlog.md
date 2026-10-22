@@ -1,9 +1,10 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import type { ServerUser } from "../../server/auth-types";
 import { useAuth } from "../contexts/AuthContext";
 import { requestJson } from "../lib/request";
-import AccountNavigation from "./AccountNavigation";
 import { buttonClass, inputClass } from "./AccountForms";
+import AccountNavigation from "./AccountNavigation";
+import AdminProjectRegistration from "./AdminProjectRegistration";
 
 function UserRow({
 	user,
@@ -94,7 +95,7 @@ function UserRow({
 }
 
 export default function AdminUsers() {
-	const { session, refresh } = useAuth();
+	const { central, session, refresh } = useAuth();
 	const [users, setUsers] = useState<ServerUser[]>([]);
 	const [username, setUsername] = useState("");
 	const [displayName, setDisplayName] = useState("");
@@ -135,7 +136,7 @@ export default function AdminUsers() {
 			setBusy(false);
 		}
 	};
-	if (session?.user.role !== "admin")
+	if (session?.user.role !== "admin" && (!central || session))
 		return (
 			<p role="alert" className="p-8">
 				Admin access required.
@@ -148,6 +149,12 @@ export default function AdminUsers() {
 				<AccountNavigation />
 				<a href="/projects" className="underline">
 					Projects
+				</a>
+				<a href="#folder-access" className="underline">
+					Folder access
+				</a>
+				<a href="#project-tracking" className="underline">
+					Project tracking
 				</a>
 			</div>
 			{error && (
@@ -201,6 +208,7 @@ export default function AdminUsers() {
 					Create user
 				</button>
 			</form>
+			<AdminProjectRegistration users={users} />
 			<ul className="space-y-4">
 				{users.map((user) => (
 					<UserRow key={user.id} user={user} changed={changed} failed={failed} />

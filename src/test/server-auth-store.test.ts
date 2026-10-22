@@ -55,10 +55,10 @@ describe("central account store", () => {
 		expect(await Bun.file(store.databasePath).arrayBuffer()).toEqual(before);
 		await store.initializeAdmin("root-admin", PASSWORD);
 		expect(new ProjectStore(dataDir).list()).toEqual([
-			{ id: "7", name: "Keep", rootPath: "/tmp/keep", createdAt: "2026-10-21" },
+			{ id: "7", name: "Keep", rootPath: "/tmp/keep", createdAt: "2026-10-21", tracking: true },
 		]);
 		const migrated = new Database(store.databasePath, { readonly: true });
-		expect(migrated.query("PRAGMA user_version").get()).toEqual({ user_version: 2 });
+		expect(migrated.query("PRAGMA user_version").get()).toEqual({ user_version: 3 });
 		migrated.close();
 	});
 
@@ -325,5 +325,21 @@ describe("central account store", () => {
 		store.editUser(user.id, { active: false });
 		expect(store.permissions(user, "1")).toBeNull();
 		expect(() => store.setMember("1", user.id, { tasksWrite: "true" } as never)).toThrow("boolean");
+	});
+
+	it("hides untracked projects from admins and members without deleting their permissions", async () => {
+		const admin = await store.initializeAdmin("admin", PASSWORD);
+		const user = await store.createUser({ username: "normal", password: PASSWORD });
+		seedProject();
+		const member = store.setMember("1", user.id, { archive: true });
+		const db = new Database(store.databasePath);
+		db.query("UPDATE projects SET tracking=0 WHERE id=1").run();
+		expect(store.permissions(admin, "1")).toBeNull();
+		expect(store.permissions(user, "1")).toBeNull();
+		expect(store.listMembers("1")).toEqual([member]);
+		db.query("UPDATE projects SET tracking=1 WHERE id=1").run();
+		db.close();
+		expect(store.permissions(admin, "1")).toEqual(ADMIN_PERMISSIONS);
+		expect(store.permissions(user, "1")).toEqual(member.permissions);
 	});
 });

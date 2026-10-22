@@ -10,15 +10,31 @@ import {
 } from "../server/auth-types.ts";
 import { CentralServer } from "../server/central.ts";
 import { ProjectStore, type ServerProject } from "../server/project-store.ts";
+import type { FolderArea, ProjectPreview } from "../server/registration-types.ts";
 import { addHelpSchema } from "./help-schema.ts";
 
 function formatProject(project: ServerProject): string {
-	return `${project.id} - ${project.name}\n  Root: ${project.rootPath}\n  Registered: ${project.createdAt}`;
+	return `${project.id} - ${project.name}\n  Root: ${project.rootPath}\n  Registered: ${project.createdAt}\n  Tracking: ${project.tracking}`;
 }
 
 function printProject(project: ServerProject, json?: boolean): void {
 	if (json) printJson({ schemaVersion: 1, kind: "server-project", project });
 	else console.log(formatProject(project));
+}
+
+function printPreview(preview: ProjectPreview, json?: boolean): void {
+	if (json) {
+		printJson({ schemaVersion: 1, kind: "server-project-preview", preview });
+		return;
+	}
+	console.log(
+		`${preview.name}\n  Root: ${preview.rootPath}\n  Backlog: ${preview.backlogPath ?? "unavailable"}\n  Configuration: ${preview.configPath ?? "unavailable"}`,
+	);
+	if (preview.config) console.log(`  Project configuration:\n${JSON.stringify(preview.config, null, 2)}`);
+	for (const [kind, count] of Object.entries(preview.counts)) console.log(`  ${kind}: ${count}`);
+	for (const issue of preview.issues)
+		console.log(`  ${issue.severity}: ${issue.message}${issue.path ? ` (${issue.path})` : ""}`);
+	console.log(`  Can register: ${preview.canRegister}`);
 }
 
 export function registerServerCommand(program: Command): void {
@@ -78,7 +94,25 @@ export function registerServerCommand(program: Command): void {
 	const store = () => new ProjectStore(server.opts<{ dataDir: string }>().dataDir);
 	const dataDirectory = { name: "--data-dir", type: "Directory", description: "Required option on backlog server" };
 	const jsonOption = { name: "--json", type: "Boolean", description: "Print schemaVersion 1 JSON" };
-	const recordOutput = "Server project: id (string), name, rootPath (canonical absolute path), createdAt (UTC)";
+	const recordOutput =
+		"Server project: id (string), name, rootPath (canonical absolute path), createdAt (UTC), tracking (boolean)";
+
+	addHelpSchema(projects.command("preview <path>"), {
+		required: [dataDirectory, { name: "path", type: "Directory" }, { name: "--name", type: "String" }],
+		optional: [jsonOption],
+		reads:
+			"Prepared Backlog configuration, records, identity warnings, and real-path boundaries; never initializes a project",
+		writes: "None; source files and missing server data stay unchanged",
+		output:
+			"ProjectPreview with config, counts, issues and canRegister; JSON kind: server-project-preview, schemaVersion: 1",
+		examples: ['backlog server --data-dir ./server-data project preview ./example-project --name "Example" --json'],
+	})
+		.description("preview an existing Backlog project without changing any files")
+		.requiredOption("--name <name>", "display name for the server project")
+		.option("--json", "print versioned JSON output")
+		.action(async (path: string, options: { name: string; json?: boolean }) => {
+			printPreview(await store().preview(options.name, path), options.json);
+		});
 
 	addHelpSchema(projects.command("register <path>"), {
 		required: [dataDirectory, { name: "path", type: "Directory" }, { name: "--name", type: "String" }],
@@ -126,7 +160,83 @@ export function registerServerCommand(program: Command): void {
 			if (!project) throw new Error(`Server project "${id}" was not found.`);
 			printProject(project, options.json);
 		});
+	addHelpSchema(projects.command("tracking <id>"), {
+		required: [dataDirectory, { name: "id", type: "Positive integer" }, { name: "--enabled", type: "true | false" }],
+		optional: [jsonOption],
+		reads: "Project binding; enabling tracking revalidates the prepared folder and all file boundaries",
+		writes: "Tracking state in server.sqlite; project identity, memberships and source files are preserved",
+		output: `${recordOutput}; JSON kind: server-project`,
+		examples: ["backlog server --data-dir ./server-data project tracking 1 --enabled false --json"],
+	})
+		.description("stop or resume tracking while preserving project identity and memberships")
+		.requiredOption("--enabled <boolean>", "true to resume tracking, false to stop", booleanOption)
+		.option("--json", "print versioned JSON output")
+		.action(async (id: string, options: { enabled: boolean; json?: boolean }) => {
+			printProject(await store().setTracking(id, options.enabled), options.json);
+		});
 	registerAccountCommands(server, projects);
+	registerFolderAreaCommands(server);
+}
+
+function printFolderArea(area: FolderArea): void {
+	console.log(`${area.id} - ${area.userId}\n  Root: ${area.rootPath}\n  Assigned: ${area.createdAt}`);
+}
+
+function registerFolderAreaCommands(server: Command): void {
+	const store = () => new AuthStore(server.opts<{ dataDir: string }>().dataDir);
+	const areas = server
+		.command("folder-area")
+		.description("manage personal directories that grant project registration");
+	const dataDirectory = { name: "--data-dir", type: "Directory", description: "Required option on backlog server" };
+	const jsonOption = { name: "--json", type: "Boolean", description: "Print schemaVersion 1 JSON" };
+	addHelpSchema(areas.command("list"), {
+		required: [dataDirectory],
+		optional: [jsonOption, { name: "--user", type: "String", description: "Only this user's areas" }],
+		reads: "Canonical personal folder areas in server.sqlite",
+		writes: "None; does not create or upgrade the database",
+		output: "schemaVersion: 1, kind: server-folder-area-list, areas: {id,userId,rootPath,createdAt}[]",
+		examples: ["backlog server --data-dir ./server-data folder-area list --json"],
+	})
+		.description("list personal folder areas")
+		.option("--user <id>", "filter by permanent user ID")
+		.option("--json", "print versioned JSON output")
+		.action((options: { user?: string; json?: boolean }) => {
+			const records = store().listFolderAreas(options.user);
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-folder-area-list", areas: records });
+			else if (records.length) for (const area of records) printFolderArea(area);
+			else console.log("No personal folder areas assigned.");
+		});
+	addHelpSchema(areas.command("set <userId> <path>"), {
+		required: [dataDirectory, { name: "userId", type: "String" }, { name: "path", type: "Directory" }],
+		optional: [jsonOption],
+		reads: "Current account and canonical existing directory; different users' areas must not overlap",
+		writes:
+			"Upsert personal folder area in server.sqlite; grants registration within the directory and its descendants",
+		output: "schemaVersion: 1, kind: server-folder-area, area: {id,userId,rootPath,createdAt}",
+		examples: ["backlog server --data-dir ./server-data folder-area set <userId> /srv/projects/member --json"],
+	})
+		.description("assign an existing personal directory to a user")
+		.option("--json", "print versioned JSON output")
+		.action(async (userId: string, path: string, options: { json?: boolean }) => {
+			const area = await store().upsertFolderArea(userId, path);
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-folder-area", area });
+			else printFolderArea(area);
+		});
+	addHelpSchema(areas.command("remove <id>"), {
+		required: [dataDirectory, { name: "id", type: "String", description: "Folder area ID" }],
+		optional: [jsonOption],
+		reads: "Folder area in server.sqlite",
+		writes: "Remove registration permission only; existing project memberships are preserved",
+		output: "schemaVersion: 1, kind: server-folder-area-remove, id",
+		examples: ["backlog server --data-dir ./server-data folder-area remove <id> --json"],
+	})
+		.description("remove a personal folder area without removing project memberships")
+		.option("--json", "print versioned JSON output")
+		.action((id: string, options: { json?: boolean }) => {
+			store().removeFolderArea(id);
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-folder-area-remove", id });
+			else console.log(`Removed folder area ${id}.`);
+		});
 }
 
 function booleanOption(value: string): boolean {

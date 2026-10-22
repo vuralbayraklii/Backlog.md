@@ -3,13 +3,31 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-21 14:16'
+updated_date: '2026-10-22 07:19'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje sunucusu geliştirmesine yeni bir sohbetten devam etmek içindir. A-00, A-01 ve A-02 ana uygulaması tamamlandı. 8440e7b7 incelemesindeki üç hata BACK-794 kapsamında düzeltildi ve doğrulandı; BACK-794 Done olarak kapandı ve düzeltme origin özellik dalına gönderildi. Güncel dal tasks/server-a02-accounts-authorization; HEAD ve temizliği Git ile doğrula. Sonraki ürün aşaması A-03 proje kayıt ekranı ve izinli klasörlerdir; bu teslimde başlatılmadı. Aşağıdaki eski aşama kayıtları tarihsel kanıtlardır.
+Bu not Backlog.md çoklu proje sunucusuna yeni sohbetten devam etmek içindir. A-00–A-03 uygulaması ve kabul kontrolleri tamamlandı. Güncel dal tasks/server-a03-project-registration; başlangıç A-02 HEAD’i 4e67653bb76723cb93ff299ac12f99fd10b36a87. Git teslimi henüz kaydedilmedi; aşağıdaki A-03 durumunu ve Git HEAD/temizliğini doğrula. Sonraki ürün aşaması A-04; bu teslimde başlatılmadı. Eski aşamalar aşağıda tarihsel kanıtlarıyla korunur.
+
+## Tamamlanan A-03 kabulü — BACK-795–BACK-798 (22 Ekim 2026)
+
+Ana ajan @codex, @codex-areas BACK-796, @codex-binding BACK-797 ve @codex-registration-ui BACK-798 ile kullanıcının istediği üç paralel uygulamayı birleştirdi. Başlangıç Git temizdi ve uzak A-02 HEAD’i doğrulandı; kaynak yedeği /tmp/backlog-a03-8vr8jlkz/start.tar.gz (SHA-256 c18d04acbbdf63fc07e7c0421c8fc443df9dd18bc1c767f13a925cec9a66551b). Yeni dal tasks/server-a03-project-registration. Ortak sözleşme/dosya sahipliği verification/server/a03-contract.json.
+
+- Yeni yüzeyler yalnız hazır proje önizleme/kayıt, kişisel klasör alanları ve takip yönetimidir. Seçicide kayıt formu; Users içinde alan/takip kontrolleri var. Görev/belge/karar, Markdown parser/okuyucular, arama ve pano mevcut uygulamadan kullanılır. Hazır standart/.backlog/özel klasör desteklenir; eksik yapı hata verir ve oluşturulmaz. Tekil bozuk kayıt ve kimlik çakışmaları görünür uyarıdır.
+- Eklemeli v3 SQLite şeması, v0/v2 proje/hesap/oturum/üyelik verisini korur; okumalar yükseltmez. Farklı kullanıcı gerçek alanları çakışmaz. Alan iptali kayıt yetkisini kaldırır, üyeliği korur. Kayıt, güncel oturum/hesap/alan/gerçek yol ve çakışmayı işlem içinde denetler; standart üyeliği aynı işlemde oluşturur.
+- Takip durumu kimlik/üyelikten ayrıdır. Durdurmada normal liste, API/sayfa ve canlı erişim kapanır; açmada klasör yeniden doğrulanır. CLI register/list/view korunur, preview/tracking ve folder-area list/set/remove eklendi; schemaVersion1 JSON. README tüm yeni CLI/API sözleşmelerini açıklar.
+- Ortak okuyucu değişikliğinin gerekçesi, sonradan değişen veya kısa süreli dışa yönelmiş bağlantılardan önbellek/izleyiciye içerik girmesini engellemektir. Merkezi açılmış-dosya okuyucusu mevcut FileSystem/Core/ContentStore/config keşfi/izleyicisine isteğe bağlı bağlanır; yerel davranış korunur. Eski handler yolları, API sonrası ve WS gönderimleri de denetlenir. Yinelenen görev/arama/pano uygulaması yoktur.
+- Bağımsız inceleme bulguları kapandı: eski v2/no-area okuması, yapılandırma keşfinde güvenli okuyucu, yetkisiz yolun varlık/tür bilgisi, SQLite kilidi beklenirken admin iptalinin DELETE içinde yeniden denetlenmesi ve özel kayıtlı projeyi içerik okumadan çakışmada engelleme. Chromium ayrıca kayıt sonrası eski beforeunload dinleyicisini buldu; ortak dinleyici güncel kirli-token kaydını kontrol ediyor. Eski tam koşu durduruldu, final kaynakla tekrarlandı; başarısız regresyon ve ham kanıt korundu.
+
+Tam Bun: 3814 başarılı / 13 atlanan / 0 başarısız; 3827 test / 337 dosya / 18728 beklenti. Tip, yazmasız Biome, native build ve derlenmiş CLI/web/MCP smoke geçti. Gerçek Chromium 21 kontrol, 0 işlenmemiş hata; 6 geçici kaynak için dosya listesi/SHA-256 özetleri eşleşti.
+
+255 ilgili backend testi ve son56 UI/auth/seçici testi geçti; bunlar tam koşuyla toplanarak ayrı bir toplam gibi gösterilmez. Üç bağımsız inceleme açık engelleyici bırakmadı; final unload düzeltmesi de bağımsız56 testle doğrulandı. Makine okunur kabul eşlemeleri/kaynak ve günlük SHA-256 özetleri [a03-verification.json](../../../verification/server/a03-verification.json) içinde; ham kanıt /tmp/backlog-a03-8vr8jlkz/.
+
+Sadelik: tek SQLite politikası, ortak alan/yol denetimi, mevcut veri ve arayüz akışları kullanıldı; central içindeki yinelenen async okunabilirlik denetimi ortak guard lehine kaldırıldı. Groma bulunamadı; tarama/yönetilen dosya değişikliği yapılmadı. Yalnız geçici Linux örnekleri kullanıldı, kaynak envanteri ve içerikleri değişmedi; Finbee/gerçek proje yok. Atlanan platform/PTY testleri geçmiş sayılmadı. /tmp kalıcı yedek değildir.
+
+Git teslimi: kontroller tamamlandı; özellik dalı commit/push ve uzak HEAD kaydı bekliyor.
 
 ## A-02 inceleme düzeltmeleri — BACK-794 (21 Ekim 2026)
 
@@ -191,7 +209,7 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00, A-01 ve A-02 tamamlandı. Sıradaki aşama A-03: proje kayıt ekranı, izinli klasör alanları ve güvenli proje bağlama. Bu teslim yalnız geçici örnek projelerle geliştirildi; gerçek projeleri veya Finbee’yi bağlama başlatılmadı. Tarihçe ve kesinti kurtarması A-04; agent sunucu CLI/MCP bağlantısı A-05’tedir.
+A-00–A-03 uygulaması ve kabul kontrolleri tamamlandı. A-03 Git teslimi aşağıdaki güncel kayıttan doğrulanır. Gerçek proje veya Finbee bağlanmadı. Sıradaki ürün aşaması A-04 ortak yazma, tarihçe ve kesinti kurtarmasıdır; A-05 agent sunucu bağlantısı ayrı kapsamdır. Kullanıcı yetkilendirmeden sonraki aşama başlatılmaz.
 
 Devam sırası:
 
@@ -208,16 +226,17 @@ Aşağıdakiler önceki plan incelemesinde önerildi; kullanıcı bunları ayrı
 - Doğrulama ve kullanıcı kabulünün hangi içerik/kod sürümüne ait olduğu; kapsam değişince yeniden inceleme gerekip gerekmediği; yeniden kullanılan görünen kimliği ayıran kalıcı kayıt kimliği.
 - Dosya ve SQLite arasındaki kesinti kurtarma karar tablosu; kısmen yazılmış çok dosyalı işlem; ortak kilide katılmayan dış yazıcılara karşı verilen eşzamanlılık garantisinin sınırı.
 - Tek işin birden fazla kayıt olayını kapsadığı durumda ortak operation_id ile tekilleştirme; aynı idempotency anahtarının farklı içerikle, sürerken veya tamamlandıktan sonra gönderilmesi.
-- A-02 ile global adminin tüm içeriğe erişimi kesinleşti. Açık kalan: proje oluşturanın ilk yetkileri, doğrulama/kabul olaylarını kimin yazabileceği ve agent’ın kullanıcı adına kabul verebilmesi; agent anahtarının bağımsız mı kullanıcıya bağlı mı olduğu.
-- A-02, ham karar Markdown’ında önceki/sonraki durum denetimini, ek realpath sınırını ve zararlı Markdown URL korumasını tamamladı. Açık kalan: A-03 izinli klasör bağlama politikası ve A-04 dış yazıcı/kurtarma sınırları.
+- A-02 ile global adminin tüm içeriğe erişimi; A-03 ile normal proje kaydedenin standart üyeliği, kişisel alan ve takip politikaları kesinleşti. Açık kalan: doğrulama/kabul olaylarını kimin yazabileceği ve agent’ın kullanıcı adına kabul verebilmesi; agent anahtarının bağımsız mı kullanıcıya bağlı mı olduğu.
+- A-02, ham karar Markdown’ında önceki/sonraki durum denetimini, ek realpath sınırını ve zararlı Markdown URL korumasını tamamladı. A-03 izinli klasör bağlama politikası bu teslimde kesinleşti. Açık kalan: A-04 dış yazıcı/kurtarma sınırları.
 - A-02 tarayıcı testleri tamamlandı. Açık kalan: yönetim tarihçesi ve yedek/geri yükleme provası. Asıl planın aşama tablosu doc-4’te özgün haliyle duruyor.
 
 ## Yeni sohbete verilecek başlangıç mesajı
 
 ```text
-/home/vuralbayrakli/Backlog.md projesindeki çalışmaya devam ediyoruz.
-Önce MANIFESTO.md, AGENTS.md Server fork continuity, doc-4, doc-5, A-00–A-02 verification/server raporları, a02-review-fixes.json ve BACK-785–BACK-794 görevlerini CLI ile oku.
-A-00, A-01 ve A-02 tamamlandı. A-02 dalı tasks/server-a02-accounts-authorization; HEAD/temizliği Git ile doğrula. Hesap, oturum, proje işlem izinleri, admin CLI/UI ve üç kayıt türünde arşiv yaşam döngüsü entegre; tarihçe ve agent server modu sonraki aşamalardır.
-8440e7b7 ana uygulamasının son tam testi: 3689 başarılı, 13 atlanan, 0 başarısız. Sonraki BACK-794 düzeltmesinde ilgili 566 test ve 19 Chromium kontrolü başarılı; tip, yazmasız Biome, build ve compiled smoke de geçti. Son kaynak kanıtı a02-review-fixes.json, ham kayıtlar /tmp/backlog-a02-review-fixes-69vcph7x/. Tam test bu dar düzeltmede yeniden çalıştırılmadı.
-Git ve yerel kayıtları koru. Sıradaki A-03 proje kayıt ekranı/izinli klasörlerdir; kullanıcı yetkilendirmeden başlatma. A-02 kesin kararlarını ve kapsam dışı A-04/A-05 ayrımını koru; Groma bu ortamda bulunamadı.
+/home/vuralbayrakli/Backlog.md projesindeki sunucu fork’una devam ediyoruz.
+Önce MANIFESTO.md, AGENTS.md, doc-4/doc-5, verification/server/a00-baseline.json ve a03-verification.json ile BACK-795–BACK-798 görevlerini CLI üzerinden oku.
+A-00–A-03 uygulaması tamamlandı; güncel dal tasks/server-a03-project-registration. Git HEAD, uzak dal ve temizliği doğrula; yerel kayıtları koru.
+A-03 hazır proje önizleme/kayıt, kişisel alanlar ve takip yönetimidir; kaynak Markdown/config değişmez ve eksik Backlog oluşturulmaz. Mevcut görev/belge/karar/Markdown/arama/pano uygulaması korunur. Kayıt standart üyelikle atomik; takip kapatma kimlik/üyeliği korur.
+Son tam test/tip/Biome/build/smoke ve21 Chromium kabul kanıtı a03-verification.json içinde; /tmp/backlog-a03-8vr8jlkz ham kanıtları uzun süreli yedek değildir. Groma yoktu.
+Sıradaki ürün aşaması A-04 ortak yazma/tarihçe/kesinti kurtarmasıdır; kullanıcı yetkilendirmeden başlatma. A-05 agent bağlantı modu ayrı kapsamdır.
 ```

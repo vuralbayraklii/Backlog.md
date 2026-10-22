@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker } from "react-router-dom";
 
 interface UnsavedChanges {
@@ -29,12 +29,13 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
 	useEffect(() => {
 		if (!dirty) return;
 		const beforeUnload = (event: BeforeUnloadEvent) => {
+			if (!isDirty()) return;
 			event.preventDefault();
 			event.returnValue = "";
 		};
 		window.addEventListener("beforeunload", beforeUnload);
 		return () => window.removeEventListener("beforeunload", beforeUnload);
-	}, [dirty]);
+	}, [dirty, isDirty]);
 
 	return <DirtyContext.Provider value={value}>{children}</DirtyContext.Provider>;
 }
@@ -42,9 +43,10 @@ export function UnsavedChangesProvider({ children }: { children: ReactNode }) {
 /** Router blocking shares the registry with actions, such as logout, outside the router. */
 export function UnsavedChangesNavigationGuard() {
 	const guard = useContext(DirtyContext);
-	const blocker = useBlocker(({ currentLocation, nextLocation }) =>
-		Boolean(guard?.isDirty()) &&
-		(currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search),
+	const blocker = useBlocker(
+		({ currentLocation, nextLocation }) =>
+			Boolean(guard?.isDirty()) &&
+			(currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search),
 	);
 	useEffect(() => {
 		if (blocker.state !== "blocked") return;

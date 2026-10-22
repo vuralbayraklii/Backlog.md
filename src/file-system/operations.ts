@@ -457,13 +457,25 @@ export class FileSystem {
 	private activeTaskFileReads = 0;
 	private readonly pendingTaskFileReads: Array<() => void> = [];
 
-	constructor(projectRoot: string) {
+	constructor(
+		projectRoot: string,
+		private readonly fileReader?: (path: string) => Buffer,
+	) {
 		this.projectRoot = projectRoot;
-		const resolution = resolveBacklogDirectory(projectRoot);
+		const resolution = resolveBacklogDirectory(projectRoot, this.fileReader);
 		this.resolvedBacklogDirName = resolution.backlogDir ?? DEFAULT_DIRECTORIES.BACKLOG;
 		this.resolvedBacklogDir = resolution.backlogPath ?? join(projectRoot, DEFAULT_DIRECTORIES.BACKLOG);
 		this.resolvedConfigPath = resolution.configPath ?? join(this.resolvedBacklogDir, DEFAULT_FILES.CONFIG);
 		this.configSource = resolution.configSource ?? "folder";
+	}
+
+	/** Central mode supplies an opened-file reader; local commands retain Bun text semantics. */
+	async readText(path: string): Promise<string> {
+		return this.fileReader ? new TextDecoder().decode(this.fileReader(path)) : await Bun.file(path).text();
+	}
+
+	async readBytes(path: string): Promise<Buffer> {
+		return this.fileReader ? this.fileReader(path) : await readFile(path);
 	}
 
 	private async getBacklogDir(): Promise<string> {
@@ -545,7 +557,7 @@ export class FileSystem {
 	}
 
 	private refreshConfigResolution(): void {
-		this.applyConfigResolution(resolveBacklogDirectory(this.projectRoot));
+		this.applyConfigResolution(resolveBacklogDirectory(this.projectRoot, this.fileReader));
 	}
 
 	private applyConfigResolution(resolution: ReturnType<typeof resolveBacklogDirectory>): void {
@@ -591,7 +603,7 @@ export class FileSystem {
 	}
 
 	resolveBacklogDirectoryInfo() {
-		return resolveBacklogDirectory(this.projectRoot);
+		return resolveBacklogDirectory(this.projectRoot, this.fileReader);
 	}
 
 	private async getTasksDir(): Promise<string> {
@@ -955,7 +967,7 @@ export class FileSystem {
 
 		if (loadedFromPath) {
 			try {
-				existingTask = parseTask(await Bun.file(filepath).text());
+				existingTask = parseTask(await this.readText(filepath));
 			} catch (error) {
 				if (error instanceof TaskDependenciesParseError) throw error;
 				existingTask = null;
@@ -1050,7 +1062,7 @@ export class FileSystem {
 
 			if (!filepath) return null;
 
-			const content = await Bun.file(filepath).text();
+			const content = await this.readText(filepath);
 			const task = normalizeTaskIdentity(parseTask(content));
 			return { ...task, filePath: filepath };
 		} catch (error) {
@@ -1086,7 +1098,7 @@ export class FileSystem {
 		if (cacheEpoch === this.taskParseCacheEpoch) {
 			this.taskFileReadGenerations.set(cacheKey, generation);
 		}
-		const content = await this.withTaskFileReadSlot(async () => await Bun.file(filepath).text());
+		const content = await this.withTaskFileReadSlot(async () => await this.readText(filepath));
 		const cached = this.parsedTaskFiles.get(cacheKey);
 		if (cached?.content === content) {
 			return structuredClone(cached.task);
@@ -1255,7 +1267,7 @@ export class FileSystem {
 			const filename = basename(sourcePath);
 			const targetPath = join(archiveDraftsDir, filename);
 
-			const content = await Bun.file(sourcePath).text();
+			const content = await this.readText(sourcePath);
 			await this.ensureDirectoryExists(dirname(targetPath));
 			await Bun.write(targetPath, content);
 
@@ -1271,7 +1283,7 @@ export class FileSystem {
 	 */
 	async loadDraftFromFile(filePath: string): Promise<Task | null> {
 		try {
-			const task = normalizeTaskIdentity(parseTask(await Bun.file(filePath).text()));
+			const task = normalizeTaskIdentity(parseTask(await this.readText(filePath)));
 			return { ...task, filePath };
 		} catch {
 			return null;
@@ -1408,7 +1420,7 @@ export class FileSystem {
 			const tasks: Task[] = [];
 			for (const file of taskFiles) {
 				const filepath = join(draftsDir, file);
-				const content = await Bun.file(filepath).text();
+				const content = await this.readText(filepath);
 				const task = normalizeTaskIdentity(parseTask(content));
 				tasks.push({ ...task, filePath: filepath });
 			}
@@ -1434,7 +1446,7 @@ export class FileSystem {
 			for (const file of taskFiles) {
 				try {
 					const filepath = join(draftsDir, file);
-					const content = await Bun.file(filepath).text();
+					const content = await this.readText(filepath);
 					const task = normalizeTaskIdentity(parseTask(content));
 					tasks.push({ ...task, filePath: filepath });
 				} catch {}
@@ -1455,7 +1467,7 @@ export class FileSystem {
 		const filename = basename(filePath);
 		let task: Task;
 		try {
-			task = normalizeTaskIdentity(parseTask(await Bun.file(filePath).text()));
+			task = normalizeTaskIdentity(parseTask(await this.readText(filePath)));
 		} catch {
 			throw new DraftParseError(filename);
 		}
@@ -1553,7 +1565,7 @@ export class FileSystem {
 		for (const filename of filenames) {
 			let parsed: Task | null;
 			try {
-				parsed = normalizeTaskIdentity(parseTask(await Bun.file(join(draftsDir, filename)).text()));
+				parsed = normalizeTaskIdentity(parseTask(await this.readText(join(draftsDir, filename))));
 			} catch {
 				unreadable.push(filename);
 				continue;
@@ -1613,7 +1625,7 @@ export class FileSystem {
 
 		// Bun.file().text() drops a leading byte-order mark, and decoding invalid UTF-8 is lossy.
 		// Read the bytes, and only edit text that writes back to exactly the bytes that were read.
-		const bytes = await readFile(filepath);
+		const bytes = await this.readBytes(filepath);
 		const content = bytes.toString("utf8");
 		const updated = bytes.equals(Buffer.from(content, "utf8")) ? replaceDecisionStatus(content, status) : null;
 		if (updated === null) {
@@ -1684,7 +1696,7 @@ export class FileSystem {
 			const decisions: Decision[] = [];
 			for (const file of decisionFiles) {
 				try {
-					const content = await Bun.file(join(directory, file)).text();
+					const content = await this.readText(join(directory, file));
 					decisions.push({ ...parseDecision(content), path: file });
 				} catch {
 					// One malformed file must not hide every other decision from lookups.
@@ -1729,7 +1741,7 @@ export class FileSystem {
 		for (const relativePath of await this.findDocumentFiles(directory, otherDocumentsDir, unreadable)) {
 			if (basename(relativePath).toLowerCase() === "readme.md") continue;
 			try {
-				const content = await Bun.file(join(directory, ...relativePath.split("/"))).text();
+				const content = await this.readText(join(directory, ...relativePath.split("/")));
 				docs.push({ ...parseDocument(content), path: relativePath });
 			} catch {
 				// One malformed file must not hide every other document from lookups.
@@ -1890,7 +1902,7 @@ export class FileSystem {
 		const projectPath = this.contentRecordProjectPath(kind, record);
 		let storedId: string;
 		try {
-			storedId = storage.storedId(await Bun.file(filePath).text());
+			storedId = storage.storedId(await this.readText(filePath));
 		} catch {
 			throw refuse(`${projectPath} cannot be read as a ${kind}.`);
 		}
@@ -2012,7 +2024,7 @@ ${rawContent.trim()}
 				continue;
 			}
 			const filepath = join(milestonesDir, file);
-			const content = await Bun.file(filepath).text();
+			const content = await this.readText(filepath);
 			let milestone: Milestone;
 			try {
 				milestone = parseMilestone(content);
@@ -2078,7 +2090,7 @@ ${rawContent.trim()}
 		for (const file of milestoneFiles) {
 			if (file.toLowerCase() === "readme.md") continue;
 			try {
-				const content = await Bun.file(join(milestonesDir, file)).text();
+				const content = await this.readText(join(milestonesDir, file));
 				milestones.push(parseMilestone(content));
 			} catch {
 				// Match task loading: one malformed file must not hide every valid item.
@@ -2138,7 +2150,7 @@ ${rawContent.trim()}
 				}
 				const filepath = join(dir, file);
 				try {
-					const content = await Bun.file(filepath).text();
+					const content = await this.readText(filepath);
 					const parsed = parseMilestone(content);
 					const parsedIdMatch = parsed.id.match(/^m-(\d+)$/i);
 					if (parsedIdMatch?.[1]) {
@@ -2308,7 +2320,7 @@ ${description || `Milestone: ${title}`}`,
 			if (!(await file.exists())) {
 				return null;
 			}
-			content = await file.text();
+			content = await this.readText(configPath);
 		} catch (_error) {
 			return null;
 		}

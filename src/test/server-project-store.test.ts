@@ -46,6 +46,7 @@ describe("server project store", () => {
 			name: "Example's project",
 			rootPath: await realpath(projectRoot),
 			createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/),
+			tracking: true,
 		});
 		const restored = new ProjectStore(dataDir);
 		expect(restored.load(record.id)).toEqual(record);
