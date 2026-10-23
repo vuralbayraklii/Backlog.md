@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-23 10:44'
-updated_date: '2026-10-23 11:05'
+updated_date: '2026-10-23 11:17'
 labels:
   - server
   - a-05
@@ -53,6 +53,8 @@ Kullanıcının dokuz A-05 bulgusu: kayıt başına gözlem okuma; bozuk dosyada
 
 <!-- SECTION:NOTES:BEGIN -->
 Dokuz A-05 bulgusu düzeltildi: istek başına tek güvenilir görüntüyle kimlik çözümü; bozuk dosyada restart liste/arama yayını; query/çoklu filtre/taskType; belge ve milestone CLI/MCP tekrarı; karar revision/sayfalama. 1000 kayıt ölçümü 11.32s → 13.43ms. Son tam CI3973pass/13skip/0fail; types, yazmasız Biome, native build/smoke ve Chromium28/28 runtime0 geçti. Kanıt verification/server/back-813-verification.json; doc-5 güncellendi. Binary atomik güncellendi; kişisel süreç yeniden başlatılmadı. Commit/push yapılmadı.
+
+23 Ekim 2026 Git teslimi: Kullanıcının bu konuşmadaki açık commit/push onayı önceki yerel tutma sınırını kaldırdı. A-05 BACK-807–812 ve bu düzeltmeler 5d8761e3b09cb906a5f9908f53b79e8661168a44 commit’iyle origin/tasks/server-a05-agent-observation dalına gönderildi; git ls-remote eşitliği doğrulandı. Pre-commit kancası geçti; 645 kaynak girdisi, binary ve üç ekran görüntüsü kabul özetleriyle aynı. Kaynak değişmediğinden tam CI3973pass/13skip/0fail ve Chromium28/28 yeniden çalıştırılmadı. doc-5 güncel Git teslimi ve sonraki A-06 kapsamıyla güncellendi; kişisel süreç yeniden başlatılmadı.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary

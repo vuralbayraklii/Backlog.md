@@ -3,13 +3,23 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-23 11:05'
+updated_date: '2026-10-23 11:18'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-05 ve BACK-813 inceleme düzeltmeleri tamamlandı. BACK-807–812 ile BACK-813 Done. Bütün bileşenler mevcut makinede tek uygulama örneğinde çalışır. Dal tasks/server-a05-agent-observation; taban 0dffa5b328a5d9376305cf3eec7417f9bde63dfe. A-05 ve düzeltmeler yereldir; commit/push yapılmadı. Güncel kabul verification/server/back-813-verification.json; önceki A-05 raporu tarihsel kanıttır. Önce Git durumunu doğrula ve yerel değişiklikleri koru.
+Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-05 ve BACK-813 inceleme düzeltmeleri tamamlandı. BACK-807–812 ile BACK-813 Done. Bütün bileşenler mevcut makinede tek uygulama örneğinde çalışır. Dal tasks/server-a05-agent-observation; A-05 ve BACK-813 uygulama/kabul commit’i 5d8761e3b09cb906a5f9908f53b79e8661168a44, origin/tasks/server-a05-agent-observation dalına gönderildi. Git teslimi aşağıda kayıtlıdır. Güncel kabul verification/server/back-813-verification.json; önceki A-05 raporu tarihsel kanıttır. Önce Git durumunu doğrula ve yerel kayıtları koru. A-06 henüz başlamadı.
+
+## A-05 ve BACK-813 Git teslimi — 23 Ekim 2026
+
+Kullanıcı bu konuşmada commit ve push yapılmasını açıkça onayladı. A-05 BACK-807–812 ve BACK-813 düzeltmeleri 5d8761e3b09cb906a5f9908f53b79e8661168a44 uygulama/kabul commit’iyle origin/tasks/server-a05-agent-observation dalına normal push ile gönderildi; git ls-remote aynı commit’i doğruladı. Önceki commit/push yapılmadı ifadeleri aşağıdaki tarihsel uygulama kayıtlarına aittir; güncel teslim durumu bu bölümdedir. Bu teslim kaydı ayrı bir BACK-813 takip commit’idir.
+
+Commit öncesi ve pre-commit kancası sonrasında 645 kaynak/derleme girdisinin özeti güncel kabul raporuyla birebir eşleşti: c5334e793b662ed845a7ac4e1d980b4b72eab8833581a8c21b9ac9b0d52f8b62. dist/backlog SHA-256 c72c754738aaff6484faada2d1a71ad265040408de3cc1f2fe8d560052cbd865 ve üç A-05 ekran görüntüsü de raporlarıyla eşleşti. Git diff kontrolü ve normal Husky/lint-staged Biome kancası geçti; uygulama kaynakları değişmedi. Bu nedenle önceki tam CI 3973 başarılı / 13 atlanan / 0 hata ve gerçek Chromium 28/28 kanıtı geçerlidir; testler bu Git teslimi için yeniden çalıştırılmadı. Kabul raporları tarihsel kanıt olarak değiştirilmedi.
+
+Teslim öncesi yerel diff, indeks ve izlenmeyen dosyalar /tmp/backlog-a05-git-delivery-_95tuw2q içinde korundu; /tmp kalıcı yedek değildir. Groma komutu bulunamadı; yönetilen mimari dosyaları değiştirilmedi. Sistem SSH yapılandırmasındaki izin sorunu için yalnız bu Git çağrılarında ssh -F /dev/null ile mevcut github.com/git/id_ed25519_backlogmd eşlemesi açıkça kullanıldı; host anahtarı kontrolü korundu ve kalıcı SSH/Git yapılandırması değiştirilmedi.
+
+Kişisel uygulama süreci yeniden başlatılmadı. A-06 görevleri açılmadı; kullanıcı geçmişi, benden beklenenler ve doğrulama/kabul akışı sonraki kapsam kararıdır.
 
 ## BACK-813 — A-05 inceleme düzeltmeleri (23 Ekim 2026)
 
@@ -324,7 +334,7 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00–A-05, BACK-806 ve BACK-813 inceleme düzeltmeleri tamamlandı. A-05 BACK-807–813 tasks/server-a05-agent-observation dalında yereldir; commit/push yapılmadı. Güncel düzeltme kabulü verification/server/back-813-verification.json içindedir. Kabul verification/server/a05-verification.json, onaylı plan doc-7. Önceki A-04 uygulaması09e336fb/kapanışıfc07f2ce ve BACK-806 uygulaması289bfc2d/kapanışı0dffa5b3 ilgili origin özellik dallarına gönderildi. A-06 kullanıcı tarihçesi, benden beklenenler ve doğrulama/kabul akışları sıradadır; A-07 gerçek Finbee bağlama ve A-08 işletim ayrı aşamalardır.
+A-00–A-05, BACK-806 ve BACK-813 inceleme düzeltmeleri tamamlandı. A-05 BACK-807–813 5d8761e3b09cb906a5f9908f53b79e8661168a44 uygulama/kabul commit’iyle origin/tasks/server-a05-agent-observation dalına gönderildi; Git teslim kaydı yukarıdadır. Güncel düzeltme kabulü verification/server/back-813-verification.json içindedir. Kabul verification/server/a05-verification.json, onaylı plan doc-7. Önceki A-04 uygulaması09e336fb/kapanışıfc07f2ce ve BACK-806 uygulaması289bfc2d/kapanışı0dffa5b3 ilgili origin özellik dallarına gönderildi. A-06 kullanıcı tarihçesi, benden beklenenler ve doğrulama/kabul akışları sıradadır; A-07 gerçek Finbee bağlama ve A-08 işletim ayrı aşamalardır.
 
 Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-7, a00-baseline.json ve a05-verification.json okumalı; BACK-807–812'yi CLI ile doğrulamalı. Git durumunu ve yerel dosyaları korumadan dal değiştirmemeli. Sonraki kapsamı mevcut kullanıcı vuralbayraklii belirler; önceki öneriler kendiliğinden onaylanmış sayılmaz.
 
@@ -339,7 +349,7 @@ Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-7, a00-basel
 
 ```text
 Backlog.md uygulamasında A-00–A-05 tamamlandı. Her şey mevcut makinede tek uygulama örneğinde çalışır.
-A-05 BACK-807–812 ve inceleme düzeltmesi BACK-813 Done; tasks/server-a05-agent-observation dalında yerel değişiklikler var, commit/push yapılmadı. Taban0dffa5b328a5d9376305cf3eec7417f9bde63dfe.
+A-05 BACK-807–812 ve inceleme düzeltmesi BACK-813 Done; uygulama/kabul commit’i 5d8761e3b09cb906a5f9908f53b79e8661168a44, origin/tasks/server-a05-agent-observation dalına gönderildi. Git teslim kaydı doc-5 başındadır; önce Git durumunu doğrula.
 Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5/doc-7 ve verification/server/a05-verification.json oku; görevleri CLI ile doğrula. Git durumunu ve yerel değişiklikleri koru.
 BACK-813 dokuz inceleme bulgusunu düzeltti; güncel kanıt verification/server/back-813-verification.json. Son sabit kaynak CI3973pass/13skip/0fail, native Chromium28/28. dist/backlog doğrulanmış son binary; kişisel süreç yeniden başlatılmadı, aynı data-dir ile kullanıcı yeniden açmalı.
 Kullanıcıya bağlı anahtar/izin kesişimi, güçlü taşımada kimlik koruma ve bozuk dosyada ilgili projede yazmayı durdurma kararları onaylı ve uygulanmış; yeniden sorma. Gerçek Finbee bu çalışmada bağlanmadı.
