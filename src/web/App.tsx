@@ -19,7 +19,6 @@ import ArchivePage from './components/ArchivePage';
 import { PasswordForm } from './components/AccountForms';
 import { useAuth } from './contexts/AuthContext';
 import { SuccessToast } from './components/SuccessToast';
-import { ThemeProvider } from './contexts/ThemeContext';
 import { TaskIdIndexProvider } from './contexts/TaskIdIndexContext';
 import {
 	type Decision,
@@ -934,21 +933,17 @@ function AppContent() {
   // Show loading state while checking initialization
   if (isInitialized === null) {
     return (
-      <ThemeProvider>
         <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900" role="status">
           <LoadingSpinner size="md" text="" />
           <span className="sr-only">Loading</span>
         </div>
-      </ThemeProvider>
     );
   }
 
   // Show initialization screen if not initialized
   if (isInitialized === false) {
     return (
-      <ThemeProvider>
         <InitializationScreen onInitialized={handleInitialized} />
-      </ThemeProvider>
     );
   }
 
@@ -993,7 +988,6 @@ function AppContent() {
   );
 
   return (
-    <ThemeProvider>
       <TaskIdIndexProvider tasks={tasks}>
       <Routes>
             <Route
@@ -1133,7 +1127,6 @@ function AppContent() {
         />
       )}
       </TaskIdIndexProvider>
-    </ThemeProvider>
   );
 }
 

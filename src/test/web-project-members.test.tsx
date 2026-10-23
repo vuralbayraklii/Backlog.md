@@ -2,9 +2,10 @@ import { afterEach, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { ADMIN_PERMISSIONS, DEFAULT_PERMISSIONS, type AuthSession, type ProjectMember } from "../server/auth-types";
+import { ADMIN_PERMISSIONS, type AuthSession, DEFAULT_PERMISSIONS, type ProjectMember } from "../server/auth-types";
 import ProjectMembers from "../web/components/ProjectMembers";
 import { AuthProvider } from "../web/contexts/AuthContext";
+import { ThemeProvider } from "../web/contexts/ThemeContext";
 import { projectScope, readProjectScope, setProjectStorageAccount } from "../web/lib/project-scope";
 import { setRequestSession } from "../web/lib/request";
 
@@ -84,9 +85,11 @@ it("adds default membership once, changes a single grant, and removes membership
 	root = createRoot(document.getElementById("root")!);
 	await act(async () => {
 		root?.render(
-			<AuthProvider>
-				<ProjectMembers />
-			</AuthProvider>,
+			<ThemeProvider>
+				<AuthProvider>
+					<ProjectMembers />
+				</AuthProvider>
+			</ThemeProvider>,
 		);
 	});
 	await act(async () => {

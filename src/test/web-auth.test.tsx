@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import { JSDOM } from "jsdom";
-import { act, StrictMode, useEffect, useState, type ReactNode } from "react";
+import { act, type ReactNode, StrictMode, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes } from "react-router-dom";
-import AccountNavigation from "../web/components/AccountNavigation";
-import DocumentationDetail from "../web/components/DocumentationDetail";
-import DecisionDetail from "../web/components/DecisionDetail";
-import { ThemeProvider } from "../web/contexts/ThemeContext";
-import type { Document as BacklogDocument, Decision } from "../types";
 import { ADMIN_PERMISSIONS, type AuthSession } from "../server/auth-types";
+import type { Document as BacklogDocument, Decision } from "../types";
+import AccountNavigation from "../web/components/AccountNavigation";
+import DecisionDetail from "../web/components/DecisionDetail";
+import DocumentationDetail from "../web/components/DocumentationDetail";
 import { AuthProvider, useAuth } from "../web/contexts/AuthContext";
+import { ThemeProvider } from "../web/contexts/ThemeContext";
 import {
 	UnsavedChangesNavigationGuard,
 	UnsavedChangesProvider,
@@ -111,7 +111,9 @@ function auth() {
 async function renderAuth(children: ReactNode = <AuthProbe />, strict = false) {
 	const content = (
 		<UnsavedChangesProvider>
-			<AuthProvider>{children}</AuthProvider>
+			<ThemeProvider>
+				<AuthProvider>{children}</AuthProvider>
+			</ThemeProvider>
 		</UnsavedChangesProvider>
 	);
 	await act(async () => {
@@ -190,6 +192,47 @@ afterEach(async () => {
 });
 
 describe("central browser session", () => {
+	it("keeps the application theme through login and same-account session expiry", async () => {
+		setup();
+		window.localStorage.setItem("backlog-theme", "dark");
+		let signedIn = false;
+		globalThis.fetch = (async (input) => {
+			const path = String(input);
+			if (path === "/api/auth/session")
+				return signedIn
+					? Response.json(userSession())
+					: Response.json({ error: "Authentication required." }, { status: 401 });
+			if (path === "/api/auth/login") {
+				signedIn = true;
+				return Response.json(userSession());
+			}
+			if (path === "/api/projects/1") return Response.json({ permissions: ADMIN_PERMISSIONS });
+			if (path === "/expire-theme") {
+				signedIn = false;
+				return Response.json({ error: "Authentication required." }, { status: 401 });
+			}
+			return Response.json({ version: "1.53.0" });
+		}) as typeof fetch;
+		await renderAuth();
+		expect(document.documentElement.classList.contains("dark")).toBe(true);
+		const toggle = document.querySelector<HTMLButtonElement>('button[aria-label="Switch to light mode"]');
+		if (!toggle) throw new Error("Login did not expose the shared theme control");
+		await act(async () => toggle.click());
+		expect(document.documentElement.classList.contains("dark")).toBe(false);
+		expect(window.localStorage.getItem("backlog-theme")).toBe("light");
+		await submitLogin();
+		expect(auth().ready).toBe(true);
+		await act(async () => {
+			await sessionFetch("/expire-theme");
+		});
+		expect(auth().ready).toBe(false);
+		expect(document.querySelector('button[aria-label="Switch to dark mode"]')).not.toBeNull();
+		expect(window.localStorage.getItem("backlog-theme")).toBe("light");
+		await submitLogin();
+		expect(auth().ready).toBe(true);
+		expect(document.documentElement.classList.contains("dark")).toBe(false);
+	});
+
 	it("shows recovery as project availability while preserving granted permissions", async () => {
 		setup();
 		globalThis.fetch = (async (input) => {
@@ -295,9 +338,11 @@ describe("central browser session", () => {
 		}
 		await act(async () => {
 			root?.render(
-				<AuthProvider>
-					<Project />
-				</AuthProvider>,
+				<ThemeProvider>
+					<AuthProvider>
+						<Project />
+					</AuthProvider>
+				</ThemeProvider>,
 			);
 		});
 		expect(mounts).toBe(0);
@@ -344,9 +389,11 @@ describe("central browser session", () => {
 			}
 			await act(async () => {
 				root?.render(
-					<AuthProvider>
-						<Editor />
-					</AuthProvider>,
+					<ThemeProvider>
+						<AuthProvider>
+							<Editor />
+						</AuthProvider>
+					</ThemeProvider>,
 				);
 			});
 			await flush();
@@ -389,9 +436,11 @@ describe("central browser session", () => {
 		}) as typeof fetch;
 		await act(async () => {
 			root?.render(
-				<AuthProvider>
-					<p>Protected project</p>
-				</AuthProvider>,
+				<ThemeProvider>
+					<AuthProvider>
+						<p>Protected project</p>
+					</AuthProvider>
+				</ThemeProvider>,
 			);
 		});
 		await flush();
@@ -493,9 +542,11 @@ describe("central browser session", () => {
 			}
 			await act(async () => {
 				root?.render(
-					<AuthProvider>
-						<Page />
-					</AuthProvider>,
+					<ThemeProvider>
+						<AuthProvider>
+							<Page />
+						</AuthProvider>
+					</ThemeProvider>,
 				);
 			});
 			await flush();

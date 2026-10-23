@@ -6,6 +6,7 @@ import type { DuplicateRepairPlan } from "../core/duplicate-task-repair.ts";
 import type { SearchResult, Task } from "../types/index.ts";
 import App from "../web/App.tsx";
 import { HealthCheckProvider } from "../web/contexts/HealthCheckContext.tsx";
+import { ThemeProvider } from "../web/contexts/ThemeContext";
 
 /**
  * Demoting a task rewrites other tasks, so the web UI reports which ones lost a reference. The
@@ -120,7 +121,8 @@ const respond = async (url: URL, init?: RequestInit): Promise<Response> => {
 		const task = tasks.find((candidate) => candidate.id === id);
 		return task ? json(task) : json({ error: `Task ${id} not found` }, 404);
 	}
-	const lifecycleRoute = init?.method === "POST" ? url.pathname.match(/^\/api\/tasks\/([^/]+)\/(archive|demote)$/) : null;
+	const lifecycleRoute =
+		init?.method === "POST" ? url.pathname.match(/^\/api\/tasks\/([^/]+)\/(archive|demote)$/) : null;
 	if (lifecycleRoute) {
 		const id = decodeURIComponent(lifecycleRoute[1] ?? "");
 		if (lifecycleRoute[2] === "archive" && archiveRefusal) {
@@ -236,7 +238,9 @@ const renderTaskList = async (): Promise<HTMLElement> => {
 		activeRoot?.render(
 			<StrictMode>
 				<HealthCheckProvider>
-					<App />
+					<ThemeProvider>
+						<App />
+					</ThemeProvider>
 				</HealthCheckProvider>
 			</StrictMode>,
 		);
@@ -248,9 +252,7 @@ const renderTaskList = async (): Promise<HTMLElement> => {
 };
 
 const findButton = (container: HTMLElement, matches: (text: string) => boolean): HTMLButtonElement => {
-	const button = Array.from(container.querySelectorAll("button")).find((element) =>
-		matches(element.textContent ?? ""),
-	);
+	const button = Array.from(container.querySelectorAll("button")).find((element) => matches(element.textContent ?? ""));
 	expect(button).toBeTruthy();
 	return button as HTMLButtonElement;
 };
@@ -388,8 +390,7 @@ describe("dependency cleanup notice", () => {
 	it("shows core's refusal in the task dialog when the archive endpoint answers 400", async () => {
 		tasks = [makeTask("TASK-1", "Archive target")];
 		const container = await renderTaskList();
-		archiveRefusal =
-			"Task TASK-1 cannot be archived: the archive already has a file named task-1 - Archive-target.md.";
+		archiveRefusal = "Task TASK-1 cannot be archived: the archive already has a file named task-1 - Archive-target.md.";
 		const originalConsoleError = console.error;
 		console.error = () => {};
 

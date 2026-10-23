@@ -6,6 +6,7 @@ import { type TaskDetail, toTaskDetail } from "../core/task-detail.ts";
 import type { BacklogConfig, SearchResult, Task } from "../types/index.ts";
 import App from "../web/App.tsx";
 import { HealthCheckProvider } from "../web/contexts/HealthCheckContext.tsx";
+import { ThemeProvider } from "../web/contexts/ThemeContext";
 import { apiClient } from "../web/lib/api.ts";
 
 const statuses = ["To Do", "In Progress", "Done"];
@@ -28,7 +29,11 @@ function makeTask(id: string, status: string, dependencies: string[] = []): Task
 }
 
 /** The one message the app listens to for "the records on disk changed". */
-type FakeSocket = { onmessage: ((event: { data: string }) => void) | null; onclose: (() => void) | null; close(): void };
+type FakeSocket = {
+	onmessage: ((event: { data: string }) => void) | null;
+	onclose: (() => void) | null;
+	close(): void;
+};
 
 /**
  * Everything this file plants on the global object, restored afterwards. Bun runs test files in one
@@ -208,7 +213,9 @@ describe("open task detail across refreshes", () => {
 		await act(async () => {
 			activeRoot?.render(
 				<HealthCheckProvider>
-					<App />
+					<ThemeProvider>
+						<App />
+					</ThemeProvider>
 				</HealthCheckProvider>,
 			);
 			await Promise.resolve();
@@ -257,7 +264,9 @@ describe("open task detail across refreshes", () => {
 		await act(async () => {
 			activeRoot?.render(
 				<HealthCheckProvider>
-					<App />
+					<ThemeProvider>
+						<App />
+					</ThemeProvider>
 				</HealthCheckProvider>,
 			);
 			await Promise.resolve();
@@ -314,7 +323,9 @@ describe("open task detail across refreshes", () => {
 		await act(async () => {
 			activeRoot?.render(
 				<HealthCheckProvider>
-					<App />
+					<ThemeProvider>
+						<App />
+					</ThemeProvider>
 				</HealthCheckProvider>,
 			);
 			await Promise.resolve();
@@ -363,7 +374,9 @@ describe("open task detail across refreshes", () => {
 		await act(async () => {
 			activeRoot?.render(
 				<HealthCheckProvider>
-					<App />
+					<ThemeProvider>
+						<App />
+					</ThemeProvider>
 				</HealthCheckProvider>,
 			);
 			await Promise.resolve();
@@ -450,7 +463,9 @@ describe("open task detail across refreshes", () => {
 		await act(async () => {
 			activeRoot?.render(
 				<HealthCheckProvider>
-					<App />
+					<ThemeProvider>
+						<App />
+					</ThemeProvider>
 				</HealthCheckProvider>,
 			);
 			await Promise.resolve();
@@ -517,7 +532,9 @@ describe("open task detail across refreshes", () => {
 		await act(async () => {
 			activeRoot?.render(
 				<HealthCheckProvider>
-					<App />
+					<ThemeProvider>
+						<App />
+					</ThemeProvider>
 				</HealthCheckProvider>,
 			);
 			await Promise.resolve();

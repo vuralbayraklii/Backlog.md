@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
-import { StrictMode, act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { DuplicateRepairPlan } from "../core/duplicate-task-repair.ts";
 import type { Milestone, SearchResult, Task } from "../types/index.ts";
 import App from "../web/App.tsx";
 import { HealthCheckProvider } from "../web/contexts/HealthCheckContext.tsx";
+import { ThemeProvider } from "../web/contexts/ThemeContext";
 
 const makeTask = (id: string, title: string, status: string, overrides: Partial<Task> = {}): Task => ({
 	id,
@@ -190,7 +191,9 @@ const renderBoard = async (): Promise<HTMLElement> => {
 		activeRoot?.render(
 			<StrictMode>
 				<HealthCheckProvider>
-					<App />
+					<ThemeProvider>
+						<App />
+					</ThemeProvider>
 				</HealthCheckProvider>
 			</StrictMode>,
 		);

@@ -4,9 +4,9 @@ import { useAuth } from "../contexts/AuthContext";
 import type { RecordVersionLike } from "../lib/api";
 import { requestJson } from "../lib/request";
 import { buttonClass, inputClass } from "./AccountForms";
-import AccountNavigation from "./AccountNavigation";
 import AdminProjectRegistration from "./AdminProjectRegistration";
 import { isMutationConflict, MutationConflictNotice } from "./MutationConflictNotice";
+import ServerLayout from "./ServerLayout";
 
 function UserRow({
 	user,
@@ -151,10 +151,9 @@ export default function AdminUsers() {
 			</p>
 		);
 	return (
-		<main className="mx-auto max-w-5xl p-8 text-gray-900 dark:text-gray-100">
+		<ServerLayout>
 			<div className="mb-8 flex flex-wrap justify-between gap-4">
 				<h1 className="text-3xl font-bold">Users</h1>
-				<AccountNavigation />
 				<a href="/projects" className="underline">
 					Projects
 				</a>
@@ -232,6 +231,6 @@ export default function AdminUsers() {
 					<UserRow key={user.id} user={user} changed={changed} failed={failed} />
 				))}
 			</ul>
-		</main>
+		</ServerLayout>
 	);
 }

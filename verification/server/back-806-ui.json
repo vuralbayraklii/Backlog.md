@@ -1,0 +1,432 @@
+{
+	"schemaVersion": 1,
+	"task": "BACK-806",
+	"result": "passed",
+	"recordedAt": "2026-10-22T12:06:20.668147+00:00",
+	"branch": "tasks/server-ui-consistency",
+	"baseCommit": "fc07f2ced74c9aeec5615f469f5fb21b24d32648",
+	"request": "Keep server additions within the existing Backlog.md frontend and flow shown by the user.",
+	"source": {
+		"fileCount": 634,
+		"snapshotSha256": "747d58c4d5f5274b441f48341671aa454f5bf7cac131fd76f2ec07ad121bf0d7",
+		"unchangedAfterChecks": true,
+		"changedFiles": [
+			{
+				"path": "src/test/web-app-open-detail-refresh.test.tsx",
+				"sha256": "a26fa52e0ed7f73b08538cc2399fa9ee53cb075b3b11e94fa96e4474fb262eb7"
+			},
+			{
+				"path": "src/test/web-auth.test.tsx",
+				"sha256": "891c0a96cb2fcbef74c3a19f0a535a2a12f733bf35a293593a374056b663ded9"
+			},
+			{
+				"path": "src/test/web-dependency-cleanup-notice.test.tsx",
+				"sha256": "4cc6c458ec9184b13af224204b31cf05eff7290f81699141c11a4d81d8e62be2"
+			},
+			{
+				"path": "src/test/web-in-place-refresh.test.tsx",
+				"sha256": "a9f2f34d9703dbf4efcfe887c20e14770a49cb9a0bbadf9679fb434758132eee"
+			},
+			{
+				"path": "src/test/web-project-members.test.tsx",
+				"sha256": "7176b37501d17518d26aed38729a352a63322eaa786eeb561747e51769ca136f"
+			},
+			{
+				"path": "src/test/web-project-registration.test.tsx",
+				"sha256": "ceaff69b4490d541d34c50ba51495341e8165941253ed885d492adf54022b5ef"
+			},
+			{
+				"path": "src/test/web-project-selector.test.tsx",
+				"sha256": "f454386fb7968c64be7d8b89a06b64b949de0075fb4e67bf784c95211c144b14"
+			},
+			{
+				"path": "src/test/web-task-detail-deeplink.test.tsx",
+				"sha256": "e306dc3b16c96482f3264b832445dd225cd2c90e042b356f0c443bad04c1a4fc"
+			},
+			{
+				"path": "src/web/App.tsx",
+				"sha256": "3dfb1ea230bb423b1fa6d7b9a7431379ea4e659fa152873e5b259d0f96172316"
+			},
+			{
+				"path": "src/web/components/AccountForms.tsx",
+				"sha256": "8f6270d706708b50f2f4b2d7761ef44d61ff9c90b019f4c216dd0a6e1dfdacbd"
+			},
+			{
+				"path": "src/web/components/AccountNavigation.tsx",
+				"sha256": "af4d8a683f5a0bddc6e44f67db3e9196dffe3a748558b629270adfab3fd5c610"
+			},
+			{
+				"path": "src/web/components/AdminUsers.tsx",
+				"sha256": "b543bb2304330dbf5d782c1f33df0334bd923188dd6e8b61a29aeea40424449e"
+			},
+			{
+				"path": "src/web/components/AppFrame.tsx",
+				"sha256": "9e1bef98eb7401690c08392c8abdbf15a1c86ac767925db566e22191dd74e721"
+			},
+			{
+				"path": "src/web/components/Layout.tsx",
+				"sha256": "dbc2ba805b84f0c6fb39fd973d8e1191461c10462c9d37f87ae40d031e066404"
+			},
+			{
+				"path": "src/web/components/Navigation.tsx",
+				"sha256": "7df86682b5677d6233df1750bff1d6ee2f79a3531ad3825197f046b222fd9596"
+			},
+			{
+				"path": "src/web/components/ProjectSelector.tsx",
+				"sha256": "b1c75d40dd4b5356a21ef7664d99129fe1bdb91efaa0c57ffb78e9c53e63ea42"
+			},
+			{
+				"path": "src/web/components/ServerLayout.tsx",
+				"sha256": "cd48afab39d5aa8a000a9d35198d746c4ac0f94e6392dce4e875cd5482f90c3b"
+			},
+			{
+				"path": "src/web/contexts/ThemeContext.tsx",
+				"sha256": "7d3ebf3454d139c0dd871b1b270ae58564f889d0bddcc69665a96ca842805953"
+			},
+			{
+				"path": "src/web/main.tsx",
+				"sha256": "47c6c68b3a42e7c8f079442d081f46a642b7da5b021a9501f568b79d76f04317"
+			}
+		],
+		"nativeExecutableSha256": "d02af95cdc9d242fbc9727c9750792568a9082c93fa007deb15dff725b872122"
+	},
+	"implementation": {
+		"sharedComponents": ["AppFrame", "Navigation", "ThemeToggle", "ThemeProvider"],
+		"newServerFrame": "ServerLayout composes the shared frame/header and only project-independent navigation.",
+		"theme": "One ThemeProvider in main.tsx wraps AuthProvider, account screens and existing project AppContent.",
+		"flow": "Login -> password change when required -> authorized Projects -> existing preview/register -> existing project board, milestones, documentation and decisions.",
+		"backendChanged": false,
+		"projectDataOrFinbeeImported": false
+	},
+	"checks": {
+		"types": {
+			"command": "bun run check:types",
+			"exitCode": 0,
+			"files": 604
+		},
+		"biome": {
+			"command": "bun run check .",
+			"exitCode": 0
+		},
+		"biomeTsx": {
+			"result": "completed_with_preexisting_diagnostics",
+			"rawExitCode": 1,
+			"checkedFiles": 19,
+			"current": {
+				"changed": 0,
+				"unchanged": 19,
+				"matches": 0,
+				"duration": 161552632,
+				"errors": 4,
+				"warnings": 31,
+				"infos": 0,
+				"skipped": 0,
+				"suggestedFixesSkipped": 0,
+				"diagnosticsNotPrinted": 0,
+				"scannerDuration": 34245009
+			},
+			"baseline": {
+				"changed": 0,
+				"unchanged": 17,
+				"matches": 0,
+				"duration": 44607740,
+				"errors": 19,
+				"warnings": 31,
+				"infos": 0,
+				"skipped": 0,
+				"suggestedFixesSkipped": 0,
+				"diagnosticsNotPrinted": 0,
+				"scannerDuration": 884947
+			},
+			"introducedDiagnostics": 0,
+			"configuration": {
+				"$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
+				"extends": ["/home/vuralbayrakli/Backlog.md/biome.json"],
+				"vcs": {
+					"enabled": false
+				},
+				"files": {
+					"includes": ["**/*.tsx"]
+				}
+			},
+			"baselineRef": "fc07f2ced74c9aeec5615f469f5fb21b24d32648"
+		},
+		"webTests": {
+			"command": "bun test --timeout=10000 src/test/web-*.test.tsx src/test/web-*.test.ts",
+			"exitCode": 0,
+			"passed": 446,
+			"failed": 0,
+			"files": 45,
+			"expectations": 2800,
+			"duration": "35.83s"
+		},
+		"build": {
+			"command": "BACKLOG_BUILD_OUTFILE=/tmp/backlog-server-ui/build/backlog bun scripts/build.ts",
+			"exitCode": 0
+		},
+		"compiledSmoke": {
+			"command": "bun scripts/smoke-compiled-build.ts /tmp/backlog-server-ui/build/backlog 1.53.0",
+			"exitCode": 0
+		},
+		"diffCheck": {
+			"command": "git diff --check",
+			"exitCode": 0
+		}
+	},
+	"chromium": {
+		"browser": "HeadlessChrome/153.0.8010.12",
+		"result": "passed",
+		"assertions": [
+			"login inherits system dark preference",
+			"login shows the shared Backlog header and theme control",
+			"theme toggle persists light preference",
+			"saved light preference survives reload over dark system preference",
+			"mandatory password change retains the theme",
+			"mandatory password change does not expose workspace navigation",
+			"empty Projects uses the shared sidebar",
+			"empty Projects has no fabricated project links",
+			"empty Projects retains login theme",
+			"registration keeps the dirty form after discard cancellation",
+			"registration opens the existing project board route",
+			"project board preserves the default navigation",
+			"project board keeps the global theme",
+			"existing milestones page renders the same task corpus",
+			"existing documentation page opens inside project layout",
+			"existing decision page opens inside project layout",
+			"registered Projects keeps full-page project links",
+			"Users shares the header and active workspace navigation",
+			"password screen shares the signed-in application layout",
+			"narrow Projects has no horizontal page overflow",
+			"narrow Projects retains registration and account actions",
+			"narrow Users has no horizontal page overflow",
+			"no unhandled browser runtime errors"
+		],
+		"runtimeErrors": 0,
+		"networkResponsesMocked": false,
+		"runDirectory": "/tmp/backlog-server-ui/browser",
+		"viewports": [
+			{
+				"width": 1440,
+				"height": 1000
+			},
+			{
+				"width": 390,
+				"height": 844
+			}
+		],
+		"visualReview": [
+			"Empty Projects dark and light",
+			"Existing project Milestones dark",
+			"Users at narrow viewport light"
+		]
+	},
+	"screenshots": [
+		{
+			"path": "verification/server/back-806-projects-dark.png",
+			"sha256": "0dcc76f1d921c4ba051e2bea154e43f030f95c47e4f52744c08ba567a6d863a7",
+			"bytes": 30689
+		},
+		{
+			"path": "verification/server/back-806-projects-light.png",
+			"sha256": "905449bf3f4a76ed5c3c7cc9b55f3d65efac479cfcee0833ab8059ac1f1755ec",
+			"bytes": 28751
+		},
+		{
+			"path": "verification/server/back-806-project-milestones-dark.png",
+			"sha256": "812af40ae89ea3c8fee5cc871877b93d456dd5cb30d2c3d982790d22db152e01",
+			"bytes": 75689
+		}
+	],
+	"release": {
+		"oldBinarySha256": "7c31abcfba77c124853fe5f179b6bf2420e7e21c991b820dc14f995f1bac0693",
+		"newBinarySha256": "d02af95cdc9d242fbc9727c9750792568a9082c93fa007deb15dff725b872122",
+		"copiedTo": "dist/backlog",
+		"existingServerProcessRestarted": false,
+		"personalServerDataChanged": false
+	},
+	"limitations": [
+		"Only isolated temporary browser fixtures were used; real Finbee and the personal server database were not opened or modified.",
+		"The running personal server retains its previous executable until restarted with the same data directory.",
+		"Preexisting TSX diagnostics are recorded separately from the passing default check; no new signatures were introduced.",
+		"Full backend tests were not repeated for this frontend correction; all web suites and compiled CLI/web/MCP smoke passed.",
+		"Raw /tmp evidence is ephemeral; representative screenshots and this report are stored in the repository.",
+		"Groma was unavailable; no Groma-owned files or MANIFESTO.md were edited."
+	],
+	"evidenceFiles": [
+		{
+			"path": "/tmp/backlog-server-ui/biome-tsx.json",
+			"bytes": 230,
+			"sha256": "6614953afbb4af6321e5ba47b79acd334f01f2e1828389591b58bcacb7ef4252"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/biome.log",
+			"bytes": 64,
+			"sha256": "25cd0b81620c4e80a612bec9dd2c65c1b21c51967d90e65a68d5c9f655cc0d12"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/browser/browser-result.json",
+			"bytes": 10782,
+			"sha256": "1b72f6eaf815443319960006ab3381dabdef6080a45e3d64fca25e95de00edda"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/browser/chromium.log",
+			"bytes": 241,
+			"sha256": "8de392bb79959199331232d2bf779f88fea400b5ff59ac2ffd70e5454f0a2e7b"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/browser/diagnostic-1-browser-result.json",
+			"bytes": 1521,
+			"sha256": "30a9d97aac3b2e93b034dbac1938d33933e2fa62a1070dd0f11a03bed538245b"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/browser/diagnostic-1-harness.log",
+			"bytes": 1028,
+			"sha256": "95ec45154b3488728dfb7980dfa0cea337434c675c03ee8fbebeec8c187f550b"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/browser/fixture-reset.log",
+			"bytes": 121,
+			"sha256": "29ae8c685651df0c7a77eeb860feb8a5dbf9ba99395d5daecf5d222362d8883c"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/browser/fixture.log",
+			"bytes": 3005,
+			"sha256": "1945d38a72b3e196f219922eb00f23d795f1a62ae36fc701d2bfcdc5742ca2d0"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/browser/harness.log",
+			"bytes": 1249,
+			"sha256": "45e5a0a8a73e62b72ee7a7c17af8f2e76f3cd91692a6288ef2c109f6d429f710"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/browser/server-error.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/browser/server.log",
+			"bytes": 61,
+			"sha256": "c43d0ffb85bde11639a0f4bb68e6774d16828bceb63032ccd323297d72f87b40"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/browser.mjs",
+			"bytes": 15120,
+			"sha256": "2361887dc4a98454aca20ba903680867ce6cbcb291a12eb1ce4a2e92bcf23181"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/build.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/diff-check.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/format.log",
+			"bytes": 46,
+			"sha256": "0501dc7e72c9b0897cc37e9a0d75e69b98c6bafa46632f566fece355c422feb1"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/harness-syntax.log",
+			"bytes": 64,
+			"sha256": "01adb0188a0d818991b2891d553441476fe719bf2891c46790e62d89f15c535e"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/imports.log",
+			"bytes": 43,
+			"sha256": "feb0df45bf340b5fefe48d6df0d7928bbd7cd65fcaa55c7ea1d9463787addcc7"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/release.json",
+			"bytes": 292,
+			"sha256": "59da11c7a147339bd68b07590fbc1c31dea2979888a8dc944f14a252908aea08"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/selector-tests.log",
+			"bytes": 448,
+			"sha256": "7590ff382a662f9c4d1f75d2cf1556cbae198d3e4102295c3837f6d553b955e1"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/smoke.log",
+			"bytes": 77,
+			"sha256": "a2d04c1b6f5c173c0618357b124b1cee023783e7c768c31edde417fe85859192"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/source-manifest.json",
+			"bytes": 69285,
+			"sha256": "443ca232c8c68042581cb3a7f345537227a4aa2f0830f86f64af1c99d8896f41"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/start-state.json",
+			"bytes": 131,
+			"sha256": "2f4c5ad5fcc7fd5724a515da5cf425b4823e07017d790dc983423fe0fe0f6ec3"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/task-create.log",
+			"bytes": 3879,
+			"sha256": "efee2130a6b651201d1dea1a96bba109dac85b5c06eb5c017b6aa6239cf6bf79"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/task-start.log",
+			"bytes": 22,
+			"sha256": "f30f0c41c6776e8ed9b18ac78ae867da1808fbd8df1d950b5d85d28f61149cde"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/tsx-baseline.json",
+			"bytes": 13527,
+			"sha256": "dc28323a3b19866809dbf02a976056d2ec4ad1bcf6f52187ebb45b3fa07ba7e1"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/tsx-comparison.json",
+			"bytes": 1435,
+			"sha256": "f79a1e5933c052df18e11ea7ec5279ebb8af9d038f3438996935a7d1df7de795"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/tsx-current.json",
+			"bytes": 8457,
+			"sha256": "f796e34204ac89477c9a01c816c3bbf29266273252d7a4f6f5fda5b86e65e05f"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/tsx-paths.json",
+			"bytes": 770,
+			"sha256": "6e67a83c018736445da0d6bbbca6d3e6d4d89b622ecf05cd770348a4fb9e3877"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/types-final.log",
+			"bytes": 55,
+			"sha256": "139971d5489bbf328e9398f3fb1adcf00ae8597a85179006379f586a54c95ffe"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/types-initial.log",
+			"bytes": 55,
+			"sha256": "3ea395c99e79cc6a306709352953ecf7225c95c4ca357f89ff09ae5090ba6ba2"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/types.log",
+			"bytes": 55,
+			"sha256": "5d5bfcd6ca8b40eb4230d71ae3a8aaf4fabee5567bff067335ecbbe953294441"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/web-initial.log",
+			"bytes": 18712,
+			"sha256": "9c2af5c1b2a95a789e9694091027466bcced4a6a264b3173aa0743dc92935287"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/web-tests-final.log",
+			"bytes": 58421,
+			"sha256": "6ee5bfebbed77015ba9a6aad96d476473ea7c7fefd51c7ca8a0dcb753b9acf67"
+		},
+		{
+			"path": "/tmp/backlog-server-ui/web-tests.log",
+			"bytes": 62524,
+			"sha256": "a2520e61091faf739809b76fd062d3af441522586db74f975d097c9a45e87e14"
+		}
+	],
+	"gitDelivery": {
+		"committed": false,
+		"pushed": false
+	},
+	"taskStatus": "Done"
+}

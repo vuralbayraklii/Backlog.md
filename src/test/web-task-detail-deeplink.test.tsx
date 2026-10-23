@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { JSDOM } from "jsdom";
-import { StrictMode, act } from "react";
+import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import type { DuplicateRepairPlan } from "../core/duplicate-task-repair.ts";
 import type { SearchResult, Task } from "../types/index.ts";
@@ -8,6 +8,7 @@ import { buildDependencyGraph } from "../utils/dependency-graph.ts";
 import { isValidTaskId, resolveTaskById } from "../utils/task-id.ts";
 import App from "../web/App.tsx";
 import { HealthCheckProvider } from "../web/contexts/HealthCheckContext.tsx";
+import { ThemeProvider } from "../web/contexts/ThemeContext";
 import { setNativeInputValue } from "./react-dom-input.ts";
 
 const tasks: Task[] = [
@@ -186,7 +187,7 @@ class FetchOperation {
 					call.readerDepth -= 1;
 					if (call.readerDepth === 0) this.markSettled(call);
 				}
-			}) as typeof response[typeof readerName];
+			}) as (typeof response)[typeof readerName];
 		}
 		return response;
 	}
@@ -270,7 +271,7 @@ const controlTimer = (delay: number) => {
 			callbacks.set(timerId, () => (handler as (...values: unknown[]) => void)(...args));
 			return timerId as unknown as ReturnType<typeof setTimeout>;
 		}
-		return originalSetTimeout(handler, timeout, ...args as never[]);
+		return originalSetTimeout(handler, timeout, ...(args as never[]));
 	}) as typeof setTimeout;
 	globalThis.clearTimeout = ((timerId) => {
 		if (typeof timerId === "number" && callbacks.delete(timerId)) return;
@@ -371,48 +372,46 @@ class FakeResizeObserver {
 const json = (data: unknown, status = 200) => Response.json(data, { status });
 
 const resolveMockResponse = async (url: URL): Promise<Response> => {
-		if (url.pathname === "/api/status") {
-			return json({ initialized: true, projectPath: "/tmp/project" });
-		}
-		if (url.pathname === "/api/statuses") {
-			return json(["To Do", "In Progress", "Done"]);
-		}
-		if (url.pathname === "/api/config") {
-			return json(defaultConfig);
-		}
-		if (url.pathname === "/api/search") {
-			return json(
-				url.searchParams.has("query")
-					? searchResults.map((result) => ({ ...result, score: 0.1 }))
-					: searchResults,
-			);
-		}
-		if (url.pathname === "/api/milestones" || url.pathname === "/api/milestones/archived") {
-			return json([]);
-		}
-		if (url.pathname === "/api/tasks/duplicates") {
-			return json(emptyDuplicatePlan());
-		}
-		if (url.pathname === "/api/version") {
-			return json({ version: "test" });
-		}
-		if (url.pathname.startsWith("/api/task/")) {
-			const routeId = decodeURIComponent(url.pathname.slice("/api/task/".length));
-			if (routeId === "BACK-1") {
-				return json({ error: "Active branch task identity collision" }, 409);
-			}
-			const resolution = resolveTaskById(tasks, routeId);
-			if (resolution.status === "found") {
-				return json(resolution.task);
-			}
-			if (resolution.status === "invalid") {
-				return json({ error: `Invalid task ID: ${routeId}` }, 400);
-			}
-			return json({ error: `Task ${routeId} not found` }, resolution.status === "ambiguous" ? 409 : 404);
-		}
-
+	if (url.pathname === "/api/status") {
+		return json({ initialized: true, projectPath: "/tmp/project" });
+	}
+	if (url.pathname === "/api/statuses") {
+		return json(["To Do", "In Progress", "Done"]);
+	}
+	if (url.pathname === "/api/config") {
+		return json(defaultConfig);
+	}
+	if (url.pathname === "/api/search") {
+		return json(
+			url.searchParams.has("query") ? searchResults.map((result) => ({ ...result, score: 0.1 })) : searchResults,
+		);
+	}
+	if (url.pathname === "/api/milestones" || url.pathname === "/api/milestones/archived") {
 		return json([]);
-	};
+	}
+	if (url.pathname === "/api/tasks/duplicates") {
+		return json(emptyDuplicatePlan());
+	}
+	if (url.pathname === "/api/version") {
+		return json({ version: "test" });
+	}
+	if (url.pathname.startsWith("/api/task/")) {
+		const routeId = decodeURIComponent(url.pathname.slice("/api/task/".length));
+		if (routeId === "BACK-1") {
+			return json({ error: "Active branch task identity collision" }, 409);
+		}
+		const resolution = resolveTaskById(tasks, routeId);
+		if (resolution.status === "found") {
+			return json(resolution.task);
+		}
+		if (resolution.status === "invalid") {
+			return json({ error: `Invalid task ID: ${routeId}` }, 400);
+		}
+		return json({ error: `Task ${routeId} not found` }, resolution.status === "ambiguous" ? 409 : 404);
+	}
+
+	return json([]);
+};
 
 const installFetchMock = () => {
 	globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -503,7 +502,9 @@ const renderApp = async (
 		activeRoot?.render(
 			<StrictMode>
 				<HealthCheckProvider>
-					<App />
+					<ThemeProvider>
+						<App />
+					</ThemeProvider>
 				</HealthCheckProvider>
 			</StrictMode>,
 		);
@@ -876,9 +877,7 @@ describe("task detail routes", () => {
 			reconciliation.respond(
 				"newer search",
 				json([
-					...searchResults.filter(
-						(result) => result.type !== "task" || result.task.id !== externallyEditedTask.id,
-					),
+					...searchResults.filter((result) => result.type !== "task" || result.task.id !== externallyEditedTask.id),
 					{ type: "task", task: externallyEditedTask, score: 1 } satisfies SearchResult,
 				]),
 			);
@@ -941,12 +940,14 @@ describe("task detail routes", () => {
 		const container = await renderApp("/");
 		assertState(() => container.textContent?.includes(tasks[0]?.title ?? "") ?? false, "board task");
 		expect(window.location.pathname).toBe("/board");
-		const boardLink = Array.from(container.querySelectorAll("a")).find(
-			(element) => element.textContent?.includes("Kanban Board"),
+		const boardLink = Array.from(container.querySelectorAll("a")).find((element) =>
+			element.textContent?.includes("Kanban Board"),
 		);
 		expect(boardLink?.getAttribute("aria-current")).toBe("page");
 
-		const title = Array.from(container.querySelectorAll("h4")).find((element) => element.textContent === tasks[0]?.title);
+		const title = Array.from(container.querySelectorAll("h4")).find(
+			(element) => element.textContent === tasks[0]?.title,
+		);
 		const card = title?.closest("[draggable='true']");
 		expect(card).toBeTruthy();
 		await click(card as HTMLElement, [expectFetch("opened task", "/api/task/BACK-101")]);
@@ -1003,9 +1004,7 @@ describe("task detail routes", () => {
 			const link = container.querySelector('a[aria-label="Open BACK-202 - Graph follower"]');
 			expect(link).toBeTruthy();
 
-			const operation = new FetchOperation("graph link navigation", [
-				expectFetch("linked task", "/api/task/BACK-202"),
-			]);
+			const operation = new FetchOperation("graph link navigation", [expectFetch("linked task", "/api/task/BACK-202")]);
 			await act(async () => {
 				(link as HTMLElement).dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
 				await Promise.resolve();
@@ -1037,7 +1036,9 @@ describe("task detail routes", () => {
 		);
 		const filteredSearch = window.location.search;
 
-		const title = Array.from(container.querySelectorAll("h4")).find((element) => element.textContent === tasks[0]?.title);
+		const title = Array.from(container.querySelectorAll("h4")).find(
+			(element) => element.textContent === tasks[0]?.title,
+		);
 		const card = title?.closest("[draggable='true']");
 		expect(card).toBeTruthy();
 		await click(card as HTMLElement, [expectFetch("opened task", "/api/task/BACK-101")]);
@@ -1156,9 +1157,7 @@ describe("task detail routes", () => {
 		const filteredSearch = window.location.search;
 		const searchInput = container.querySelector("input[placeholder='Search (⌘K)...']") as HTMLInputElement | null;
 		expect(searchInput).toBeTruthy();
-		await setInputValue(searchInput as HTMLInputElement, "Fix labels", [
-			expectFetch("sidebar search", "/api/search"),
-		]);
+		await setInputValue(searchInput as HTMLInputElement, "Fix labels", [expectFetch("sidebar search", "/api/search")]);
 
 		assertState(
 			() =>
@@ -1420,8 +1419,8 @@ describe("task detail routes", () => {
 
 	it("archives a routed task with a single history close", async () => {
 		const container = await renderApp("/milestones");
-		const allTasksLink = Array.from(container.querySelectorAll("a")).find(
-			(element) => element.textContent?.includes("All Tasks"),
+		const allTasksLink = Array.from(container.querySelectorAll("a")).find((element) =>
+			element.textContent?.includes("All Tasks"),
 		);
 		expect(allTasksLink).toBeTruthy();
 		await click(allTasksLink as HTMLAnchorElement);
@@ -1437,13 +1436,12 @@ describe("task detail routes", () => {
 		await click(title as HTMLButtonElement, [expectFetch("opened task", "/api/task/BACK-101")]);
 		assertState(
 			() =>
-				window.location.pathname.startsWith("/tasks/BACK-101/") &&
-				Boolean(container.querySelector("[role='dialog']")),
+				window.location.pathname.startsWith("/tasks/BACK-101/") && Boolean(container.querySelector("[role='dialog']")),
 			"routed task modal",
 		);
 
-		const archiveButton = Array.from(container.querySelectorAll("button")).find(
-			(element) => element.textContent?.includes("Archive Task"),
+		const archiveButton = Array.from(container.querySelectorAll("button")).find((element) =>
+			element.textContent?.includes("Archive Task"),
 		);
 		expect(archiveButton).toBeTruthy();
 		await clickWithHistory(archiveButton as HTMLButtonElement, [

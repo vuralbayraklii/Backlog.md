@@ -9,6 +9,7 @@ import AdminUsers from "../web/components/AdminUsers";
 import ProjectRegistration from "../web/components/ProjectRegistration";
 import ProjectSelector from "../web/components/ProjectSelector";
 import { AuthProvider, useAuth } from "../web/contexts/AuthContext";
+import { ThemeProvider } from "../web/contexts/ThemeContext";
 import { UnsavedChangesProvider, useConfirmDiscardChanges } from "../web/contexts/UnsavedChangesContext";
 import { projectScope, readProjectScope, setProjectStorageAccount } from "../web/lib/project-scope";
 import { sessionFetch, setRequestSession } from "../web/lib/request";
@@ -76,6 +77,7 @@ function setup(handler: (path: string, options?: RequestInit) => Response | Prom
 		const path = String(input);
 		calls.push({ path, options });
 		if (path === "/api/auth/session") return Response.json(currentSession);
+		if (path === "/api/version") return Response.json({ version: "1.53.0" });
 		if (path === "/expire") return Response.json({ error: "Login required" }, { status: 401 });
 		return handler(path, options);
 	}) as typeof fetch;
@@ -90,10 +92,12 @@ async function render(children: ReactNode) {
 	await act(async () => {
 		root?.render(
 			<UnsavedChangesProvider>
-				<AuthProvider>
-					<Probe />
-					{children}
-				</AuthProvider>
+				<ThemeProvider>
+					<AuthProvider>
+						<Probe />
+						{children}
+					</AuthProvider>
+				</ThemeProvider>
 			</UnsavedChangesProvider>,
 		);
 	});

@@ -3,6 +3,7 @@ import { JSDOM } from "jsdom";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import ProjectSelector from "../web/components/ProjectSelector.tsx";
+import { ThemeProvider } from "../web/contexts/ThemeContext";
 import { projectStorageKey, readProjectScope } from "../web/lib/project-scope.ts";
 
 let root: Root | null = null;
@@ -23,7 +24,11 @@ async function renderSelector(projects: Array<{ id: string; name: string }>) {
 	}) as typeof fetch;
 	root = createRoot(document.getElementById("root")!);
 	await act(async () => {
-		root?.render(<ProjectSelector />);
+		root?.render(
+			<ThemeProvider>
+				<ProjectSelector />
+			</ThemeProvider>,
+		);
 		await Promise.resolve();
 	});
 	return document;
@@ -39,8 +44,13 @@ afterEach(async () => {
 
 describe("project selector", () => {
 	it("shows registered names and IDs as full-page project links", async () => {
-		const document = await renderSelector([{ id: "1", name: "Alpha" }, { id: "2", name: "Beta" }]);
-		expect([...document.querySelectorAll("a")].map((link) => [link.textContent?.trim(), link.getAttribute("href")])).toEqual([
+		const document = await renderSelector([
+			{ id: "1", name: "Alpha" },
+			{ id: "2", name: "Beta" },
+		]);
+		expect(
+			[...document.querySelectorAll("a")].map((link) => [link.textContent?.trim(), link.getAttribute("href")]),
+		).toEqual([
 			["Alpha1", "/projects/1/board"],
 			["Beta2", "/projects/2/board"],
 		]);
@@ -56,7 +66,9 @@ describe("project selector", () => {
 describe("immutable project path scope", () => {
 	it("derives API and route bases from the URL rather than a task project field", () => {
 		expect(readProjectScope("/projects/12/tasks/TASK-1")).toEqual({
-			id: "12", routeBase: "/projects/12", apiBase: "/api/projects/12",
+			id: "12",
+			routeBase: "/projects/12",
+			apiBase: "/api/projects/12",
 		});
 		expect(readProjectScope("/projects").id).toBeNull();
 		expect(readProjectScope("/projects/0/board").id).toBeNull();
