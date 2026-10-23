@@ -425,8 +425,14 @@
 		}
 	],
 	"gitDelivery": {
-		"committed": false,
-		"pushed": false
+		"committed": true,
+		"pushed": true,
+		"branch": "tasks/server-ui-consistency",
+		"remote": "origin",
+		"implementationCommit": "289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6",
+		"deliveryRecords": "Recorded in a separate follow-up commit on the same branch.",
+		"sourceUnchangedFromVerification": true,
+		"recordedAt": "2026-10-23T06:00:14.054963+00:00"
 	},
 	"taskStatus": "Done"
 }

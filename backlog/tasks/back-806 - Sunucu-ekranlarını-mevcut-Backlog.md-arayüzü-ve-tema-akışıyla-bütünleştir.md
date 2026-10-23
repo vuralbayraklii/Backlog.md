@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-22 11:32'
-updated_date: '2026-10-22 12:09'
+updated_date: '2026-10-23 06:00'
 labels:
   - server
   - frontend
@@ -65,6 +65,8 @@ Kullanıcı görselleriyle doğrulanan eksiklik, global Projects/hesap/yönetim 
 Ayrı derlenmiş sunucuda gerçek Chromium23kontrol/0runtimeerror: sistem/kayıtlı açık-koyu tema, reload, login/zorunlu parola, boş/dolu Projects, kirli kayıt formu iptali, kayıt sonrası mevcut pano/Milestones/belge/karar, Users/parola ve390px ekran. Boş Projects dark/light, mevcut Milestones dark ve Users mobile light PNG'leri gözle incelendi. Kaynak özeti747d58c4d5f5274b441f48341671aa454f5bf7cac131fd76f2ec07ad121bf0d7 son kontroller sonrasında aynı.
 
 Kalıcı rapor verification/server/back-806-ui.json; üç karşılaştırılabilir PNG aynı klasörde. Ham kanıt /tmp/backlog-server-ui altında, kalıcı yedek değildir. Kullanıcı sunucusu veya veritabanı yeniden başlatılmadı/değiştirilmedi; gerçek Finbee bağlanmadı. Doğrulanmış binary atomik olarak dist/backlog'a alındı; aynı data-dir ile kullanıcı yeniden başlattığında yeni görünüm açılır. Doc-5 CLI üzerinden güncellendi. Sadelik incelemesi ortak küçük çerçeve/başlık/tema ve eski form/rota işleyicilerini kullandı; ayrı backend/ikinci görev arayüzü eklenmedi. Groma yoktu; yönettiği dosyalar ve manifesto değişmedi. Düzeltme tasks/server-ui-consistency dalında yerel, commit/push yapılmadı.
+
+Git teslimi — 23 Ekim 2026: Kullanıcı commit ve push yapılmasını onayladı. Uygulama/kabul commit’i 289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6, origin/tasks/server-ui-consistency dalına normal push ile gönderildi. Ön commit kancası geçti. 634 kaynak dosyası, binary ve üç PNG kabul kaydıyla aynı; kaynak değişmediği için önceki 446 web testi ve 23 Chromium kontrolü geçerlidir. Doc-5 ve kabul raporunun Git teslim alanı güncellendi; bu kayıtlar ayrı takip commit’iyle taşınır. Önceki yerel/commit edilmedi ifadeleri uygulama kapanışındaki tarihsel durumu anlatır. Kullanıcı aynı veri klasörüyle yeniden başlatıp güncel arayüzün açıldığını doğruladı. A-05 başlatılmadı.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
@@ -72,5 +74,7 @@ Kalıcı rapor verification/server/back-806-ui.json; üç karşılaştırılabil
 <!-- SECTION:FINAL_SUMMARY:BEGIN -->
 Global Projects, giriş/parola ve Users ekranları mevcut Backlog.md çerçevesi, başlığı, renkleri ve tema düğmesiyle bütünleştirildi. Tek tema sağlayıcısı uygulama girişinde çalışıyor; kayıtlı/sistem teması oturum ve proje geçişlerinde korunuyor. Mevcut pano, Milestones, belge/karar ve yetki/dirty guard akışları aynı bileşenler ve rotalarla sürüyor.
 
-446 web testi, tip, varsayılan Biome, build ve derlenmiş smoke geçti. Gerçek Chromium23kontrol ve0runtimeerror; değişen TSX'te yeni tanı0, kalıtımlı borç ayrı kaydedildi. Kabul/screenshot: verification/server/back-806-ui.json. Yeni binary dist/backlog'da hazır; açık kişisel sunucu aynı data-dir ile yeniden başlatılmalıdır. Gerçek proje/Finbee veya kişisel sunucu verisi değiştirilmedi. Doc-5 güncellendi; değişiklikler yerel, commit/push yapılmadı.
+446 web testi, tip, varsayılan Biome, build ve derlenmiş smoke geçti. Gerçek Chromium üzerinde 23 kontrol ve 0 runtime hatası; değişen TSX’te yeni tanı 0, kalıtımlı borç ayrı kaydedildi. Kabul ve ekran görüntüleri verification/server/back-806-ui.json içinde. Kaynak dosyaları Git tesliminde kabul sürümüyle aynı kaldı.
+
+Uygulama/kabul commit’i 289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6, origin/tasks/server-ui-consistency dalına gönderildi. Git teslim kayıtları ayrı takip commit’indedir. Yeni binary dist/backlog’da; kullanıcı aynı data-dir ile yeniden başlatıp arayüzün açıldığını doğruladı. Gerçek proje/Finbee veya kişisel sunucu verisi ajan tarafından değiştirilmedi. Doc-5 güncellendi; A-05 başlatılmadı.
 <!-- SECTION:FINAL_SUMMARY:END -->

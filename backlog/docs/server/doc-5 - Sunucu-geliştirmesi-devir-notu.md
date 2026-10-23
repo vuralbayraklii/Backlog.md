@@ -3,13 +3,17 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-22 12:08'
+updated_date: '2026-10-23 06:00'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje sunucusuna yeni sohbetten devam etmek içindir. A-00–A-04 ve BACK-799–805 tamamlandı; A-04 uygulama/kabul commit’i 09e336fb, Git kapanışı fc07f2ce ile origin/tasks/server-a04-write-history dalındadır. Kullanıcının görsel geri bildirimi üzerine BACK-806 mevcut frontend/tema bütünlüğü düzeltmesi tamamlandı. Güncel dal tasks/server-ui-consistency; taban fc07f2ced74c9aeec5615f469f5fb21b24d32648. Yeni arayüz düzeltmesi yereldir; commit/push yapılmadı. Önce Git durumunu doğrula ve yerel çalışmayı koru.
+Bu not Backlog.md çoklu proje sunucusuna yeni sohbetten devam etmek içindir. A-00–A-04 ve BACK-799–805 tamamlandı; A-04 uygulama/kabul commit’i 09e336fb, Git kapanışı fc07f2ce ile origin/tasks/server-a04-write-history dalındadır. Kullanıcının görsel geri bildirimi üzerine BACK-806 mevcut frontend/tema bütünlüğü düzeltmesi tamamlandı. Güncel dal tasks/server-ui-consistency; taban fc07f2ced74c9aeec5615f469f5fb21b24d32648. BACK-806 uygulama/kabul commit’i 289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6, origin/tasks/server-ui-consistency dalına gönderildi. Git teslim kaydı bu commit’i takip eder. Önce Git durumunu doğrula ve yerel çalışmayı koru.
+
+## BACK-806 Git teslimi — 23 Ekim 2026
+
+Kullanıcı commit ve push yapılmasını onayladı. Uygulama/kabul commit’i 289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6, origin/tasks/server-ui-consistency dalına normal push ile gönderildi. Ön commit kancası geçti; 634 kaynak dosyası test edilen sürümle aynı kaldı. Kaynak özeti 747d58c4d5f5274b441f48341671aa454f5bf7cac131fd76f2ec07ad121bf0d7; binary ve üç ekran görüntüsünün SHA-256 özetleri de kabul raporuyla eşleşti. Önceki 446 web testi ve 23 gerçek Chromium kontrolünün kanıtları geçerlidir; kaynak değişmediği için testler tekrarlanmadı. Bu teslim kaydı ayrı bir takip commit’idir. A-05 başlatılmadı.
 
 ## BACK-806 — mevcut frontend ile sunucu ekranlarının bütünlüğü
 
@@ -22,7 +26,7 @@ Kullanıcı ilk Projects ekranını Finbee önizlemesindeki mevcut Backlog.md ar
 
 Kalıcı kabul kaydı verification/server/back-806-ui.json; karşılaştırılabilir PNG'ler verification/server/back-806-projects-dark.png, back-806-projects-light.png ve back-806-project-milestones-dark.png. Ham kanıt /tmp/backlog-server-ui/ altındadır; kalıcı yedek değildir. Sadelik incelemesi ortak çerçeve/başlık/tema ve mevcut form işleyicilerini korudu; yeni backend, rota veya ikinci domain modeli eklenmedi. Groma yoktu; yönetilen dosya/manifesto değişmedi.
 
-Doğrulanmış binary dist/backlog konumuna atomik olarak alındı; açık kullanıcı sunucusu yeniden başlatılmadı ve kişisel veri klasörüne dokunulmadı. Görünmesi için kullanıcı açık terminalde Ctrl+C ile durdurup aynı data-dir ve start komutuyla yeniden açmalıdır. Kullanıcı ve projeler aynı veri klasöründen korunur. Bu BACK-806 düzeltmesi henüz commit/push edilmedi.
+Doğrulanmış binary dist/backlog konumuna atomik olarak alındı; açık kullanıcı sunucusu yeniden başlatılmadı ve kişisel veri klasörüne dokunulmadı. Görünmesi için kullanıcı açık terminalde Ctrl+C ile durdurup aynı data-dir ve start komutuyla yeniden açmalıdır. Kullanıcı ve projeler aynı veri klasöründen korunur. Kullanıcı aynı veri klasörüyle uygulamayı yeniden başlatıp arayüzün açıldığını doğruladı. BACK-806 uygulama/kabul commit’i 289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6, origin/tasks/server-ui-consistency dalına gönderildi.
 
 ## A-04 Git teslimi — 22 Ekim 2026
 
@@ -270,7 +274,7 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00–A-04 ve BACK-806 arayüz düzeltmesi tamamlandı. BACK-806 tasks/server-ui-consistency dalında yerel; kabul kaydı verification/server/back-806-ui.json. A-04 uygulaması ve kabulü 09e336fb28f28dcef9a94ac162666cfc5662a20b commit’iyle origin/tasks/server-a04-write-history dalındadır; kapanış kayıtları aynı dalda takip commit’iyle taşınır. Yeni aşama veya gerçek proje bağlama bu çalışmada başlatılmadı. A-05 agent kimliği/dış değişiklik olayları, A-06 kullanıcı geçmişi ve doğrulama/kabul iş akışları doc-4'teki ayrı aşamalardır.
+A-00–A-04 ve BACK-806 arayüz düzeltmesi tamamlandı. BACK-806 289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6 commit’iyle origin/tasks/server-ui-consistency dalına gönderildi; kabul kaydı verification/server/back-806-ui.json. A-04 uygulaması ve kabulü 09e336fb28f28dcef9a94ac162666cfc5662a20b commit’iyle origin/tasks/server-a04-write-history dalındadır; kapanış kayıtları aynı dalda takip commit’iyle taşınır. Yeni aşama veya gerçek proje bağlama bu çalışmada başlatılmadı. A-05 agent kimliği/dış değişiklik olayları, A-06 kullanıcı geçmişi ve doğrulama/kabul iş akışları doc-4'teki ayrı aşamalardır.
 
 Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-6, a00-baseline.json ve a04-verification.json okumalı; BACK-799–805'i CLI ile doğrulamalı. Git durumunu ve yerel dosyaları korumadan dal değiştirmemeli. Sonraki kapsamı mevcut kullanıcı vuralbayraklii belirler; önceki öneriler kendiliğinden onaylanmış sayılmaz.
 
@@ -285,8 +289,8 @@ Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-6, a00-basel
 
 ```text
 Backlog.md sunucusunda A-00–A-04 tamamlandı ve origin/tasks/server-a04-write-history dalına gönderildi (uygulama09e336fb, kapanışfc07f2ce).
-Kullanıcının görsel geri bildirimi üzerine BACK-806 frontend/tema bütünlüğü düzeltmesi tasks/server-ui-consistency dalında tamamlandı; bu son düzeltme yerel, commit/push yapılmadı.
+Kullanıcının görsel geri bildirimi üzerine BACK-806 frontend/tema bütünlüğü düzeltmesi 289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6 commit’iyle origin/tasks/server-ui-consistency dalına gönderildi; teslim kaydı takip commit’indedir.
 Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5 ve verification/server/back-806-ui.json oku; BACK-806'yı CLI ile doğrula. Git durumunu ve yerel değişiklikleri koru.
-Yeni derleme dist/backlog'a alındı; kullanıcının açık sunucusu yeniden başlatılmadı. Aynı kişisel data-dir ile yeniden başlatılınca yeni arayüz görünür; gerçek Finbee bağlanmadı.
+Yeni derleme dist/backlog'a alındı. Kullanıcı aynı kişisel data-dir ile yeniden başlattı ve güncel arayüzün açıldığını doğruladı; gerçek Finbee bu çalışma sırasında bağlanmadı.
 A-05 agent/dış dosya olayları ve A-06 kullanıcı geçmişi/kabul kapsamları ayrı aşamalardır; mevcut kullanıcı vuralbayraklii ile kapsam ve açık ürün kararları netleştirilmeden yeni aşama başlatma.
 ```
