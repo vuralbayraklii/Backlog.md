@@ -303,6 +303,11 @@ describe("real process interruption of a central two-file archive", () => {
 						});
 						expect(replay.status).toBe(200);
 						expect(operationEvidence(operationId).events).toBe(1);
+						expect(
+							store
+								.listHistory({ scope: { kind: "project", projectId: "1" } })
+								.items.filter((event) => event.source === "external"),
+						).toHaveLength(0);
 					}
 				} finally {
 					original.child.kill("SIGKILL");

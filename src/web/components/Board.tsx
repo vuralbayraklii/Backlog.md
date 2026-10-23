@@ -86,8 +86,8 @@ const Board: React.FC<BoardProps> = ({
   hideEmptyColumns = false,
   dateFormat,
 }) => {
-  const { permissions, writeState } = useAuth();
-  const canWrite = permissions.tasksWrite && writeState === 'ready';
+  const { permissions, writesAvailable } = useAuth();
+  const canWrite = permissions.tasksWrite && writesAvailable;
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [updateConflict, setUpdateConflict] = useState<unknown>(null);
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
@@ -711,7 +711,7 @@ const Board: React.FC<BoardProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 transition-colors duration-200">Kanban Board</h2>
           <button
-            className="inline-flex items-center px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-blue-500 dark:focus:ring-offset-gray-800 transition-colors duration-200"
+            className="inline-flex items-center px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-blue-500 dark:focus:ring-offset-gray-800 transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50"
             disabled={!canWrite}
             onClick={onNewTask}
           >
@@ -945,7 +945,7 @@ const Board: React.FC<BoardProps> = ({
                             dateFormat={dateFormat}
                             onDragStart={handleColumnDragStart}
                             onDragEnd={handleColumnDragEnd}
-                            onCleanup={permissions.archive && writeState === 'ready' && status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
+                            onCleanup={permissions.archive && writesAvailable && status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
                             {...selectionProps}
                           />
                         </div>
@@ -977,7 +977,7 @@ const Board: React.FC<BoardProps> = ({
                   dateFormat={dateFormat}
                   onDragStart={handleColumnDragStart}
                   onDragEnd={handleColumnDragEnd}
-                  onCleanup={permissions.archive && writeState === 'ready' && status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
+                  onCleanup={permissions.archive && writesAvailable && status === terminalStatus ? () => setShowCleanupModal(true) : undefined}
                   {...selectionProps}
                 />
               </div>

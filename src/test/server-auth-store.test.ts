@@ -58,7 +58,7 @@ describe("central account store", () => {
 			{ id: "7", name: "Keep", rootPath: "/tmp/keep", createdAt: "2026-10-21", tracking: true },
 		]);
 		const migrated = new Database(store.databasePath, { readonly: true });
-		expect(migrated.query("PRAGMA user_version").get()).toEqual({ user_version: 4 });
+		expect(migrated.query("PRAGMA user_version").get()).toEqual({ user_version: 5 });
 		migrated.close();
 	});
 

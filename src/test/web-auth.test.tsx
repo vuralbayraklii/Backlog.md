@@ -8,6 +8,7 @@ import type { Document as BacklogDocument, Decision } from "../types";
 import AccountNavigation from "../web/components/AccountNavigation";
 import DecisionDetail from "../web/components/DecisionDetail";
 import DocumentationDetail from "../web/components/DocumentationDetail";
+import { ObservationStatus, type ProjectObservation } from "../web/components/ObservationStatus";
 import { AuthProvider, useAuth } from "../web/contexts/AuthContext";
 import { ThemeProvider } from "../web/contexts/ThemeContext";
 import {
@@ -250,6 +251,79 @@ describe("central browser session", () => {
 		expect(auth().writeState).toBe("recovery_required");
 		expect(document.body.textContent).toContain("Project writes are paused for recovery.");
 		expect(document.body.textContent).toContain("Operation op-pending");
+	});
+
+	it("pauses and resumes writes on file checks without losing a dirty document draft", async () => {
+		setup();
+		const record: BacklogDocument = {
+			id: "doc-1",
+			recordKey: "document-key-1",
+			revision: "rev-1",
+			title: "Runbook",
+			type: "other",
+			createdDate: "2026-01-01",
+			rawContent: "Original document",
+			path: "doc-1 - Runbook.md",
+		};
+		let observation: ProjectObservation = {
+			state: "ready",
+			lastSuccessfulScanAt: "2026-01-01T00:00:00.000Z",
+			checkedAt: "2026-01-01T00:00:00.000Z",
+			error: null,
+		};
+		globalThis.fetch = (async (input) => {
+			const path = String(input);
+			if (path === "/api/auth/session") return Response.json(userSession());
+			if (path === "/api/projects/1")
+				return Response.json({ permissions: ADMIN_PERMISSIONS, writeState: "ready", observation });
+			if (path === "/api/projects/1/docs/doc-1") return Response.json(record);
+			throw new Error(path);
+		}) as typeof fetch;
+		function FileCheck() {
+			const state = useAuth();
+			return <ObservationStatus observation={state.observation} />;
+		}
+		await renderAuth(
+			<>
+				<AuthProbe />
+				<FileCheck />
+				<MemoryRouter initialEntries={["/documentation/1"]}>
+					<Routes>
+						<Route
+							path="/documentation/:id"
+							element={<DocumentationDetail docs={[record]} onRefreshData={async () => {}} />}
+						/>
+					</Routes>
+				</MemoryRouter>
+			</>,
+		);
+		expect(auth().writesAvailable).toBe(true);
+		await act(async () => visibleButton("Edit").click());
+		await flush();
+		await act(async () =>
+			setNativeInputValue(document.querySelector("textarea") as HTMLTextAreaElement, "Unsaved file-check draft"),
+		);
+		observation = {
+			...observation,
+			state: "degraded",
+			checkedAt: "2026-01-02T00:00:00.000Z",
+			error: "Document is unreadable.",
+		};
+		await act(async () => auth().refresh());
+		expect(auth().permissions.docsWrite).toBe(true);
+		expect(auth().writeState).toBe("ready");
+		expect(auth().writesAvailable).toBe(false);
+		expect(document.body.textContent).toContain("Project file check needs attention");
+		expect(document.body.textContent).toContain("Writes are paused.");
+		expect(document.body.textContent).toContain("Last successful scan:");
+		expect(document.body.textContent).toContain("Document is unreadable.");
+		expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Unsaved file-check draft");
+		expect((visibleButton("Save") as HTMLButtonElement).disabled).toBe(true);
+		observation = { ...observation, state: "ready", lastSuccessfulScanAt: "2026-01-03T00:00:00.000Z", error: null };
+		await act(async () => auth().refresh());
+		expect(auth().writesAvailable).toBe(true);
+		expect(document.querySelector<HTMLTextAreaElement>("textarea")?.value).toBe("Unsaved file-check draft");
+		expect((visibleButton("Save") as HTMLButtonElement).disabled).toBe(false);
 	});
 
 	it("updates the read-only notice when a write returns recovery required", async () => {

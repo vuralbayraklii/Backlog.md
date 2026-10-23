@@ -15,6 +15,7 @@ import type {
 	RecordKind,
 	SafeHttpResult,
 } from "./mutation-types.ts";
+import { checkpointManagedInTransaction } from "./observation-store.ts";
 
 export interface StoredRecord {
 	recordKey: string;
@@ -64,7 +65,7 @@ interface OperationRow {
 	operation_id: string;
 	scope_kind: MutationScope["kind"];
 	project_id: number | null;
-	actor_kind: MutationActor["kind"];
+	actor_kind: "user" | "unknown";
 	actor_id: string | null;
 	source: MutationSource;
 	request_hash: string;
@@ -162,7 +163,11 @@ function sameScope(left: MutationScope, right: MutationScope): boolean {
 }
 
 function sameActor(left: MutationActor, right: MutationActor): boolean {
-	return left.kind === right.kind && (left.kind !== "user" || left.userId === (right as typeof left).userId);
+	if (left.kind !== right.kind) return false;
+	if (left.kind === "user" && right.kind === "user") return left.userId === right.userId;
+	if (left.kind === "agent" && right.kind === "agent")
+		return left.agentKeyId === right.agentKeyId && left.userId === right.userId;
+	return true;
 }
 
 function entryHash(entry: FileEntry): string | null {
@@ -195,7 +200,21 @@ function rowScope(row: OperationRow): MutationScope {
 		: { kind: row.scope_kind };
 }
 
-function rowActor(row: OperationRow): MutationActor {
+function rowActor(database: Database, row: OperationRow): MutationActor {
+	if (row.source === "agent") {
+		const version = database.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version ?? 0;
+		if (version >= 5) {
+			const agent = database
+				.query<{ agent_key_id: string; user_id: string }, [string]>(
+					"SELECT agent_key_id,user_id FROM operation_agents WHERE operation_id=?",
+				)
+				.get(row.operation_id);
+			if (agent) {
+				if (agent.user_id !== row.actor_id) throw new Error("Stored agent operation identity is inconsistent.");
+				return { kind: "agent", agentKeyId: agent.agent_key_id, userId: agent.user_id };
+			}
+		}
+	}
 	return row.actor_kind === "user" ? { kind: "user", userId: row.actor_id ?? "" } : { kind: "unknown" };
 }
 
@@ -230,13 +249,14 @@ function loadFiles(database: Database, operationId: string): PreparedFileChange[
 		}));
 }
 
-function operationView(row: OperationRow): OperationView {
+function operationView(database: Database, row: OperationRow): OperationView {
 	return {
 		operationId: row.operation_id,
+		requestHash: row.request_hash,
 		scope: rowScope(row),
 		state: row.state,
 		source: row.source,
-		actor: rowActor(row),
+		actor: rowActor(database, row),
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 		...(row.result_json ? { result: JSON.parse(row.result_json) as SafeHttpResult } : {}),
@@ -247,7 +267,7 @@ function operationView(row: OperationRow): OperationView {
 
 function storedOperation(database: Database, row: OperationRow): StoredOperation {
 	return {
-		...operationView(row),
+		...operationView(database, row),
 		requestHash: row.request_hash,
 		action: row.action,
 		files: loadFiles(database, row.operation_id),
@@ -266,8 +286,17 @@ function assertIntent(intent: MutationIntent): { result: string; event: string |
 	}
 	if (!intent.action.trim()) throw new MutationStoreError("Operation action is required.", "INVALID_OPERATION", 400);
 	scopeProjectId(intent.scope);
-	if (intent.actor.kind === "user" && !intent.actor.userId) {
+	if (
+		(intent.actor.kind === "user" && !intent.actor.userId) ||
+		(intent.actor.kind === "agent" && (!intent.actor.userId || !intent.actor.agentKeyId))
+	) {
 		throw new MutationStoreError("Verified actor ID is required.", "INVALID_OPERATION", 400);
+	}
+	if ((intent.source === "agent") !== (intent.actor.kind === "agent")) {
+		throw new MutationStoreError("Agent source requires an agent actor.", "INVALID_OPERATION", 400);
+	}
+	if (intent.source === "external" && intent.actor.kind !== "unknown") {
+		throw new MutationStoreError("External source requires an unknown actor.", "INVALID_OPERATION", 400);
 	}
 	const paths = new Set<string>();
 	for (const file of intent.files) {
@@ -299,7 +328,12 @@ function assertIntent(intent: MutationIntent): { result: string; event: string |
 		) {
 			throw new MutationStoreError("Planned history event does not match the operation.", "INVALID_OPERATION", 400);
 		}
-		if (!utcTimestamp(event.occurredAt) || (event.detectedAt !== undefined && !utcTimestamp(event.detectedAt))) {
+		if (
+			(event.source === "external"
+				? event.occurredAt !== null || !event.detectedAt || !utcTimestamp(event.detectedAt)
+				: event.occurredAt === null || !utcTimestamp(event.occurredAt)) ||
+			(event.detectedAt !== undefined && !utcTimestamp(event.detectedAt))
+		) {
 			throw new MutationStoreError("History times must be UTC timestamps.", "INVALID_OPERATION", 400);
 		}
 	}
@@ -315,6 +349,16 @@ function insertIntent(
 	intent: MutationIntent,
 	json: { result: string; event: string | null; records: string },
 ): void {
+	if (
+		intent.actor.kind === "agent" &&
+		!database
+			.query(
+				"SELECT 1 FROM agent_keys k JOIN users u ON u.id=k.user_id WHERE k.id=? AND k.user_id=? AND k.revoked_at IS NULL AND u.active=1 AND u.must_change_password=0",
+			)
+			.get(intent.actor.agentKeyId, intent.actor.userId)
+	) {
+		throw new MutationStoreError("Agent key is no longer active.", "INVALID_OPERATION", 403);
+	}
 	const now = new Date().toISOString();
 	database
 		.query(
@@ -324,8 +368,8 @@ function insertIntent(
 			intent.operationId,
 			intent.scope.kind,
 			scopeProjectId(intent.scope),
-			intent.actor.kind,
-			intent.actor.kind === "user" ? intent.actor.userId : null,
+			intent.actor.kind === "agent" ? "user" : intent.actor.kind,
+			intent.actor.kind === "unknown" ? null : intent.actor.userId,
 			intent.source,
 			intent.requestHash,
 			"pending",
@@ -339,6 +383,11 @@ function insertIntent(
 			null,
 			null,
 		);
+	if (intent.actor.kind === "agent") {
+		database
+			.query("INSERT INTO operation_agents(operation_id,agent_key_id,user_id) VALUES(?,?,?)")
+			.run(intent.operationId, intent.actor.agentKeyId, intent.actor.userId);
+	}
 	const insertFile = database.query(
 		"INSERT INTO operation_files(operation_id,ordinal,path,record_key,record_json,no_replace,before_kind,before_bytes,before_target,before_hash,after_kind,after_bytes,after_target,after_hash) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
 	);
@@ -376,7 +425,7 @@ function assertRecord(record: StoredRecord): void {
 	}
 }
 
-function upsertRecordInTransaction(database: Database, record: StoredRecord): void {
+export function upsertRecordInTransaction(database: Database, record: StoredRecord): void {
 	assertRecord(record);
 	const prior = database
 		.query<RecordRow, [string]>(`SELECT ${RECORD_COLUMNS} FROM records WHERE record_key=?`)
@@ -411,9 +460,20 @@ function finishInTransaction(database: Database, row: OperationRow): void {
 		const event = JSON.parse(row.planned_event_json) as HistoryEvent;
 		database
 			.query(
-				"INSERT INTO history_events(event_id,operation_id,scope_kind,project_id,occurred_at,event_json) VALUES(?,?,?,?,?,?)",
+				"INSERT INTO history_events(event_id,operation_id,scope_kind,project_id,occurred_at,detected_at,event_json) VALUES(?,?,?,?,?,?,?)",
 			)
-			.run(event.eventId, row.operation_id, row.scope_kind, row.project_id, event.occurredAt, row.planned_event_json);
+			.run(
+				event.eventId,
+				row.operation_id,
+				row.scope_kind,
+				row.project_id,
+				event.occurredAt,
+				event.detectedAt ?? null,
+				row.planned_event_json,
+			);
+	}
+	if (row.scope_kind === "project" && row.project_id !== null && row.source !== "external") {
+		checkpointManagedInTransaction(database, String(row.project_id), loadFiles(database, row.operation_id));
 	}
 	database
 		.query("UPDATE operations SET state='completed',updated_at=?,result_json=?,error_json=NULL WHERE operation_id=?")
@@ -437,7 +497,7 @@ export class MutationStore {
 			if (prior) {
 				if (
 					!sameScope(rowScope(prior), intent.scope) ||
-					!sameActor(rowActor(prior), intent.actor) ||
+					!sameActor(rowActor(database, prior), intent.actor) ||
 					prior.request_hash !== intent.requestHash
 				) {
 					throw new MutationStoreError("Operation key is already in use.", "IDEMPOTENCY_KEY_REUSED");
@@ -504,7 +564,7 @@ export class MutationStore {
 				const previous = original.resolved_by === recovery.operationId ? loadRow(database, recovery.operationId) : null;
 				if (
 					previous?.state === "completed" &&
-					sameActor(rowActor(previous), recovery.actor) &&
+					sameActor(rowActor(database, previous), recovery.actor) &&
 					previous.request_hash === recovery.requestHash
 				) {
 					return storedOperation(database, previous);
@@ -566,8 +626,8 @@ export class MutationStore {
 			if (version < 4) return null;
 			const row = loadRow(database, operationId);
 			if (!row || (viewer.scope && !sameScope(rowScope(row), viewer.scope))) return null;
-			if (!viewer.admin && !sameActor(rowActor(row), viewer.actor)) return null;
-			return operationView(row);
+			if (!viewer.admin && !sameActor(rowActor(database, row), viewer.actor)) return null;
+			return operationView(database, row);
 		});
 	}
 
@@ -582,12 +642,12 @@ export class MutationStore {
 			if (!row) return null;
 			if (
 				!sameScope(rowScope(row), request.scope) ||
-				!sameActor(rowActor(row), request.actor) ||
+				!sameActor(rowActor(database, row), request.actor) ||
 				row.request_hash !== request.requestHash
 			) {
 				throw new MutationStoreError("Operation key is already in use.", "IDEMPOTENCY_KEY_REUSED");
 			}
-			return operationView(row);
+			return operationView(database, row);
 		});
 	}
 
@@ -729,6 +789,18 @@ export class MutationStore {
 		);
 	}
 
+	listRecords(projectId: string): StoredRecord[] {
+		scopeProjectId({ kind: "project", projectId });
+		return this.database.read([], (database, version) =>
+			version < 4
+				? []
+				: database
+						.query<RecordRow, [string]>(`SELECT ${RECORD_COLUMNS} FROM records WHERE project_id=? ORDER BY record_key`)
+						.all(projectId)
+						.map(rowRecord),
+		);
+	}
+
 	upsertRecord(record: StoredRecord): void {
 		this.database.write((database) => upsertRecordInTransaction(database, record));
 	}
@@ -745,6 +817,26 @@ export class MutationStore {
 		insertIntent(database, intent, json);
 		const row = loadRow(database, intent.operationId);
 		if (!row) throw new Error("Audit operation could not be read.");
+		finishInTransaction(database, row);
+	}
+
+	/** One external event and its record updates, within the observer's snapshot transaction. */
+	appendObservationInTransaction(database: Database, intent: MutationIntent): void {
+		if (
+			intent.source !== "external" ||
+			intent.actor.kind !== "unknown" ||
+			intent.scope.kind !== "project" ||
+			intent.files.length ||
+			!intent.plannedEvent
+		) {
+			throw new MutationStoreError("Invalid external observation operation.", "INVALID_OPERATION", 400);
+		}
+		const json = assertIntent(intent);
+		if (loadRow(database, intent.operationId))
+			throw new MutationStoreError("Operation key is already in use.", "IDEMPOTENCY_KEY_REUSED");
+		insertIntent(database, intent, json);
+		const row = loadRow(database, intent.operationId);
+		if (!row) throw new Error("Observation operation could not be read.");
 		finishInTransaction(database, row);
 	}
 }

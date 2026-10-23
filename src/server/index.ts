@@ -17,8 +17,9 @@ import { initializeProject } from "../core/init.ts";
 import type { SearchService } from "../core/search-service.ts";
 import { getTaskStatistics } from "../core/statistics.ts";
 import { loadTaskDetail } from "../core/task-detail.ts";
-import { isCreateLockError, isTaskLockError } from "../file-system/operations.ts";
+import { FileSystem, isCreateLockError, isTaskLockError } from "../file-system/operations.ts";
 import {
+	attachRecordFileSnapshot,
 	type FileEntry,
 	type PreparedAfterFile,
 	type PreparedFileChange,
@@ -27,11 +28,12 @@ import {
 	snapshotFileEntry,
 } from "../file-system/prepared-change.ts";
 import { parseFrontmatter } from "../markdown/frontmatter.ts";
-import { parseMilestone, parseTask } from "../markdown/parser.ts";
+import { parseDecision, parseDocument, parseMilestone, parseTask } from "../markdown/parser.ts";
 import { BacklogToolError } from "../mcp/errors/mcp-errors.ts";
 import { MilestoneHandlers } from "../mcp/tools/milestones/handlers.ts";
 import {
 	type ContentRecordKind,
+	type Decision,
 	DOCUMENT_TYPE_VALUES,
 	type Document,
 	type SearchPriorityFilter,
@@ -39,6 +41,7 @@ import {
 	type Task,
 	type TaskUpdateInput,
 } from "../types/index.ts";
+import type { TaskEditArgs } from "../types/task-edit-args.ts";
 import { launchBrowser } from "../utils/browser-launch.ts";
 import type { BrowserLoadingState } from "../utils/browser-loading-state.ts";
 import { normalizeDueDate } from "../utils/due-date.ts";
@@ -53,12 +56,21 @@ import {
 	resolveProjectValues,
 } from "../utils/project-config.ts";
 import { formatValidStatuses, getCanonicalStatuses, getValidStatuses } from "../utils/status.ts";
+import { buildTaskUpdateInput } from "../utils/task-edit-builder.ts";
 import { isValidTaskId } from "../utils/task-id.ts";
-import { isAmbiguousTaskIdError, LOCAL_TASK_LOOKUP_HINT, taskNotFoundMessage } from "../utils/task-path.ts";
+import {
+	isAmbiguousTaskIdError,
+	LOCAL_TASK_LOOKUP_HINT,
+	normalizeTaskIdentity,
+	taskNotFoundMessage,
+} from "../utils/task-path.ts";
+import { formatValidTaskTypeValues, resolveTaskTypeValues } from "../utils/task-type-config.ts";
 import { getVersion } from "../utils/version.ts";
 import { AuthStoreError } from "./auth-store.ts";
 import type { ProjectAuthorization, ProjectPermission } from "./auth-types.ts";
 import { MutationAbortResponse, MutationError, recordRevision, taskCollectionRevision } from "./mutations.ts";
+import { type ObservedInventory, scanObservedProjectFiles } from "./observation.ts";
+import type { ObservationState, ObservedPathSnapshot } from "./observation-types.ts";
 import { assertProjectBoundary, readProjectFile } from "./project-paths.ts";
 
 // Regex pattern to match any prefix (letters followed by dash)
@@ -161,6 +173,10 @@ function parseDocumentType(value: unknown): Document["type"] | undefined {
 		throw new DocumentPayloadValidationError(`Document type must be one of: ${DOCUMENT_TYPE_VALUES.join(", ")}.`);
 	}
 	return value as Document["type"];
+}
+
+function parseDecisionStatus(value: unknown): Decision["status"] | null {
+	return value === "proposed" || value === "accepted" || value === "rejected" || value === "superseded" ? value : null;
 }
 
 function parseDocumentTags(value: unknown): string[] | undefined {
@@ -315,13 +331,14 @@ export class BacklogServer {
 	private queuedConfigBroadcast = false;
 	private readonly boundaryPaths = new Set<string>();
 	private boundaryFailure: Error | null = null;
+	private lastObservedEntries: readonly ObservedPathSnapshot[] | null = null;
 
 	constructor(projectPath: string, options?: { centralMode?: boolean; projectName?: string }) {
 		this.centralMode = options?.centralMode ?? false;
 		// Config discovery itself reads a candidate file, so check before constructing Core.
 		if (this.centralMode) assertProjectBoundary(projectPath);
 		this.core = new Core(projectPath, {
-			enableWatchers: true,
+			enableWatchers: !this.centralMode,
 			serverMode: this.centralMode,
 			fileReader: this.centralMode
 				? (path) => {
@@ -416,6 +433,84 @@ export class BacklogServer {
 		return snapshots.sort((a, b) => a.recordPath.localeCompare(b.recordPath));
 	}
 
+	/** Every relevant path is read and parsed; an invalid file is reported, never mistaken for deletion. */
+	async scanObservedFiles(
+		previousPaths: readonly string[] = [],
+		previousEntries?: readonly ObservedPathSnapshot[],
+	): Promise<ObservedInventory> {
+		if (!this.centralMode) throw new Error("Project observation requires central mode.");
+		const root = this.core.filesystem.rootDir;
+		const reader = new FileSystem(root, (path) => readProjectFile(root, path));
+		return await scanObservedProjectFiles(root, reader, previousPaths, previousEntries);
+	}
+
+	observationWatchDirectory(): string {
+		return this.core.filesystem.backlogDir;
+	}
+
+	/** Publish only the exact parsed bytes the observation transaction committed. */
+	async publishObservedFiles(entries: readonly ObservedPathSnapshot[]): Promise<void> {
+		if (!this.centralMode) throw new Error("Project observation requires central mode.");
+		const filesystem = this.core.filesystem;
+		const root = filesystem.rootDir;
+		assertProjectBoundary(root);
+		this.boundaryFailure = null;
+		const previous = this.lastObservedEntries;
+		const configEntry = entries.find((entry) => entry.kind === "config");
+		if (!configEntry) throw new Error("Observed configuration is missing.");
+		const configContent = new TextDecoder("utf-8", { fatal: true }).decode(configEntry.recordBytes);
+		const config = filesystem.parseConfig(configContent);
+		const formerBacklogDir = filesystem.backlogDir;
+		if (!filesystem.publishConfig(config, configEntry.path, configContent))
+			throw new Error("Observed configuration cannot be published.");
+		if (filesystem.backlogDir !== formerBacklogDir)
+			throw new Error("Observed project layout changed; reopen its handler.");
+		const activeTasks: Task[] = [];
+		const archivedTasks: Task[] = [];
+		const documents: Document[] = [];
+		const decisions: Awaited<ReturnType<typeof filesystem.listDecisions>> = [];
+		for (const item of entries) {
+			if (item.kind === "config") continue;
+			const content = new TextDecoder("utf-8", { fatal: true }).decode(item.recordBytes);
+			if (item.kind === "task") {
+				const task = attachRecordFileSnapshot(
+					{ ...normalizeTaskIdentity(parseTask(content)), filePath: item.path },
+					item.path,
+					item.recordBytes,
+				);
+				if (item.lifecycle === "active") activeTasks.push(task);
+				else if (item.lifecycle === "archived") archivedTasks.push(task);
+			} else if (item.kind === "document" && item.lifecycle === "active") {
+				const path = relative(filesystem.docsDir, item.path).replaceAll("\\", "/");
+				documents.push(attachRecordFileSnapshot({ ...parseDocument(content), path }, item.path, item.recordBytes));
+			} else if (item.kind === "decision" && item.lifecycle === "active") {
+				decisions.push(
+					attachRecordFileSnapshot(
+						{ ...parseDecision(content), path: basename(item.path) },
+						item.path,
+						item.recordBytes,
+					),
+				);
+			}
+		}
+		this.lastObservedEntries = entries;
+		this.contentStore?.publishObservedContent({ activeTasks, archivedTasks, documents, decisions, config });
+		if (previous) {
+			const milestoneChanged = [...previous, ...entries].some((item) => {
+				if (item.kind !== "milestone") return false;
+				const before = previous.find((entry) => entry.path === item.path);
+				const after = entries.find((entry) => entry.path === item.path);
+				return !before || !after || !Buffer.from(before.recordBytes).equals(Buffer.from(after.recordBytes));
+			});
+			if (milestoneChanged) this.broadcastDataUpdated("milestones");
+		}
+	}
+
+	broadcastObservationUpdated(projectId: string, state: ObservationState["state"]): void {
+		const message = JSON.stringify({ type: "observation-updated", projectId, state });
+		for (const socket of this.sockets.keys()) this.sendSocket(socket, message, true);
+	}
+
 	private assertBoundary(): void {
 		if (!this.centralMode) return;
 		if (this.boundaryFailure) throw this.boundaryFailure;
@@ -445,6 +540,7 @@ export class BacklogServer {
 		kind: "task" | "document" | "decision" | "milestone",
 		lifecycle: "active" | "draft" | "archived",
 		context?: ProjectReadContext,
+		requireCurrent = false,
 	): Promise<T & { recordKey?: string; revision?: string }> {
 		if (!this.centralMode) return record;
 		const snapshot = recordFileSnapshot(record);
@@ -454,6 +550,17 @@ export class BacklogServer {
 				503,
 				"RECOVERY_REQUIRED",
 			);
+		}
+		if (requireCurrent) {
+			let current: Uint8Array | null = null;
+			try {
+				current = readProjectFile(this.core.filesystem.rootDir, snapshot.recordPath);
+			} catch {
+				// A removed or unreadable current path cannot be served as a current detail record.
+			}
+			if (!current || !Buffer.from(current).equals(Buffer.from(snapshot.bytes))) {
+				throw new MutationError("The record changed before it could be safely opened.", 503, "OBSERVATION_UNAVAILABLE");
+			}
 		}
 		const recordKey = await context.recordKeyFor(kind, record.id, snapshot.recordPath, {
 			lifecycle,
@@ -691,6 +798,7 @@ export class BacklogServer {
 		});
 		this.assertBoundary();
 		this.contentStore = store;
+		if (this.centralMode && this.lastObservedEntries) await this.publishObservedFiles(this.lastObservedEntries);
 
 		if (!this.unsubscribeContentStore) {
 			this.unsubscribeContentStore = store.subscribe((event) => {
@@ -941,7 +1049,7 @@ export class BacklogServer {
 			},
 			"/api/decisions": {
 				GET: route("read", async () => this.handleListDecisions(mutationContext)),
-				POST: decisionRoute("decisionsWrite", async (req: Request) => this.handleCreateDecision(req)),
+				POST: decisionRoute("decisionsWrite", async (req: Request) => this.handleCreateDecision(req, authorization)),
 			},
 			"/api/decisions/archived": {
 				GET: route("read", async () => this.handleListArchived("decision", mutationContext)),
@@ -1046,7 +1154,9 @@ export class BacklogServer {
 			const match = new URLPattern({ pathname: path }).exec(url);
 			if (!match) continue;
 			const handler = routes[path]?.[req.method];
-			return handler ? { handler, params: match.pathname.groups, url } : null;
+			const params = { ...match.pathname.groups };
+			if (params.id !== undefined) params.id = decodeURIComponent(params.id);
+			return handler ? { handler, params, url } : null;
 		}
 		return null;
 	}
@@ -1064,6 +1174,9 @@ export class BacklogServer {
 		if (denied) return denied;
 		if (req.method === "PUT" && localPath.startsWith("/api/decisions/") && authorization) {
 			return (await this.checkDecisionWriteAuthorization(req, matched.params.id ?? "", authorization)).denied;
+		}
+		if (req.method === "POST" && localPath === "/api/decisions" && authorization) {
+			return (await this.checkDecisionCreateAuthorization(req, authorization)).denied;
 		}
 		return null;
 	}
@@ -1091,14 +1204,14 @@ export class BacklogServer {
 		if (this.browserLoadingState.type === "loading") void this.ensureServicesReady().catch(() => {});
 	}
 
-	private sendSocket(ws: ServerWebSocket<unknown>, message: string): boolean {
+	private sendSocket(ws: ServerWebSocket<unknown>, message: string, allowBoundaryFailure = false): boolean {
 		try {
 			const authorize = this.sockets.get(ws);
 			if (
 				!this.sockets.has(ws) ||
 				(this.centralMode && !authorize) ||
 				(authorize && !authorize()) ||
-				this.boundaryDenied()
+				(!allowBoundaryFailure && this.boundaryDenied())
 			) {
 				this.removeSocket(ws);
 				ws.close(1008, "Authorization expired");
@@ -1475,6 +1588,7 @@ export class BacklogServer {
 			const limitParam = url.searchParams.get("limit");
 			const typeParams = [...url.searchParams.getAll("type"), ...url.searchParams.getAll("types")];
 			const statusParams = url.searchParams.getAll("status");
+			const taskTypeParams = collectDelimitedSearchParams(url, ["taskType", "task-type"]);
 			const excludeStatusParams = collectDelimitedSearchParams(url, [
 				"excludeStatus",
 				"exclude-status",
@@ -1526,6 +1640,7 @@ export class BacklogServer {
 			}
 
 			const filters: {
+				type?: string[];
 				status?: string | string[];
 				excludeStatus?: string | string[];
 				priority?: SearchPriorityFilter | SearchPriorityFilter[];
@@ -1534,6 +1649,23 @@ export class BacklogServer {
 				labels?: string | string[];
 				modifiedFiles?: string | string[];
 			} = {};
+
+			if (taskTypeParams.length > 0) {
+				if (types && !types.includes("task"))
+					return Response.json(
+						{ error: "taskType filters task results. Include type=task or omit type." },
+						{ status: 400 },
+					);
+				const config = await this.core.filesystem.loadConfig();
+				const { values, invalid } = resolveTaskTypeValues(taskTypeParams, config);
+				if (invalid.length)
+					return Response.json(
+						{ error: `Unsupported task type '${invalid[0]}'. Use ${formatValidTaskTypeValues(config)}.` },
+						{ status: 400 },
+					);
+				filters.type = values;
+				types ??= ["task"];
+			}
 
 			if (statusParams.length === 1) {
 				filters.status = statusParams[0];
@@ -1700,7 +1832,9 @@ export class BacklogServer {
 				assignee: payload.assignee,
 				dependencies: payload.dependencies,
 				references: payload.references,
+				documentation: payload.documentation,
 				modifiedFiles: payload.modifiedFiles,
+				ordinal: typeof payload.ordinal === "number" && Number.isFinite(payload.ordinal) ? payload.ordinal : undefined,
 				parentTaskId: payload.parentTaskId,
 				implementationPlan: payload.implementationPlan,
 				implementationNotes: payload.implementationNotes,
@@ -1767,6 +1901,7 @@ export class BacklogServer {
 			"task",
 			resolved.source === "archived" ? "archived" : isDraftId(resolved.id) ? "draft" : "active",
 			context,
+			true,
 		);
 		return Response.json(
 			{ ...detail, ...(record.recordKey && { recordKey: record.recordKey, revision: record.revision }) },
@@ -1778,120 +1913,131 @@ export class BacklogServer {
 
 	private async handleUpdateTask(req: Request, taskId: string): Promise<Response> {
 		const updates = await req.json();
-		const dueDate = parseDueDatePayload(updates?.dueDate, true);
+		const editArgs = updates?.editArgs;
+		if (editArgs !== undefined && (!editArgs || typeof editArgs !== "object" || Array.isArray(editArgs))) {
+			return Response.json({ error: "editArgs must be an object." }, { status: 400 });
+		}
+		const dueDate = parseDueDatePayload((editArgs ?? updates)?.dueDate, true);
 		if (!dueDate.ok) return Response.json({ error: dueDate.error }, { status: 400 });
 
-		const updateInput: TaskUpdateInput = {};
-		for (const [field, inputField] of [
-			["definitionOfDoneRemove", "removeDefinitionOfDone"],
-			["definitionOfDoneCheck", "checkDefinitionOfDone"],
-			["definitionOfDoneUncheck", "uncheckDefinitionOfDone"],
-		] as const) {
-			if (!(field in updates)) continue;
-			const indices = updates[field];
-			if (
-				!Array.isArray(indices) ||
-				indices.some((value: unknown) => typeof value !== "number" || !Number.isFinite(value))
-			) {
-				return Response.json({ error: `${field} must be an array of finite numbers.` }, { status: 400 });
+		const updateInput: TaskUpdateInput = editArgs ? buildTaskUpdateInput(editArgs as TaskEditArgs) : {};
+		if (!editArgs) {
+			for (const [field, inputField] of [
+				["definitionOfDoneRemove", "removeDefinitionOfDone"],
+				["definitionOfDoneCheck", "checkDefinitionOfDone"],
+				["definitionOfDoneUncheck", "uncheckDefinitionOfDone"],
+			] as const) {
+				if (!(field in updates)) continue;
+				const indices = updates[field];
+				if (
+					!Array.isArray(indices) ||
+					indices.some((value: unknown) => typeof value !== "number" || !Number.isFinite(value))
+				) {
+					return Response.json({ error: `${field} must be an array of finite numbers.` }, { status: 400 });
+				}
+				updateInput[inputField] = indices;
 			}
-			updateInput[inputField] = indices;
-		}
 
-		if ("title" in updates && typeof updates.title === "string") {
-			updateInput.title = updates.title;
-		}
-
-		if ("dueDate" in updates) {
-			updateInput.dueDate = dueDate.value ?? null;
-		}
-
-		if ("description" in updates && typeof updates.description === "string") {
-			updateInput.description = updates.description;
-		}
-
-		if ("status" in updates && typeof updates.status === "string") {
-			updateInput.status = updates.status;
-		}
-
-		if ("priority" in updates && typeof updates.priority === "string") {
-			updateInput.priority = updates.priority;
-		}
-
-		if ("type" in updates && typeof updates.type === "string") {
-			updateInput.type = updates.type;
-		}
-
-		if ("project" in updates && (typeof updates.project === "string" || updates.project === null)) {
-			updateInput.project = updates.project;
-		}
-
-		if ("milestone" in updates && (typeof updates.milestone === "string" || updates.milestone === null)) {
-			if (typeof updates.milestone === "string") {
-				updateInput.milestone = await this.resolveMilestoneInput(updates.milestone);
-			} else {
-				updateInput.milestone = updates.milestone;
+			if ("title" in updates && typeof updates.title === "string") {
+				updateInput.title = updates.title;
 			}
-		}
 
-		if ("labels" in updates && Array.isArray(updates.labels)) {
-			updateInput.labels = updates.labels;
-		}
+			if ("dueDate" in updates) {
+				updateInput.dueDate = dueDate.value ?? null;
+			}
 
-		if ("assignee" in updates && Array.isArray(updates.assignee)) {
-			updateInput.assignee = updates.assignee;
-		}
+			if ("description" in updates && typeof updates.description === "string") {
+				updateInput.description = updates.description;
+			}
 
-		if ("dependencies" in updates && Array.isArray(updates.dependencies)) {
-			updateInput.dependencies = updates.dependencies;
-		}
+			if ("status" in updates && typeof updates.status === "string") {
+				updateInput.status = updates.status;
+			}
 
-		if ("references" in updates && Array.isArray(updates.references)) {
-			updateInput.references = updates.references;
-		}
+			if ("priority" in updates && typeof updates.priority === "string") {
+				updateInput.priority = updates.priority;
+			}
 
-		if ("modifiedFiles" in updates && Array.isArray(updates.modifiedFiles)) {
-			updateInput.modifiedFiles = updates.modifiedFiles;
-		}
+			if ("type" in updates && typeof updates.type === "string") {
+				updateInput.type = updates.type;
+			}
 
-		if ("implementationPlan" in updates && typeof updates.implementationPlan === "string") {
-			updateInput.implementationPlan = updates.implementationPlan;
-		}
+			if ("project" in updates && (typeof updates.project === "string" || updates.project === null)) {
+				updateInput.project = updates.project;
+			}
 
-		if ("implementationNotes" in updates && typeof updates.implementationNotes === "string") {
-			updateInput.implementationNotes = updates.implementationNotes;
-		}
+			if ("milestone" in updates && (typeof updates.milestone === "string" || updates.milestone === null)) {
+				if (typeof updates.milestone === "string") {
+					updateInput.milestone = await this.resolveMilestoneInput(updates.milestone);
+				} else {
+					updateInput.milestone = updates.milestone;
+				}
+			}
 
-		if ("commentsAppend" in updates && Array.isArray(updates.commentsAppend)) {
-			const author =
-				typeof updates.commentAuthor === "string" && updates.commentAuthor.trim().length > 0
-					? updates.commentAuthor.trim()
-					: undefined;
-			updateInput.appendComments = updates.commentsAppend
-				.map((body: unknown) => ({
-					body: String(body ?? "").trim(),
-					...(author && { author }),
-				}))
-				.filter((comment: { body: string }) => comment.body.length > 0);
-		}
+			if ("labels" in updates && Array.isArray(updates.labels)) {
+				updateInput.labels = updates.labels;
+			}
 
-		if ("finalSummary" in updates && typeof updates.finalSummary === "string") {
-			updateInput.finalSummary = updates.finalSummary;
-		}
+			if ("assignee" in updates && Array.isArray(updates.assignee)) {
+				updateInput.assignee = updates.assignee;
+			}
 
-		if ("acceptanceCriteriaItems" in updates && Array.isArray(updates.acceptanceCriteriaItems)) {
-			updateInput.acceptanceCriteria = updates.acceptanceCriteriaItems
-				.map((item: { text?: string; checked?: boolean }) => ({
-					text: String(item?.text ?? "").trim(),
-					checked: Boolean(item?.checked),
-				}))
-				.filter((item: { text: string }) => item.text.length > 0);
-		}
+			if ("dependencies" in updates && Array.isArray(updates.dependencies)) {
+				updateInput.dependencies = updates.dependencies;
+			}
 
-		if ("definitionOfDoneAdd" in updates && Array.isArray(updates.definitionOfDoneAdd)) {
-			updateInput.addDefinitionOfDone = updates.definitionOfDoneAdd
-				.map((item: unknown) => ({ text: String(item ?? "").trim(), checked: false }))
-				.filter((item: { text: string }) => item.text.length > 0);
+			if ("references" in updates && Array.isArray(updates.references)) {
+				updateInput.references = updates.references;
+			}
+
+			if ("modifiedFiles" in updates && Array.isArray(updates.modifiedFiles)) {
+				updateInput.modifiedFiles = updates.modifiedFiles;
+			}
+
+			if ("implementationPlan" in updates && typeof updates.implementationPlan === "string") {
+				updateInput.implementationPlan = updates.implementationPlan;
+			}
+
+			if ("implementationNotes" in updates && typeof updates.implementationNotes === "string") {
+				updateInput.implementationNotes = updates.implementationNotes;
+			}
+
+			if ("commentsAppend" in updates && Array.isArray(updates.commentsAppend)) {
+				const author =
+					typeof updates.commentAuthor === "string" && updates.commentAuthor.trim().length > 0
+						? updates.commentAuthor.trim()
+						: undefined;
+				updateInput.appendComments = updates.commentsAppend
+					.map((body: unknown) => ({
+						body: String(body ?? "").trim(),
+						...(author && { author }),
+					}))
+					.filter((comment: { body: string }) => comment.body.length > 0);
+			}
+
+			if ("finalSummary" in updates && typeof updates.finalSummary === "string") {
+				updateInput.finalSummary = updates.finalSummary;
+			}
+
+			if ("acceptanceCriteriaItems" in updates && Array.isArray(updates.acceptanceCriteriaItems)) {
+				updateInput.acceptanceCriteria = updates.acceptanceCriteriaItems
+					.map((item: { text?: string; checked?: boolean }) => ({
+						text: String(item?.text ?? "").trim(),
+						checked: Boolean(item?.checked),
+					}))
+					.filter((item: { text: string }) => item.text.length > 0);
+			}
+
+			if ("definitionOfDoneAdd" in updates && Array.isArray(updates.definitionOfDoneAdd)) {
+				updateInput.addDefinitionOfDone = updates.definitionOfDoneAdd
+					.map((item: unknown) => ({ text: String(item ?? "").trim(), checked: false }))
+					.filter((item: { text: string }) => item.text.length > 0);
+			}
+		} else {
+			if ("dueDate" in editArgs) updateInput.dueDate = dueDate.value ?? null;
+			if (typeof updateInput.milestone === "string") {
+				updateInput.milestone = await this.resolveMilestoneInput(updateInput.milestone);
+			}
 		}
 
 		try {
@@ -1934,6 +2080,7 @@ export class BacklogServer {
 			this.broadcastDataUpdated();
 			return Response.json({ success: true, ...result });
 		} catch (error) {
+			if (error instanceof SyntaxError) return Response.json({ error: "Invalid request payload" }, { status: 400 });
 			if (isAmbiguousIdError(error)) {
 				return this.conflictResponse(error, error.message);
 			}
@@ -2107,7 +2254,7 @@ export class BacklogServer {
 			if (!doc) {
 				return Response.json({ error: "Document not found" }, { status: 404 });
 			}
-			const versioned = await this.versionRecord(doc, "document", doc.archived ? "archived" : "active", context);
+			const versioned = await this.versionRecord(doc, "document", doc.archived ? "archived" : "active", context, true);
 			return Response.json(versioned, { headers: versioned.revision ? { ETag: versioned.revision } : undefined });
 		} catch (error) {
 			if (error instanceof MutationError) throw error;
@@ -2249,6 +2396,7 @@ export class BacklogServer {
 				"decision",
 				decision.archived ? "archived" : "active",
 				context,
+				true,
 			);
 			return Response.json(versioned, { headers: versioned.revision ? { ETag: versioned.revision } : undefined });
 		} catch (error) {
@@ -2261,11 +2409,31 @@ export class BacklogServer {
 		}
 	}
 
-	private async handleCreateDecision(req: Request): Promise<Response> {
-		const { title } = await req.json();
+	private async checkDecisionCreateAuthorization(
+		req: Request,
+		authorization: ProjectAuthorization,
+	): Promise<{ denied: Response | null; requiresManage: boolean }> {
+		const payload = await req
+			.clone()
+			.json()
+			.catch(() => null);
+		const requiresManage = payload?.status !== undefined && payload.status !== "proposed";
+		return { denied: requiresManage ? authorization.check("decisionsManage") : null, requiresManage };
+	}
+
+	private async handleCreateDecision(req: Request, authorization?: ProjectAuthorization): Promise<Response> {
+		const permission = authorization ? await this.checkDecisionCreateAuthorization(req, authorization) : null;
+		if (permission?.denied) return permission.denied;
+		const payload = await req.json().catch(() => null);
+		const title = typeof payload?.title === "string" ? payload.title.trim() : "";
+		const status = payload?.status === undefined ? "proposed" : parseDecisionStatus(payload.status);
+		if (!title) return Response.json({ error: "Decision title is required" }, { status: 400 });
+		if (!status) return Response.json({ error: "Invalid decision status" }, { status: 400 });
 
 		try {
-			const decision = await this.core.createDecisionWithTitle(title);
+			if (permission?.requiresManage)
+				(req as Request & { [DECISION_MANAGE_RECHECK]?: boolean })[DECISION_MANAGE_RECHECK] = true;
+			const decision = await this.core.createDecisionWithTitle(title, undefined, status);
 			return Response.json(decision, { status: 201 });
 		} catch (error) {
 			console.error("Error creating decision:", error);
@@ -2290,7 +2458,15 @@ export class BacklogServer {
 		if (!current)
 			return { denied: Response.json({ error: "Decision not found" }, { status: 404 }), requiresManage: false };
 		// Use Core's parser and fallback for both first execution and authorized replay.
-		const nextStatus = parseFrontmatter(content ?? (await req.clone().text())).data.status || current.status;
+		const raw = content ?? (await req.clone().text());
+		let nextStatus: unknown = current.status;
+		if (req.headers.get("content-type")?.includes("application/json")) {
+			try {
+				nextStatus = (JSON.parse(raw) as { status?: unknown }).status ?? current.status;
+			} catch {
+				// The handler reports malformed JSON after the authorization gate.
+			}
+		} else nextStatus = parseFrontmatter(raw).data.status || current.status;
 		const requiresManage = current.status !== "proposed" || nextStatus !== current.status;
 		return { denied: requiresManage ? authorization.check("decisionsManage") : null, requiresManage };
 	}
@@ -2310,7 +2486,14 @@ export class BacklogServer {
 				}
 				if (permission.denied) return permission.denied;
 			}
-			await this.core.updateDecisionFromContent(decisionId, content);
+			if (req.headers.get("content-type")?.includes("application/json")) {
+				const payload = JSON.parse(content) as { status?: unknown };
+				const status = parseDecisionStatus(payload.status);
+				if (!status) return Response.json({ error: "Invalid decision status" }, { status: 400 });
+				await this.core.updateDecisionStatus(decisionId, status);
+			} else {
+				await this.core.updateDecisionFromContent(decisionId, content);
+			}
 			return Response.json({ success: true });
 		} catch (error) {
 			if (isAmbiguousIdError(error)) {
@@ -2538,7 +2721,7 @@ export class BacklogServer {
 			if (!milestone) {
 				return Response.json({ error: "Milestone not found" }, { status: 404 });
 			}
-			const versioned = await this.versionRecord(milestone, "milestone", "active", context);
+			const versioned = await this.versionRecord(milestone, "milestone", "active", context, true);
 			return Response.json(versioned, { headers: versioned.revision ? { ETag: versioned.revision } : undefined });
 		} catch (error) {
 			if (error instanceof MutationError) throw error;

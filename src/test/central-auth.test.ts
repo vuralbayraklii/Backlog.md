@@ -283,7 +283,18 @@ describe("central authentication and authorization", () => {
 	});
 
 	it("conceals nonmembers before checking source readability across every data surface", async () => {
-		expect(await (await request("/api/projects", user)).json()).toEqual([{ id: "1", name: "Alpha" }]);
+		expect(await (await request("/api/projects", user)).json()).toEqual([
+			{
+				id: "1",
+				name: "Alpha",
+				observation: {
+					state: "ready",
+					error: null,
+					checkedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+					lastSuccessfulScanAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+				},
+			},
+		]);
 		for (const suffix of [
 			"",
 			"/tasks",

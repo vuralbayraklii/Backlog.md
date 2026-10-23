@@ -1,7 +1,10 @@
 /** Shared wire values for central writes and their durable operation record. */
 export type MutationScope = { kind: "project"; projectId: string } | { kind: "admin" } | { kind: "registration" };
 
-export type MutationActor = { kind: "user"; userId: string } | { kind: "unknown" };
+export type MutationActor =
+	| { kind: "user"; userId: string }
+	| { kind: "agent"; agentKeyId: string; userId: string }
+	| { kind: "unknown" };
 
 export type MutationSource = "browser" | "server-cli" | "agent" | "external" | "recovery" | "baseline";
 
@@ -11,7 +14,7 @@ export type WriteState = "ready" | "recovery_required";
 
 export type RecordKind = "task" | "document" | "decision" | "milestone" | "config";
 
-export type HistoryKind = RecordKind | "user" | "membership" | "folder-area" | "project";
+export type HistoryKind = RecordKind | "user" | "membership" | "folder-area" | "project" | "agent-key";
 
 export interface RecordVersion {
 	recordKey: string;
@@ -35,7 +38,7 @@ export interface HistoryEvent {
 	source: MutationSource;
 	actor: MutationActor;
 	action: string;
-	occurredAt: string;
+	occurredAt: string | null;
 	detectedAt?: string;
 	changes: HistoryRecordChange[];
 }
@@ -49,6 +52,8 @@ export interface SafeHttpResult {
 
 export interface OperationView {
 	operationId: string;
+	/** SHA-256 of the semantic request, for safe lost-response verification. */
+	requestHash?: string;
 	scope: MutationScope;
 	state: OperationState;
 	source: MutationSource;
@@ -74,7 +79,8 @@ export type MutationErrorCode =
 	| "OPERATION_IN_PROGRESS"
 	| "OPERATION_NOT_APPLIED"
 	| "OPERATION_RESOLVED"
-	| "RECOVERY_REQUIRED";
+	| "RECOVERY_REQUIRED"
+	| "OBSERVATION_UNAVAILABLE";
 
 export interface MutationErrorBody {
 	error: string;

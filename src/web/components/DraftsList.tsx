@@ -13,7 +13,7 @@ interface DraftsListProps {
 }
 
 const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft, dateFormat }) => {
-  const { permissions, writeState } = useAuth();
+  const { permissions, writesAvailable } = useAuth();
   const [drafts, setDrafts] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +116,7 @@ const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft, dateFor
             </div>
 	            <button 
 	              className="inline-flex items-center px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-400 dark:focus:ring-offset-gray-900 transition-colors duration-200" 
-	              disabled={!permissions.tasksWrite || writeState !== 'ready'}
+	              disabled={!permissions.tasksWrite || !writesAvailable}
               onClick={onNewDraft}
 	            >
 	              + New Draft
@@ -180,7 +180,7 @@ const DraftsList: React.FC<DraftsListProps> = ({ onEditTask, onNewDraft, dateFor
                   </div>
                   <div className="ml-4">
                     <button
-                      disabled={!permissions.tasksWrite || writeState !== 'ready'}
+                      disabled={!permissions.tasksWrite || !writesAvailable}
                       onClick={(e) => {
                         e.stopPropagation();
                         handlePromoteDraft(draft.id);

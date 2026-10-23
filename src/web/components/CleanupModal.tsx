@@ -29,7 +29,7 @@ const AGE_OPTIONS = [
 ];
 
 const CleanupModal: React.FC<CleanupModalProps> = ({ isOpen, onClose, onSuccess, dateFormat }) => {
-	const { writeState } = useAuth();
+	const { writesAvailable } = useAuth();
 	const [selectedAge, setSelectedAge] = useState<number | null>(null);
 	const [previewTasks, setPreviewTasks] = useState<TaskPreview[]>([]);
 	const [previewCount, setPreviewCount] = useState(0);
@@ -61,7 +61,7 @@ const CleanupModal: React.FC<CleanupModalProps> = ({ isOpen, onClose, onSuccess,
 	};
 
 	const handleExecuteCleanup = async () => {
-		if (previewTasks.length === 0 || writeState !== 'ready') return;
+		if (previewTasks.length === 0 || !writesAvailable) return;
 
 		setIsExecuting(true);
 		setError(null);
@@ -209,7 +209,7 @@ const CleanupModal: React.FC<CleanupModalProps> = ({ isOpen, onClose, onSuccess,
 								) : (
 									<button
 										onClick={handleExecuteCleanup}
-										disabled={isExecuting || writeState !== 'ready'}
+										disabled={isExecuting || !writesAvailable}
 										className="px-4 py-2 text-sm font-medium text-white bg-red-500 dark:bg-red-600 rounded-md hover:bg-red-600 dark:hover:bg-red-700 disabled:opacity-50 transition-colors duration-200"
 									>
 										{isExecuting ? 'Archiving Tasks...' : `Archive ${previewCount} Task${previewCount !== 1 ? 's' : ''}`}

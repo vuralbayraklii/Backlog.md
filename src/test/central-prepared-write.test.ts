@@ -278,7 +278,7 @@ describe("central prepared task write", () => {
 		expect((await (await request("/api/projects/2/tasks/TASK-1")).json()).title).toBe("Other project");
 	});
 
-	it("indexes a CLI-created file and unmatched external move without inventing history", async () => {
+	it("records a CLI-created file and preserves identity through a unique external move", async () => {
 		const projectRoot = join(root, "project");
 		const historyPath = "/api/projects/1/history";
 		const beforeHistory = await (await request(historyPath)).json();
@@ -317,7 +317,12 @@ describe("central prepared task write", () => {
 		const afterSearch = await request("/api/projects/1/search?type=task");
 		expect(afterSearch.status).toBe(200);
 		expect(afterSearch.headers.get("X-Backlog-Tasks-Revision")).not.toBe(beforeCollection);
-		expect(await (await request(historyPath)).json()).toEqual(beforeHistory);
+		const afterCreate = (await (await request(historyPath)).json()) as {
+			items: Array<{ source: string; occurredAt: string | null; changes: Array<{ recordKey: string }> }>;
+		};
+		expect(afterCreate.items.filter((event) => event.source === "external")).toHaveLength(1);
+		expect(afterCreate.items.find((event) => event.source === "external")?.occurredAt).toBeNull();
+		expect(afterCreate.items.find((event) => event.source === "external")?.changes[0]?.recordKey).toBe(added.recordKey);
 
 		const movedPath = join(
 			dirname(local.filePath),
@@ -325,19 +330,22 @@ describe("central prepared task write", () => {
 		);
 		await rename(local.filePath, movedPath);
 		let moved = added;
-		for (let attempt = 0; attempt < 80 && moved.recordKey === added.recordKey; attempt += 1) {
+		for (let attempt = 0; attempt < 80 && moved.revision === added.revision; attempt += 1) {
 			await Bun.sleep(25);
 			moved = await readTask();
 		}
-		expect(moved.recordKey).not.toBe(added.recordKey);
+		expect(moved.recordKey).toBe(added.recordKey);
 		expect(moved.revision).toBe(recordRevision(moved.recordKey, movedPath, "active", await readFile(movedPath)));
-		expect(await (await request(historyPath)).json()).toEqual(beforeHistory);
+		const afterMove = (await (await request(historyPath)).json()) as typeof afterCreate;
+		expect(afterMove.items.filter((event) => event.source === "external")).toHaveLength(2);
+		expect(afterMove.items.find((event) => event.source === "external")?.changes[0]?.recordKey).toBe(added.recordKey);
 
 		await server.stop();
 		server = new CentralServer(dataDir);
 		await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
 		expect((await readTask()).recordKey).toBe(moved.recordKey);
-		expect(await (await request(historyPath)).json()).toEqual(beforeHistory);
+		expect(await (await request(historyPath)).json()).toEqual(afterMove);
+		expect(beforeHistory).not.toEqual(afterMove);
 	});
 
 	it("preserves one record key through draft promotion and task demotion", async () => {

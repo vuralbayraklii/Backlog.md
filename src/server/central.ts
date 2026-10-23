@@ -3,11 +3,13 @@ import { isIP } from "node:net";
 import type { Server, ServerWebSocket } from "bun";
 import { launchBrowser } from "../utils/browser-launch.ts";
 import { getVersion } from "../utils/version.ts";
+import { AgentStore, AgentStoreError } from "./agent-store.ts";
+import type { AgentGrant } from "./agent-types.ts";
 import { AuthStore, AuthStoreError } from "./auth-store.ts";
 import type { AuthSession, ProjectAuthorization, ProjectPermissions } from "./auth-types.ts";
 import { BacklogServer, spaIndexHtml } from "./index.ts";
 import { MutationStoreError } from "./mutation-store.ts";
-import type { MutationScope, OperationView, RecordKind } from "./mutation-types.ts";
+import type { MutationActor, MutationScope, OperationView, RecordKind } from "./mutation-types.ts";
 import {
 	CentralMutations,
 	type ManagementMutationContext,
@@ -17,6 +19,7 @@ import {
 	managementAudit,
 	versionedManagement,
 } from "./mutations.ts";
+import type { ObservationState, ObservedPathSnapshot } from "./observation-types.ts";
 import { assertProjectBoundary } from "./project-paths.ts";
 import { ProjectStore, type ServerProject } from "./project-store.ts";
 
@@ -111,18 +114,23 @@ function fields(body: Record<string, unknown>, allowed: string[]): void {
 export class CentralServer {
 	private readonly store: ProjectStore;
 	private readonly auth: AuthStore;
+	private readonly agents: AgentStore;
 	private readonly mutations: CentralMutations;
 	private readonly handlers = new Map<string, BacklogServer>();
+	private readonly publishedHandlers = new WeakSet<BacklogServer>();
 	private readonly retiring = new Set<Promise<void>>();
 	private readonly sockets = new Set<ServerWebSocket<SocketData>>();
 	private server: Server<SocketData> | null = null;
 	private closing: Promise<void> | null = null;
 	private sweep: ReturnType<typeof setInterval> | null = null;
+	private observationSweep: ReturnType<typeof setInterval> | null = null;
+	private readonly observedProjects = new Set<string>();
 	private origin = "";
 
 	constructor(dataDirectory: string, options?: { mutationCheckpoint?: MutationCheckpoint }) {
 		this.store = new ProjectStore(dataDirectory);
 		this.auth = new AuthStore(dataDirectory);
+		this.agents = new AgentStore(dataDirectory);
 		this.mutations = new CentralMutations(dataDirectory, (id) => this.project(id), options?.mutationCheckpoint);
 	}
 
@@ -135,20 +143,13 @@ export class CentralServer {
 		if (this.server) return;
 		if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("Port must be between 1 and 65535.");
 		this.origin = configuredOrigin(options);
-		const projects = this.store.list();
+		this.store.list();
 		if (!this.auth.hasAdmin())
 			throw new Error(
 				"Initialize the first admin with: backlog server --data-dir <directory> user init-admin <username>",
 			);
 		await this.mutations.recoverPending();
-		for (const project of projects) {
-			if (!project.tracking) continue;
-			try {
-				await this.mutations.ensureBaseline(project, () => this.handler(project).listCentralRecordSnapshots());
-			} catch {
-				this.mutations.blockProject(project.id);
-			}
-		}
+		await this.syncObservedProjects();
 		try {
 			this.server = Bun.serve<SocketData>({
 				port,
@@ -167,6 +168,7 @@ export class CentralServer {
 								{ error: error.message, code: error.code },
 								{ status: error.status, headers: NO_STORE },
 							);
+						if (error instanceof AgentStoreError) return errorResponse(error.message, error.status);
 						if (error instanceof AuthStoreError) {
 							const response = errorResponse(error.message, error.status);
 							if (error.retryAfter !== undefined) response.headers.set("Retry-After", String(error.retryAfter));
@@ -191,6 +193,7 @@ export class CentralServer {
 				},
 			});
 		} catch (error) {
+			await this.stop();
 			if ((error as { code?: string }).code === "EADDRINUSE")
 				throw new Error(`Port ${port} is already in use. Use --port to choose another port.`);
 			throw error;
@@ -199,6 +202,8 @@ export class CentralServer {
 			for (const ws of this.sockets) this.socketAllowed(ws);
 		}, 1000);
 		this.sweep.unref();
+		this.observationSweep = setInterval(() => void this.syncObservedProjects().catch(() => {}), 30000);
+		this.observationSweep.unref();
 		const url = `${this.origin}/projects`;
 		console.log(`Backlog.md server running at ${url}`);
 		if (openBrowser) {
@@ -215,12 +220,16 @@ export class CentralServer {
 		this.closing = (async () => {
 			try {
 				if (this.sweep) clearInterval(this.sweep);
+				if (this.observationSweep) clearInterval(this.observationSweep);
+				this.observationSweep = null;
 				this.sweep = null;
 				for (const ws of this.sockets) ws.close(1001, "Server stopping");
 				this.sockets.clear();
 				const server = this.server;
 				this.server = null;
 				if (server) await server.stop(true);
+				await this.mutations.stopObservation();
+				this.observedProjects.clear();
 				await Promise.all([...this.handlers.values()].map((handler) => handler.stop()));
 				this.handlers.clear();
 				await Promise.all(this.retiring);
@@ -244,6 +253,7 @@ export class CentralServer {
 	private authorization(token: string, projectId: string): ProjectAuthorization {
 		return {
 			check: (permission) => {
+				if (this.closing) return errorResponse("Server is stopping.", 503);
 				const session = this.auth.loadSession(token);
 				if (!session) return errorResponse("Authentication required.", 401);
 				if (session.user.mustChangePassword) return errorResponse("Password change required.", 403);
@@ -271,6 +281,7 @@ export class CentralServer {
 	}
 
 	private requireCurrentSession(token: string, admin = false): AuthSession {
+		if (this.closing) throw new AuthStoreError("Server is stopping.", 503);
 		const session = this.auth.loadSession(token);
 		if (!session) throw new AuthStoreError("Authentication required.", 401);
 		if (session.user.mustChangePassword) throw new AuthStoreError("Password change required.", 403);
@@ -314,6 +325,104 @@ export class CentralServer {
 	private project(projectId: string): ServerProject | null {
 		return /^[1-9]\d*$/.test(projectId) ? this.store.load(projectId) : null;
 	}
+
+	private async observeProject(project: ServerProject): Promise<void> {
+		if (this.closing || !this.project(project.id)?.tracking) return;
+		const scan = (previousPaths: readonly string[], previousEntries?: readonly ObservedPathSnapshot[]) =>
+			this.handler(project).scanObservedFiles(previousPaths, previousEntries);
+		const hooks = {
+			watchDirectory: this.handler(project).observationWatchDirectory(),
+			needsPublication: () => !this.publishedHandlers.has(this.handler(project)),
+			publish: async (entries: readonly ObservedPathSnapshot[]) => {
+				const handler = this.handler(project);
+				await handler.publishObservedFiles(entries);
+				this.publishedHandlers.add(handler);
+			},
+			onState: (state: ObservationState) =>
+				this.handlers.get(project.id)?.broadcastObservationUpdated(project.id, state.state),
+			onPublicationFailure: () => this.retireProject(project.id),
+		};
+		this.mutations.setObservationTracking(project, scan, hooks);
+		this.observedProjects.add(project.id);
+		await this.mutations.reconcileObserved(project, scan, hooks);
+	}
+
+	private async syncObservedProjects(): Promise<void> {
+		if (this.closing) return;
+		const projects = this.store.list().filter((project) => project.tracking);
+		const active = new Set(projects.map((project) => project.id));
+		for (const id of this.observedProjects) {
+			if (!active.has(id)) {
+				await this.mutations.stopObservationTracking(id);
+				this.observedProjects.delete(id);
+				await this.retireProject(id);
+			}
+		}
+		for (const project of projects) {
+			if (this.observedProjects.has(project.id)) continue;
+			try {
+				await this.mutations.ensureBaseline(project, () => this.handler(project).listCentralRecordSnapshots());
+				await this.observeProject(project);
+			} catch {
+				// One unavailable binding must not prevent observing the other projects.
+			}
+		}
+	}
+
+	private agentAuthorization(secret: string, projectId: string): ProjectAuthorization {
+		return {
+			check: (permission) => {
+				if (this.closing) return errorResponse("Server is stopping.", 503);
+				const actor = this.agents.authenticate(secret);
+				if (!actor) return errorResponse("Authentication required.", 401);
+				const project = this.project(projectId);
+				const permissions = this.agents.permissions(actor.agentKeyId, projectId);
+				if (!project?.tracking || !permissions) return errorResponse("Not Found", 404);
+				try {
+					assertProjectBoundary(project.rootPath);
+				} catch {
+					return errorResponse("Project is unavailable.", 503);
+				}
+				if (permission === "admin" || (permission !== "read" && !permissions[permission]))
+					return errorResponse("Permission denied.", 403);
+				return null;
+			},
+		};
+	}
+
+	private async agentRequest(req: Request, server: Server<SocketData>): Promise<Response | undefined> {
+		const match = /^Bearer ([A-Za-z0-9_-]+)$/.exec(req.headers.get("authorization") ?? "");
+		const secret = match?.[1] ?? "";
+		const actor = this.agents.authenticate(secret);
+		if (!actor) return errorResponse("Authentication required.", 401);
+		const path = new URL(req.url).pathname;
+		if (path === "/api/projects" && req.method === "GET") {
+			return Response.json(
+				this.store
+					.list()
+					.filter((project) => project.tracking && this.agents.permissions(actor.agentKeyId, project.id))
+					.map(({ id, name }) => ({ id, name, observation: this.mutations.observationState(id) })),
+			);
+		}
+		const operation = path.match(/^\/api\/operations\/([^/]+)$/);
+		if (operation && req.method === "GET") {
+			const view = this.mutations.operation(operation[1] ?? "", actor);
+			if (view?.scope.kind !== "project") return errorResponse("Not Found", 404);
+			return this.agentAuthorization(secret, view.scope.projectId).check("read") ?? Response.json(view);
+		}
+		const api = path.match(/^\/api\/projects\/([1-9]\d*)(?:\/(.+))?$/);
+		if (!api) return errorResponse("Permission denied.", 403);
+		return this.projectRequest(
+			req,
+			server,
+			api[1] ?? "",
+			api[2],
+			this.agentAuthorization(secret, api[1] ?? ""),
+			actor,
+			() => this.agents.permissions(actor.agentKeyId, api[1] ?? ""),
+		);
+	}
+
 	private handler(project: ServerProject): BacklogServer {
 		let handler = this.handlers.get(project.id);
 		if (!handler) {
@@ -403,12 +512,39 @@ export class CentralServer {
 		token: string,
 		mutation?: ManagementMutationContext,
 	): Promise<Response> {
+		if (path === "/api/admin/agent-keys") {
+			if (req.method === "GET") return Response.json(this.agents.list());
+			if (req.method === "POST") {
+				const body = await jsonBody(req);
+				fields(body, ["userId", "name", "grants"]);
+				const created = this.agents.create(
+					{
+						userId: stringField(body, "userId"),
+						name: stringField(body, "name"),
+						grants: body.grants as AgentGrant[],
+					},
+					mutation?.audit("agent-key.create", { status: 201, resultBody: (result) => result }),
+				);
+				return Response.json(created, { status: 201 });
+			}
+		}
+		const revokeKey = path.match(/^\/api\/admin\/agent-keys\/([^/]+)\/revoke$/);
+		if (revokeKey && req.method === "POST") {
+			const key = this.agents.load(decodeURIComponent(revokeKey[1] ?? ""));
+			if (!key) return errorResponse("Not Found", 404);
+			const updated = this.agents.revoke(
+				key.id,
+				key.userId,
+				mutation?.audit("agent-key.revoke", { requireRevision: true, resultBody: (result) => result }),
+			);
+			return Response.json({ key: updated });
+		}
 		if (path === "/api/admin/history" && req.method === "GET") {
 			const url = new URL(req.url);
 			const scope: MutationScope =
 				url.searchParams.get("scope") === "registration" ? { kind: "registration" } : { kind: "admin" };
 			const kind = url.searchParams.get("kind") ?? undefined;
-			if (kind && !["user", "membership", "folder-area", "project"].includes(kind))
+			if (kind && !["user", "membership", "folder-area", "project", "agent-key"].includes(kind))
 				return errorResponse("Invalid history kind.", 400);
 			return Response.json(
 				this.mutations.store.listHistory({
@@ -465,14 +601,10 @@ export class CentralServer {
 				},
 				mutation?.audit("project.tracking", { requireRevision: true }),
 			);
+			await this.mutations.stopObservationTracking(project.id);
+			this.observedProjects.delete(project.id);
 			await this.retireProject(project.id);
-			if (project.tracking) {
-				try {
-					await this.mutations.ensureBaseline(project, () => this.handler(project).listCentralRecordSnapshots());
-				} catch {
-					this.mutations.blockProject(project.id);
-				}
-			}
+			if (project.tracking) await this.observeProject(project);
 			return Response.json(versionedManagement(`project:${project.id}`, project));
 		}
 		if (path === "/api/admin/users") {
@@ -552,7 +684,9 @@ export class CentralServer {
 	}
 
 	private async handleRequest(req: Request, server: Server<SocketData>): Promise<Response | undefined> {
+		if (this.closing) return errorResponse("Server is stopping.", 503);
 		const path = new URL(req.url).pathname;
+		if (req.headers.has("authorization")) return this.agentRequest(req, server);
 		const token = cookieToken(req);
 		if (path.startsWith("/api/auth/")) return this.authRequest(req, path, token);
 		if (path === "/api/version" && req.method === "GET") return Response.json({ version: await getVersion() });
@@ -665,8 +799,9 @@ export class CentralServer {
 					try {
 						await this.mutations.ensureBaseline(project, () => this.handler(project).listCentralRecordSnapshots());
 					} catch {
-						this.mutations.blockProject(project.id);
+						// Observation reports incomplete source records without inventing a recovery operation.
 					}
+					await this.observeProject(project);
 					return Response.json(versionedManagement(`project:${project.id}`, project), { status: 201 });
 				},
 				(operation) => this.operationDenied(operation, token),
@@ -677,88 +812,21 @@ export class CentralServer {
 				this.store
 					.list()
 					.filter((project) => project.tracking && this.auth.permissions(session.user, project.id))
-					.map(({ id, name }) => ({ id, name })),
+					.map(({ id, name }) => ({ id, name, observation: this.mutations.observationState(id) })),
 			);
 		}
 		const api = path.match(/^\/api\/projects\/([^/]+)(?:\/(.+))?$/);
-		if (api) {
-			const projectId = api[1] ?? "";
-			const authorization = this.authorization(token, projectId);
-			const denied = authorization.check("read");
-			if (denied) return denied;
-			const project = this.project(projectId);
-			if (!project) return errorResponse("Not Found", 404);
-			if (
-				!this.mutations.store.hasBaseline(project.id) &&
-				this.mutations.writeState(project.id).writeState === "ready"
-			) {
-				try {
-					await this.mutations.ensureBaseline(project, () => this.handler(project).listCentralRecordSnapshots());
-				} catch {
-					this.mutations.blockProject(project.id);
-				}
-			}
-			if (!api[2])
-				return req.method === "GET"
-					? Response.json({
-							id: project.id,
-							name: project.name,
-							permissions: this.auth.permissions(session.user, project.id),
-							...this.mutations.writeState(project.id),
-						})
-					: errorResponse("Not Found", 404);
-			if (api[2] === "history" && req.method === "GET") {
-				const url = new URL(req.url);
-				const kind = url.searchParams.get("kind") ?? undefined;
-				if (kind && !(["task", "document", "decision", "milestone", "config"] as string[]).includes(kind))
-					return errorResponse("Invalid history kind.", 400);
-				return Response.json(
-					this.mutations.store.listHistory({
-						scope: { kind: "project", projectId: project.id },
-						...(url.searchParams.get("recordKey") && { recordKey: url.searchParams.get("recordKey") ?? undefined }),
-						...(kind && { kind: kind as RecordKind }),
-						...(url.searchParams.get("cursor") && { cursor: url.searchParams.get("cursor") ?? undefined }),
-						...(url.searchParams.get("limit") && { limit: Number(url.searchParams.get("limit")) }),
-					}),
-				);
-			}
-			this.mutations.writeState(project.id);
-			if (this.mutations.consumeResolved(project.id)) await this.retireProject(project.id);
-			const handler = this.handler(project);
-			if (api[2] === "ws") {
-				if (req.headers.get("origin") !== this.origin) return errorResponse("Invalid Origin.", 403);
-				if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") return errorResponse("Not Found", 404);
-				const latestDenied = authorization.check("read");
-				if (latestDenied) return latestDenied;
-				return server.upgrade(req, { data: { projectId: project.id, token } })
-					? undefined
-					: errorResponse("WebSocket upgrade failed", 400);
-			}
-			const localPath = api[2].startsWith("assets/") ? `/${api[2]}` : `/api/${api[2]}`;
-			const permissionRequest = req.clone();
-			const response = ["GET", "HEAD", "OPTIONS"].includes(req.method)
-				? await this.mutations.runRead(
-						project.id,
-						() => handler.authorizeApi(permissionRequest.clone(), localPath, authorization),
-						() =>
-							handler.dispatchApi(req, localPath, authorization, {
-								recordKeyFor: (kind, visibleId, recordPath, observed) =>
-									this.mutations.recordKeyFor(project.id, kind, visibleId, recordPath, observed),
-							}),
-					)
-				: await this.mutations.runProject(
-						req,
-						project,
-						{ kind: "user", userId: session.user.id },
-						() => handler.authorizeApi(permissionRequest.clone(), localPath, authorization),
-						(context) => handler.dispatchApi(req, localPath, authorization, context),
-						() => handler.listCentralRecordSnapshots(),
-						() => this.retireProject(project.id),
-					);
-			const latestDenied = authorization.check("read");
-			if (latestDenied || response.status === 503) await this.retireProject(projectId);
-			return latestDenied ?? response;
-		}
+		if (api)
+			return this.projectRequest(
+				req,
+				server,
+				api[1] ?? "",
+				api[2],
+				this.authorization(token, api[1] ?? ""),
+				{ kind: "user", userId: session.user.id },
+				() => this.auth.permissions(session.user, api[1] ?? ""),
+				token,
+			);
 		const page = path.match(/^\/projects\/([^/]+)(?:\/(.*))?$/);
 		if (page && req.method === "GET") {
 			const denied = this.authorization(token, page[1] ?? "").check("read");
@@ -773,5 +841,89 @@ export class CentralServer {
 			return this.html();
 		}
 		return errorResponse("Not Found", 404);
+	}
+	private async projectRequest(
+		req: Request,
+		server: Server<SocketData>,
+		projectId: string,
+		tail: string | undefined,
+		authorization: ProjectAuthorization,
+		actor: MutationActor,
+		permissions: () => ProjectPermissions | null,
+		token?: string,
+	): Promise<Response | undefined> {
+		const denied = authorization.check("read");
+		if (denied) return denied;
+		const project = this.project(projectId);
+		if (!project) return errorResponse("Not Found", 404);
+		if (!this.mutations.store.hasBaseline(project.id) && this.mutations.writeState(project.id).writeState === "ready") {
+			try {
+				await this.mutations.ensureBaseline(project, () => this.handler(project).listCentralRecordSnapshots());
+			} catch {
+				// The observer distinguishes malformed files from interrupted writes.
+			}
+		}
+		await this.observeProject(project);
+		if (!tail)
+			return req.method === "GET"
+				? Response.json({
+						id: project.id,
+						name: project.name,
+						permissions: permissions(),
+						...this.mutations.writeState(project.id),
+						observation: this.mutations.observationState(project.id),
+					})
+				: errorResponse("Not Found", 404);
+		if (tail === "history" && req.method === "GET") {
+			const url = new URL(req.url);
+			const kind = url.searchParams.get("kind") ?? undefined;
+			if (kind && !(["task", "document", "decision", "milestone", "config"] as string[]).includes(kind))
+				return errorResponse("Invalid history kind.", 400);
+			return Response.json(
+				this.mutations.store.listHistory({
+					scope: { kind: "project", projectId: project.id },
+					...(url.searchParams.get("recordKey") && { recordKey: url.searchParams.get("recordKey") ?? undefined }),
+					...(kind && { kind: kind as RecordKind }),
+					...(url.searchParams.get("cursor") && { cursor: url.searchParams.get("cursor") ?? undefined }),
+					...(url.searchParams.get("limit") && { limit: Number(url.searchParams.get("limit")) }),
+				}),
+			);
+		}
+		this.mutations.writeState(project.id);
+		if (this.mutations.consumeResolved(project.id)) await this.retireProject(project.id);
+		const handler = this.handler(project);
+		if (tail === "ws") {
+			if (!token) return errorResponse("Permission denied.", 403);
+			if (req.headers.get("origin") !== this.origin) return errorResponse("Invalid Origin.", 403);
+			if (req.headers.get("upgrade")?.toLowerCase() !== "websocket") return errorResponse("Not Found", 404);
+			const latestDenied = authorization.check("read");
+			if (latestDenied) return latestDenied;
+			return server.upgrade(req, { data: { projectId: project.id, token } })
+				? undefined
+				: errorResponse("WebSocket upgrade failed", 400);
+		}
+		const localPath = tail.startsWith("assets/") ? `/${tail}` : `/api/${tail}`;
+		const permissionRequest = req.clone();
+		const response = ["GET", "HEAD", "OPTIONS"].includes(req.method)
+			? await this.mutations.runRead(
+					project.id,
+					() => handler.authorizeApi(permissionRequest.clone(), localPath, authorization),
+					() =>
+						handler.dispatchApi(req, localPath, authorization, {
+							recordKeyFor: this.mutations.recordKeysFor(project.id),
+						}),
+				)
+			: await this.mutations.runProject(
+					req,
+					project,
+					actor,
+					() => handler.authorizeApi(permissionRequest.clone(), localPath, authorization),
+					(context) => handler.dispatchApi(req, localPath, authorization, context),
+					() => handler.listCentralRecordSnapshots(),
+					() => this.retireProject(project.id),
+				);
+		const latestDenied = authorization.check("read");
+		if (latestDenied) await this.retireProject(projectId);
+		return latestDenied ?? response;
 	}
 }

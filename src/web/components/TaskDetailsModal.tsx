@@ -204,9 +204,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const { theme } = useTheme();
   const isCreateMode = !task;
   // A task from another branch or in the archive is shown but cannot be changed here.
-  const { permissions, writeState } = useAuth();
+  const { permissions, writeState, observation, writesAvailable } = useAuth();
   const isRecordReadOnly = task ? isReadOnlyTask(task) : false;
-  const isReadOnly = isRecordReadOnly || !permissions.tasksWrite || writeState !== "ready";
+  const isReadOnly = isRecordReadOnly || !permissions.tasksWrite || !writesAvailable;
   // Promoting a draft replaces it with a new task ID, which the Drafts page does through its own
   // Promote action, so the popup shows the draft status without turning the field into a second one.
   const isOpenDraft = (task?.status ?? "").trim().toLowerCase() === "draft";
@@ -1269,7 +1269,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
               </button>
 	              <button
 		                onClick={() => void handleSave()}
-		                disabled={saving || demoting}
+		                disabled={saving || demoting || isReadOnly}
 		                className="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium text-white bg-blue-600 dark:bg-blue-700 hover:bg-blue-700 dark:hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors duration-200 disabled:opacity-50"
 		                title="Save"
 		              >
@@ -1299,6 +1299,10 @@ export const TaskDetailsModal: React.FC<Props> = ({
             <span className="font-medium">Read-only:</span>{" "}
             {writeState !== "ready" ? (
 			  "Project writes are paused for recovery."
+			) : observation?.state === "checking" ? (
+			  "Project files are being checked. Writes are paused."
+			) : observation?.state === "degraded" ? (
+			  "Project files need attention. Writes are paused until a successful scan."
 			) : task?.branch ? (
               <>This task exists in the <span className="font-semibold">{task.branch}</span> branch. Switch to that branch to edit it.</>
             ) : !permissions.tasksWrite ? (
@@ -1777,7 +1781,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={() => void handleAddComment()}
-                      disabled={commentSaving || commentBody.trim().length === 0}
+                      disabled={isReadOnly || commentSaving || commentBody.trim().length === 0}
                       className="px-4 py-2 text-sm font-medium bg-blue-500 text-white rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors disabled:opacity-50"
                     >
                       {commentSaving ? "Adding..." : "Add comment"}
@@ -2020,7 +2024,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
           </div>
 
           {/* Archive button at bottom of sidebar */}
-		          {task && onArchive && !isRecordReadOnly && permissions.archive && writeState === "ready" && (
+		          {task && onArchive && !isRecordReadOnly && permissions.archive && writesAvailable && (
 		            <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3">
 		              <button
 		                onClick={handleArchive}

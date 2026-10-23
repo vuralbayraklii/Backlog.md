@@ -161,7 +161,7 @@ describe("persistent central mutation store", () => {
 		expect(store.listHistory({ scope: pending.scope }).items).toEqual([]);
 	});
 
-	it("retains v3 accounts, sessions, grants, project identities, and rollback behavior through v4", async () => {
+	it("retains v3 accounts, sessions, grants, project identities, and rollback behavior through v5", async () => {
 		seedProjects();
 		database.write((db) => {
 			db.query(
@@ -177,7 +177,7 @@ describe("persistent central mutation store", () => {
 		});
 		const old = new Database(store.databasePath);
 		old.exec(
-			"DROP TABLE history_events; DROP TABLE operation_files; DROP TABLE operations; DROP TABLE records; PRAGMA user_version=3",
+			"DROP TABLE observed_paths; DROP TABLE observation_projects; DROP TABLE operation_agents; DROP TABLE agent_key_grants; DROP TABLE agent_keys; DROP TABLE history_events; DROP TABLE operation_files; DROP TABLE operations; DROP TABLE records; PRAGMA user_version=3",
 		);
 		old.close();
 		const before = await Bun.file(store.databasePath).arrayBuffer();
@@ -197,7 +197,7 @@ describe("persistent central mutation store", () => {
 			expect(db.query("SELECT user_id FROM project_members").all()).toEqual([{ user_id: "u1" }]);
 			expect(db.query("SELECT id FROM folder_areas").all()).toEqual([{ id: "a1" }]);
 		});
-		expect(database.read(-1, (_db, version) => version)).toBe(4);
+		expect(database.read(-1, (_db, version) => version)).toBe(5);
 	});
 
 	it("keeps full physical evidence, ownership, safe response and one event across replay", () => {

@@ -103,8 +103,8 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
     const isArchived = currentDocument?.archived === true;
     // The editor opens on request (the Edit button, `?edit=true` in the URL, the new page), but never
     // for an archived document: the request can come before or after the record has loaded.
-    const { permissions, writeState } = useAuth();
-    const canWrite = permissions.docsWrite && writeState === 'ready';
+    const { permissions, writesAvailable } = useAuth();
+    const canWrite = permissions.docsWrite && writesAvailable;
     const isEditing = editRequested && !isArchived && permissions.docsWrite;
     const hasChanges = content !== originalContent || docTitle !== originalDocTitle || docPath !== originalDocPath;
     const clearUnsaved = useUnsavedChanges(isEditing && hasChanges);
@@ -431,7 +431,7 @@ export default function DocumentationDetail({docs, onRefreshData, dateFormat}: D
                                         Edit
                                     </button>
                                     {currentDocument && !isNewDocument && permissions.archive && (
-                                        <ArchiveButton onClick={archive} disabled={isArchiving || writeState !== 'ready'} />
+                                        <ArchiveButton onClick={archive} disabled={isArchiving || !writesAvailable} />
                                     )}
                                     </>
                                 ) : (

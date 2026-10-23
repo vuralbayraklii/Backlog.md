@@ -7,7 +7,9 @@
 
 import type { Command } from "commander";
 import { isConfigValueError } from "../file-system/operations.ts";
+import { createConnectedMcpServer } from "../mcp/connected.ts";
 import { createMcpServer } from "../mcp/server.ts";
+import { hasServerConnection, type ServerConnectionOptions } from "../server/client.ts";
 import { findBacklogRoot } from "../utils/find-backlog-root.ts";
 import { resolveRuntimeCwd } from "../utils/runtime-cwd.ts";
 
@@ -35,22 +37,27 @@ function registerStartCommand(mcpCmd: Command): void {
 		.description("Start the MCP server using stdio transport")
 		.option("-d, --debug", "Enable debug logging", false)
 		.option("--cwd <path>", "Directory to resolve Backlog root from (overrides BACKLOG_CWD)")
-		.action(async (options: StartOptions) => {
+		.action(async (options: StartOptions, command: Command) => {
 			try {
-				const runtimeCwd = await resolveRuntimeCwd({ cwd: options.cwd });
-				const projectRoot = (await findBacklogRoot(runtimeCwd.cwd)) ?? runtimeCwd.cwd;
-				// An explicit --cwd/BACKLOG_CWD pins the root; an inferred process.cwd()
-				// lets the server follow the client's workspace roots instead.
-				const pinned = runtimeCwd.source !== "process";
-				const server = await createMcpServer(projectRoot, { debug: options.debug, pinned });
+				let server: Awaited<ReturnType<typeof createMcpServer>> | Awaited<ReturnType<typeof createConnectedMcpServer>>;
+				if (hasServerConnection(process.argv.slice(2))) {
+					server = await createConnectedMcpServer(command.optsWithGlobals<ServerConnectionOptions>());
+				} else {
+					const runtimeCwd = await resolveRuntimeCwd({ cwd: options.cwd });
+					const projectRoot = (await findBacklogRoot(runtimeCwd.cwd)) ?? runtimeCwd.cwd;
+					// An explicit --cwd/BACKLOG_CWD pins the root; an inferred process.cwd()
+					// lets the server follow the client's workspace roots instead.
+					const pinned = runtimeCwd.source !== "process";
+					server = await createMcpServer(projectRoot, { debug: options.debug, pinned });
+					if (options.debug && runtimeCwd.source !== "process") {
+						console.error(`Using MCP start directory from ${runtimeCwd.sourceLabel}: ${runtimeCwd.cwd}`);
+					}
+				}
 
 				await server.connect();
 				await server.start();
 
 				if (options.debug) {
-					if (runtimeCwd.source !== "process") {
-						console.error(`Using MCP start directory from ${runtimeCwd.sourceLabel}: ${runtimeCwd.cwd}`);
-					}
 					console.error("Backlog.md MCP server started (stdio transport)");
 				}
 

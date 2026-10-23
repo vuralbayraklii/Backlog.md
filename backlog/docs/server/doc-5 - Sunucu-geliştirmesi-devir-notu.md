@@ -3,13 +3,63 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-23 06:00'
+updated_date: '2026-10-23 11:05'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje sunucusuna yeni sohbetten devam etmek içindir. A-00–A-04 ve BACK-799–805 tamamlandı; A-04 uygulama/kabul commit’i 09e336fb, Git kapanışı fc07f2ce ile origin/tasks/server-a04-write-history dalındadır. Kullanıcının görsel geri bildirimi üzerine BACK-806 mevcut frontend/tema bütünlüğü düzeltmesi tamamlandı. Güncel dal tasks/server-ui-consistency; taban fc07f2ced74c9aeec5615f469f5fb21b24d32648. BACK-806 uygulama/kabul commit’i 289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6, origin/tasks/server-ui-consistency dalına gönderildi. Git teslim kaydı bu commit’i takip eder. Önce Git durumunu doğrula ve yerel çalışmayı koru.
+Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-05 ve BACK-813 inceleme düzeltmeleri tamamlandı. BACK-807–812 ile BACK-813 Done. Bütün bileşenler mevcut makinede tek uygulama örneğinde çalışır. Dal tasks/server-a05-agent-observation; taban 0dffa5b328a5d9376305cf3eec7417f9bde63dfe. A-05 ve düzeltmeler yereldir; commit/push yapılmadı. Güncel kabul verification/server/back-813-verification.json; önceki A-05 raporu tarihsel kanıttır. Önce Git durumunu doğrula ve yerel değişiklikleri koru.
+
+## BACK-813 — A-05 inceleme düzeltmeleri (23 Ekim 2026)
+
+Kullanıcı dokuz inceleme bulgusunun düzeltilmesini istedi ve commit/push için uygun bulmadığını belirtti. BACK-813 @codex üzerine alındı; mevcut yerel değişiklikler /tmp/backlog-review-fixes/before.patch ve before-untracked.tar.gz ile korundu. Aynı özellik dalında düzeltildi.
+
+- Kimlik çözümü istek/toplu precondition başına tek doğrulanmış gözlem görüntüsü ve yol indeksi kullanır. Aynı 1000 kayıt ve 2,29 MB içerikte eski algoritma 11.32 saniye, yeni 13.43 ms; yükleme 1000→1, kimlikler eşit. Bu yalnız kimlik çözümü ölçümüdür.
+- Yeni handler, bozuk dosyayla açılışta bile kalıcı son güvenilir görüntüyü liste/aramaya yayınlar. Kuyrukta handler yenilenirse yayın hedefi yeniden çözülür. İki HTTP restart ve gerçek native Chromium restart kontrolünde güvenilir kayıt görünür; bozuk detay/yazma503 kalır.
+- Bağlı search/doc search query gönderir. ServerClient dizi filtrelerini ayrı type/status/excludeStatus/project/modifiedFile parametreleri olarak aktarır; API taskType değerlerini ortak yapılandırma resolverı ile doğrulayıp uygular.
+- Açık içerikli belge güncellemesi istemcide güncel revision okumasına takılmaz; özgün revision/UUID sunucuya gider. CLI→MCP tekrar, stale yeni edit ve farklı retry body reddi kanıtlıdır. Milestone rename/archive/remove özgün ad/ID ile aynı sunucu replay yoluna gider; CLI/MCP aktif kayıt çözümleme kopyaları kaldırıldı. Boşluk içeren adlar decode edilir; precondition belirsizliği kapalı tutar. Altı CLI/MCP durumunda tek sonuç/olay kanıtlıdır.
+- Karar listesi JSON/metinde recordKey ve revision korur; JSON ortak list window ile max-count/skip/total/nextSkip uygular; count mevcut sözleşmeye uyar.
+
+Son sabit kaynakta resmî tam CI 3973 başarılı / 13 atlanan / 0 başarısız; 3986 test, 360 dosya, 20942 beklenti. Tip623, yazmasız Biome, native build/test CLI paketi ve derlenmiş CLI/web/MCP smoke geçti. Gerçek Chromium28/28, runtime0; API yanıtı taklidi yok. Kalıcı kanıt [back-813-verification.json](../../../verification/server/back-813-verification.json); komutlar, dosya/günlük özetleri ve sınırlar buradadır. Kaynak manifesti src ve beş derleme/test girdisi toplam645 dosyayı kapsar; SHA-256 c5334e793b662ed845a7ac4e1d980b4b72eab8833581a8c21b9ac9b0d52f8b62; kontrollerden sonra değişmedi.
+
+Sadelik incelemesi tek resolver, tek ServerClient, mevcut SearchService/list-window/JSON ve sunucu yazım yolunu korudu; yeni kalıcı önbellek, depo veya servis katmanı eklenmedi. Groma yoktu; manifesto/yönetilen mimari dosyaları değişmedi. Yalnız geçici projeler kullanıldı. Ham kanıt /tmp/backlog-review-fixes altındadır; kalıcı yedek değildir. Mevcut13 platform/PTY atlaması başarı sayılmaz.
+
+Doğrulanmış binary dist/backlog konumuna atomik alındı; önceki binary /tmp/backlog-review-fixes/previous-backlog içinde korundu. Kişisel süreç yeniden başlatılmadı; aynı data-dir/start komutuyla yeniden açınca düzeltmeler kullanılır. Commit/push yapılmadı. A-06 kapsamı önceki kayıtta olduğu gibi sonraki kullanıcı kararıdır.
+
+## Tamamlanan A-05 — yerel agent erişimi ve dış dosya gözlemi (23 Ekim 2026)
+
+Kullanıcı doc-7 planını onaylayıp uygulamayı istedi; ayrıca sunucu teriminin mevcut makinedeki Backlog.md süreci olduğunu netleştirdi. Ayrı makine/servis kurulmadı. Üç mevcut alt ajan depo (@codex-store), gözlem (@codex-core) ve web/MCP (@codex-web) dilimlerini; ana ajan (@codex) merkezi API/CLI/istemci, entegrasyon ve kabulü tamamladı. Core ajanının son iki test fixture düzeltmesi ana ajan tarafından tamamlandı. Tüm görevler CLI üzerinden atanıp planlandı ve kanıtla kapatıldı.
+
+| Görev | Sonuç |
+|---|---|
+| BACK-807 | SQLite v5, kullanıcıya bağlı hash anahtarlar, açık grants ve atomik gözlem/denetim deposu |
+| BACK-808 | Güvenli ham envanter, güçlü taşıma eşlemesi, kalıcı gözlem sonrası yayın ve startup/watcher/30s yaşam döngüsü |
+| BACK-809 | Aynı proje handlerlarında Bearer, güncel yetki ve operasyon sahipliği; admin anahtar CLI/API ve gözlem bağlantısı |
+| BACK-810 | Ortak ServerClient, mevcut etkileşimsiz CLI ve 24 isteğe bağlı MCP aracı; açık revision/UUID ve doğrulanmış sonuç |
+| BACK-811 | Mevcut Users içinde anahtar yönetimi; Projects/pano içinde kontrol durumu, durmuş yazmalar ve İstanbul zamanı |
+| BACK-812 | Birleşmiş CI, native CLI/web/MCP, gerçek Chromium ve kesinti kabulü |
+
+Anahtarlar kullanıcıya bağlıdır; etkin izin açık grants ile sahibinin güncel izinlerinin kesişimidir. Admin sahibi bile anahtara yönetim/config yetkisi vermez. Ham sır yalnız ilk yanıttadır; sonraki liste/iptal/replay sonucu güvenli metadata içerir. Pasifleştirme ve admin parola sıfırlaması anahtarları kalıcı iptal eder. Grants değişimi iptal+yeniden oluşturma; varsayılan süre sonu yoktur. HTTP create {key,secret}, replay {key}; revoke If-Match korumalıdır. Yönetim CLI server agent-key create/list/revoke mevcut --data-dir kullanır.
+
+Bağlantılı CLI --server-url/--server-project/--agent-key-file ile yerel root/config dönüşümünden önce seçilir. HTTP yalnız açık loopback izniyle çalışır; bağlantı hatası yerel dosyalara yazmaya düşmez. Okunan revision açık --if-match/MCP girdisidir; her yazı UUID kullanır. Kayıp network/body yanıtı ancak kimliği doğrulanan operation GET requestHash'i gönderilen kanonik isteğin hash'iyle eşleşirse başarı kabul edilir. Farklı içerikle aynı UUID veya arada iptal edilmiş erişim eski sonucu yeni başarı gibi göstermez; belirsiz sonuçta işlem kimliği korunur. JSON watch, filtreler, arama ve çıktı yardımcıları yeniden kullanılır. MCP sabit proje ve aynı istemci üzerinde stdio adaptörüdür; roots hedefi değiştirmez. TUI/editör/Git/yerel bakım/config write uzak çalıştırılmaz.
+
+Gözlem mevcut reader/parser/kimlik/güvenli yol kodunu kullanır. Geçerli/yok/bozuk/erişilemeyen/kararsız dosya ayrılır; parser skip silme sayılmaz. İlk A-05 güvenli tarama takip başlangıcıdır; önceki dış hareketler geriye dönük üretilmez. Sonraki fark, record metadata, olay ve checkpoint tek SQLite transaction'ındadır. Dış aktör unknown, occurredAt null, detectedAt gerçek UTC gözlem zamanıdır. Güçlü tekil dosya kimliğiyle taşıma recordKey'i korur; ID/içerik benzerliği yeterli değildir. Belirsiz yeni yol ve gözlenmiş silme sonrası recreate yeni kimlik alır; normal atomik save kimliği bölmez. İç yazı/finalize checkpoint'i de ilerletir; watcher ikinci dış olay üretmez.
+
+Yalnız gerçek Backlog dizini recursive izlenir; başlangıç, dosya bildirimi ve 30 saniye kontrolü browser kapalıyken de çalışır. Değişmeyen güvenli envanter tek kontrol noktası güncellemesiyle doğrulanır; değişen dosyada kararlılık tekrar okunur. Takip kapatma/kapanış yarışları transaction ve proje kuyruğunda denetlenir. Bozuk Markdown ilgili projeyi yazmaya kapatır, güvenli list/search son geçerli hali uyarıyla sunar; değişmiş bozuk detay503, güvenilmeyen fiziksel sınır hard503 olur. Başarılı tam kontrolde yazma otomatik açılır. observation durumu A-04 recovery_required engelinden ayrıdır. Kayıtlar, arama, cache ve WS mevcut ContentStore/pano yolundadır.
+
+### Son kabul kanıtı
+
+- Resmî tam CI profili: 3.967 başarılı, 13 atlanan, 0 başarısız; toplam 3.980 test, 360 dosya, 19.855 beklenti. Non-DOM 3.494/13/0 (315 dosya, 338,54s), DOM 473/0/0 (45 dosya, 34,76s). Komut ve iki JUnit verification/server/a05-verification.json içindedir; kısmi/odak koşuları bu toplama eklenmedi.
+- Tip 623 dosyada 0 hata; varsayılan yazmasız Biome 534 dosyada geçti. Değişen/yeni 23 TSX aynı kurallarla ayrıca karşılaştırıldı: başlangıç159 hata/41 uyarı/5 bilgi, son158 hata/39 uyarı/5 bilgi; yeni tanı0. Kalıtımlı TSX borcu temiz tarama sayılmadı.
+- Native build, CLI test paketi ve derlenmiş CLI/web/MCP smoke geçti. Gerçek native Chromium 27/27 ve runtime0: kullanıcı/admin, anahtar tek gösterim/iptal, aynı anahtarla native CLI+MCP read/edit, dış olay, bozuk dosyada yazma durması/onarım, mevcut Kanban ve koyu/açık390px akışı. API yanıtı taklidi yoktur. Altı gerçek SIGKILL/kurtarma testi tam koşuda geçti; completed recovery dış watcher olayı üretmedi.
+- Son 653 kaynak dosyası özeti 10534e03c96a52895b0f0602a38011fed4de64a7306b8cc064961744ac06b2d2; build/test/browser sonrası aynı kaldı. Native SHA-256 b9ec89cc1a8464428d99c27b9b6cc262d4e187ef224466ce5cdef77c65246f3b.
+
+Kalıcı kabul raporu verification/server/a05-verification.json; PNG'ler a05-board-degraded-dark.png, a05-agent-keys-mobile-light.png ve a05-projects-degraded-dark.png aynı klasördedir ve gözle incelendi. Ham günlük/JUnit/manifest/harness /tmp/backlog-a05 altındadır; /tmp kalıcı yedek değildir. Başlangıç kayıtları start-records.tar.gz ile korundu. İlk tanı tam koşusunun10 hatası yeni DTO beklentileri, ayrı internal Core fixture cache'i, JS test paketi asset çalışma dizini, ham SQLite worker commit yarışı ve ara UI kopya değişikliği kaynaklıydı; nihai sabit kaynak tam CI0hata ile doğrulandı. Native ilk tanı, global --allow-http-loopback bayrağının start alt komutunu gölgelemesini buldu; aynı kullanıcı komutunun gerçek CLI/native testiyle düzeltildi.
+
+Sadelik: tek mevcut Core/prepared writer/SQLite politikası, tek proje dispatch ve ServerClient/kanonik hash/JSON-watch döngüsü; mevcut AppFrame/tema/yetki kontrolleri. Yeni pano veya ikinci görev modeli eklenmedi. Groma yoktu; manifesto/yönetilen mimari dosyaları değişmedi. Yalnız geçici projeler kullanıldı; gerçek Finbee veya kişisel veritabanı ajan tarafından açılmadı/değiştirilmedi. Ortak kilide katılmayan dış yazıcıların bütün ara hareketleri/çok dosyalı atomikliği garanti edilmez; eksik güçlü dosya kimliği yeni kimliğe düşer. Mevcut13 platform/PTY atlaması başarı sayılmaz.
+
+Doğrulanmış yeni binary dist/backlog konumuna atomik alındı; önceki binary /tmp/backlog-a05/previous-backlog içinde korunur. Çalışan kişisel süreç yeniden başlatılmadı. Kullanıcı aynı --data-dir ve localhost start komutuyla yeniden başlatınca A-05 ve SQLite yükseltmesi devreye girer; admin tekrar oluşturulmaz. A-05 değişiklikleri tasks/server-a05-agent-observation dalında yerel, commit/push yapılmadı. Sıradaki aşama A-06 kullanıcı geçmişi/inceleme/kabul akışıdır; görevleri henüz açılmadı.
 
 ## BACK-806 Git teslimi — 23 Ekim 2026
 
@@ -274,13 +324,13 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00–A-04 ve BACK-806 arayüz düzeltmesi tamamlandı. BACK-806 289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6 commit’iyle origin/tasks/server-ui-consistency dalına gönderildi; kabul kaydı verification/server/back-806-ui.json. A-04 uygulaması ve kabulü 09e336fb28f28dcef9a94ac162666cfc5662a20b commit’iyle origin/tasks/server-a04-write-history dalındadır; kapanış kayıtları aynı dalda takip commit’iyle taşınır. Yeni aşama veya gerçek proje bağlama bu çalışmada başlatılmadı. A-05 agent kimliği/dış değişiklik olayları, A-06 kullanıcı geçmişi ve doğrulama/kabul iş akışları doc-4'teki ayrı aşamalardır.
+A-00–A-05, BACK-806 ve BACK-813 inceleme düzeltmeleri tamamlandı. A-05 BACK-807–813 tasks/server-a05-agent-observation dalında yereldir; commit/push yapılmadı. Güncel düzeltme kabulü verification/server/back-813-verification.json içindedir. Kabul verification/server/a05-verification.json, onaylı plan doc-7. Önceki A-04 uygulaması09e336fb/kapanışıfc07f2ce ve BACK-806 uygulaması289bfc2d/kapanışı0dffa5b3 ilgili origin özellik dallarına gönderildi. A-06 kullanıcı tarihçesi, benden beklenenler ve doğrulama/kabul akışları sıradadır; A-07 gerçek Finbee bağlama ve A-08 işletim ayrı aşamalardır.
 
-Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-6, a00-baseline.json ve a04-verification.json okumalı; BACK-799–805'i CLI ile doğrulamalı. Git durumunu ve yerel dosyaları korumadan dal değiştirmemeli. Sonraki kapsamı mevcut kullanıcı vuralbayraklii belirler; önceki öneriler kendiliğinden onaylanmış sayılmaz.
+Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-7, a00-baseline.json ve a05-verification.json okumalı; BACK-807–812'yi CLI ile doğrulamalı. Git durumunu ve yerel dosyaları korumadan dal değiştirmemeli. Sonraki kapsamı mevcut kullanıcı vuralbayraklii belirler; önceki öneriler kendiliğinden onaylanmış sayılmaz.
 
 ## Sonraki aşamalarda karar gerektiren konular
 
-- Agent anahtarının kullanıcıyla bağı ve agent'ın kullanıcı adına doğrulama/kabul yetkisi.
+- Agent'ın kullanıcı adına doğrulama/kabul yetkisi A-06 kararıdır. Anahtarın kullanıcıyla bağı ve A-05 yetki kesişimi onaylanıp uygulanmıştır; yeniden açık soru sayılmaz.
 - İnceleme taleplerinin alanları, Markdown/SQLite kaynak dağılımı ve serbest metin assignee'lerin hesaplarla eşleştirilmesi.
 - Doğrulama/kabulün hangi içerik veya kod sürümüne ait olduğu ve kapsam değişiminde yeniden inceleme politikası.
 - Yedek/geri yükleme provası ve sonraki işletim kapsamı. A-04 kesinti/olay/ortak kilit sınırları doc-6 bölüm9 ile karara bağlandı; açık öneri değildir.
@@ -288,9 +338,10 @@ Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-6, a00-basel
 ## Yeni sohbete verilecek başlangıç mesajı
 
 ```text
-Backlog.md sunucusunda A-00–A-04 tamamlandı ve origin/tasks/server-a04-write-history dalına gönderildi (uygulama09e336fb, kapanışfc07f2ce).
-Kullanıcının görsel geri bildirimi üzerine BACK-806 frontend/tema bütünlüğü düzeltmesi 289bfc2dfa6c4d68b7ab2a9acfb7b40631ac47d6 commit’iyle origin/tasks/server-ui-consistency dalına gönderildi; teslim kaydı takip commit’indedir.
-Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5 ve verification/server/back-806-ui.json oku; BACK-806'yı CLI ile doğrula. Git durumunu ve yerel değişiklikleri koru.
-Yeni derleme dist/backlog'a alındı. Kullanıcı aynı kişisel data-dir ile yeniden başlattı ve güncel arayüzün açıldığını doğruladı; gerçek Finbee bu çalışma sırasında bağlanmadı.
-A-05 agent/dış dosya olayları ve A-06 kullanıcı geçmişi/kabul kapsamları ayrı aşamalardır; mevcut kullanıcı vuralbayraklii ile kapsam ve açık ürün kararları netleştirilmeden yeni aşama başlatma.
+Backlog.md uygulamasında A-00–A-05 tamamlandı. Her şey mevcut makinede tek uygulama örneğinde çalışır.
+A-05 BACK-807–812 ve inceleme düzeltmesi BACK-813 Done; tasks/server-a05-agent-observation dalında yerel değişiklikler var, commit/push yapılmadı. Taban0dffa5b328a5d9376305cf3eec7417f9bde63dfe.
+Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5/doc-7 ve verification/server/a05-verification.json oku; görevleri CLI ile doğrula. Git durumunu ve yerel değişiklikleri koru.
+BACK-813 dokuz inceleme bulgusunu düzeltti; güncel kanıt verification/server/back-813-verification.json. Son sabit kaynak CI3973pass/13skip/0fail, native Chromium28/28. dist/backlog doğrulanmış son binary; kişisel süreç yeniden başlatılmadı, aynı data-dir ile kullanıcı yeniden açmalı.
+Kullanıcıya bağlı anahtar/izin kesişimi, güçlü taşımada kimlik koruma ve bozuk dosyada ilgili projede yazmayı durdurma kararları onaylı ve uygulanmış; yeniden sorma. Gerçek Finbee bu çalışmada bağlanmadı.
+Sıradaki A-06 kullanıcı geçmişi/benden beklenenler/doğrulama-kabul akışıdır; kapsamı ve açık A-06 ürün kararlarını mevcut kullanıcı vuralbayraklii ile netleştir. Henüz A-06 görevi açılmadı.
 ```

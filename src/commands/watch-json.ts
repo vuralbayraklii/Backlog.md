@@ -63,6 +63,7 @@ export async function watchJson(
 	inputs: string[],
 	read: () => Promise<string | undefined>,
 	output: Writable = process.stdout,
+	options: { poll?: boolean } = {},
 ): Promise<void> {
 	const controller = new AbortController();
 	const { signal } = controller;
@@ -132,7 +133,7 @@ export async function watchJson(
 		// can be expensive in large projects, so an idle watch otherwise only compares stats.
 		timer = setInterval(() => {
 			if (starterExited()) onTerminate();
-			else if (filesSignature(inputs) !== seen) refresh();
+			else if (options.poll || filesSignature(inputs) !== seen) refresh();
 		}, 1000);
 		while (!signal.aborted) {
 			pending = false;

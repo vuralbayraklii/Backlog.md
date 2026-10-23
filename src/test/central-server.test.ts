@@ -164,15 +164,22 @@ describe("central project server", () => {
 		await store.register("Shown Beta", beta);
 		await server.start(Number(new URL(base).port), false, { publicUrl: base, allowHttpLoopback: true });
 
+		const observation = {
+			state: "ready",
+			error: null,
+			checkedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+			lastSuccessfulScanAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+		};
 		expect(await (await request(`${base}/api/projects`)).json()).toEqual([
-			{ id: "1", name: "Shown Alpha" },
-			{ id: "2", name: "Shown Beta" },
+			{ id: "1", name: "Shown Alpha", observation },
+			{ id: "2", name: "Shown Beta", observation },
 		]);
 		expect(await (await request(`${base}/api/projects/1`)).json()).toEqual({
 			id: "1",
 			name: "Shown Alpha",
 			permissions: ADMIN_PERMISSIONS,
 			writeState: "ready",
+			observation,
 		});
 		for (const [id, name] of [
 			["1", "Alpha"],

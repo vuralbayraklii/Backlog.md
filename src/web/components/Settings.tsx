@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { MutationConflictNotice, isMutationConflict } from './MutationConflictNotice';
 
 const Settings: React.FC = () => {
-	const { writeState } = useAuth();
+	const { writesAvailable } = useAuth();
 	const [config, setConfig] = useState<BacklogConfig | null>(null);
 	const [originalConfig, setOriginalConfig] = useState<BacklogConfig | null>(null);
 	const [configRevision, setConfigRevision] = useState<string | null>(null);
@@ -93,7 +93,7 @@ const Settings: React.FC = () => {
 	};
 
 	const handleSave = async () => {
-		if (!config || writeState !== 'ready' || !validateConfig()) return;
+		if (!config || !writesAvailable || !validateConfig()) return;
 
 		try {
 			setSaving(true);
@@ -202,7 +202,7 @@ const Settings: React.FC = () => {
 				</div>
 				<div className="flex justify-end gap-3">
 					<button type="button" disabled={!hasUnsavedChanges || saving} onClick={handleCancel} className="rounded border px-4 py-2 disabled:opacity-50">Cancel</button>
-					<button type="button" disabled={!hasUnsavedChanges || saving || writeState !== 'ready'} onClick={handleSave} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{saving ? 'Saving...' : 'Save Changes'}</button>
+					<button type="button" disabled={!hasUnsavedChanges || saving || !writesAvailable} onClick={handleSave} className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50">{saving ? 'Saving...' : 'Save Changes'}</button>
 				</div>
 				{showSuccess && <SuccessToast message="Settings saved successfully!" onDismiss={() => setShowSuccess(false)} />}
 			</div>
@@ -544,7 +544,7 @@ const Settings: React.FC = () => {
 							</button>
 							<button
 								onClick={handleSave}
-								disabled={!hasUnsavedChanges || saving || writeState !== 'ready'}
+								disabled={!hasUnsavedChanges || saving || !writesAvailable}
 								className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded-lg hover:bg-blue-600 dark:hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-500 disabled:opacity-50 transition-colors duration-200"
 							>
 								{saving ? 'Saving...' : 'Save Changes'}

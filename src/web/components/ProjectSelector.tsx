@@ -3,12 +3,14 @@ import type { ProjectRegistrationAccess } from "../../server/registration-types"
 import { useAuth } from "../contexts/AuthContext";
 import { requestJson } from "../lib/request";
 import { buttonClass } from "./AccountForms";
+import { ObservationStatus, type ProjectObservation } from "./ObservationStatus";
 import ProjectRegistration from "./ProjectRegistration";
 import ServerLayout from "./ServerLayout";
 
 interface ProjectChoice {
 	id: string;
 	name: string;
+	observation?: ProjectObservation;
 }
 
 export default function ProjectSelector() {
@@ -22,17 +24,27 @@ export default function ProjectSelector() {
 	useEffect(() => {
 		if (!ready) return;
 		const controller = new AbortController();
-		requestJson<ProjectChoice[]>("/api/projects", { signal: controller.signal })
-			.then((projects) => {
-				if (!controller.signal.aborted) {
-					setProjects(projects);
-					setError(false);
-				}
-			})
-			.catch(() => {
-				if (controller.signal.aborted) return;
-				setError(true);
-			});
+		let latestLoad = 0;
+		const loadProjects = () => {
+			const request = ++latestLoad;
+			return requestJson<ProjectChoice[]>("/api/projects", { signal: controller.signal })
+				.then((projects) => {
+					if (!controller.signal.aborted && request === latestLoad) {
+						setProjects(projects);
+						setError(false);
+					}
+				})
+				.catch(() => {
+					if (controller.signal.aborted || request !== latestLoad) return;
+					setError(true);
+				});
+		};
+		void loadProjects();
+		const refreshVisible = () => {
+			if (document.visibilityState === "visible") void loadProjects();
+		};
+		if (central) window.addEventListener("focus", refreshVisible);
+		const timer = central ? window.setInterval(refreshVisible, 30_000) : null;
 		if (central)
 			requestJson<ProjectRegistrationAccess>("/api/projects/registration", { signal: controller.signal })
 				.then((next) => {
@@ -44,7 +56,11 @@ export default function ProjectSelector() {
 				.catch(() => {
 					if (!controller.signal.aborted) setAccessError(true);
 				});
-		return () => controller.abort();
+		return () => {
+			controller.abort();
+			if (timer !== null) window.clearInterval(timer);
+			window.removeEventListener("focus", refreshVisible);
+		};
 	}, [central, ready, session?.csrfToken]);
 
 	return (
@@ -89,10 +105,13 @@ export default function ProjectSelector() {
 							<li key={project.id}>
 								<a
 									href={`/projects/${encodeURIComponent(project.id)}/board`}
-									className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white px-5 py-4 font-medium shadow-sm hover:border-blue-500 focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-gray-700 dark:bg-gray-800"
+									className="block rounded-lg border border-gray-200 bg-white px-5 py-4 font-medium shadow-sm hover:border-blue-500 focus-visible:outline-2 focus-visible:outline-blue-500 dark:border-gray-700 dark:bg-gray-800"
 								>
-									<span>{project.name}</span>
-									<span className="text-sm text-gray-500 dark:text-gray-400">{project.id}</span>
+									<span className="flex items-center justify-between gap-4">
+										<span>{project.name}</span>
+										<span className="text-sm text-gray-500 dark:text-gray-400">{project.id}</span>
+									</span>
+									<ObservationStatus observation={project.observation} compact />
 								</a>
 							</li>
 						))}

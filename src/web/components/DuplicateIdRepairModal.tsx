@@ -12,7 +12,7 @@ interface DuplicateIdRepairModalProps {
 }
 
 export function DuplicateIdRepairModal({ isOpen, plan, onClose, onRepaired }: DuplicateIdRepairModalProps) {
-	const { writeState } = useAuth();
+	const { writesAvailable } = useAuth();
 	const [showConfirmation, setShowConfirmation] = useState(false);
 	const [isRepairing, setIsRepairing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -31,7 +31,7 @@ export function DuplicateIdRepairModal({ isOpen, plan, onClose, onRepaired }: Du
 	};
 
 	const handleRepair = async () => {
-		if (writeState !== "ready") return;
+		if (!writesAvailable) return;
 		setIsRepairing(true);
 		setError(null);
 		try {
@@ -159,7 +159,7 @@ export function DuplicateIdRepairModal({ isOpen, plan, onClose, onRepaired }: Du
 							ref={repairButtonRef}
 							type="button"
 							onClick={handleRepair}
-							disabled={isRepairing || writeState !== "ready"}
+							disabled={isRepairing || !writesAvailable}
 							className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:opacity-50 dark:bg-red-500 dark:hover:bg-red-400"
 						>
 							{isRepairing

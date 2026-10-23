@@ -1,0 +1,666 @@
+{
+	"schemaVersion": 1,
+	"stage": "A-05",
+	"result": "passed",
+	"recordedAt": "2026-10-23T07:40:14.003522+00:00",
+	"taskIds": ["BACK-807", "BACK-808", "BACK-809", "BACK-810", "BACK-811", "BACK-812"],
+	"branch": "tasks/server-a05-agent-observation",
+	"baseCommit": "0dffa5b328a5d9376305cf3eec7417f9bde63dfe",
+	"deployment": "One Backlog.md application instance on the existing Linux machine; browser, CLI and optional stdio MCP use the same local API.",
+	"source": {
+		"fileCount": 653,
+		"snapshotSha256": "10534e03c96a52895b0f0602a38011fed4de64a7306b8cc064961744ac06b2d2",
+		"unchangedAfterFinalChecks": true,
+		"changedFiles": [
+			{
+				"path": "README.md",
+				"sha256": "bce504a89dcf64bb2ee7188a54a8058ee4185f35bbdadde4ac9d6315cd5ee03e"
+			},
+			{
+				"path": "src/cli.ts",
+				"sha256": "ff8853d860953c3cfe9adf0f54f943d5315c829b813d48cbbcdbd5708a88d87e"
+			},
+			{
+				"path": "src/commands/connected.ts",
+				"sha256": "14477cee4513a86007daf0451923299b515a8da448631f87ff74e9e766f25fcd"
+			},
+			{
+				"path": "src/commands/mcp.ts",
+				"sha256": "c5b031edb142fd5f0c2545c2963037a5623c85837351a5353935fc6fd166f1a3"
+			},
+			{
+				"path": "src/commands/server.ts",
+				"sha256": "66112e2e0d95f994102465b2f9097bbd7158a6a8d3990089e67daf4aef76c469"
+			},
+			{
+				"path": "src/commands/watch-json.ts",
+				"sha256": "b3284d06a44e8d43a3f17cfc3a0377ef8565bc379d782ecbd3ed152e8759a338"
+			},
+			{
+				"path": "src/core/backlog.ts",
+				"sha256": "6b31497a2aa6cec0bf0266fe2e1c4b82a13741d71db0a7f0d9b24bd72236943e"
+			},
+			{
+				"path": "src/core/content-store.ts",
+				"sha256": "e5806103613dd31b7ec024feb961537daf51bb182aa4305d22fa2162ea891a37"
+			},
+			{
+				"path": "src/guidelines/cli-instructions/overview.md",
+				"sha256": "61b8f88fec129384ea4db58ae5fd74c62e034dfb19b19f24856da72a2f0e81ee"
+			},
+			{
+				"path": "src/mcp/connected.ts",
+				"sha256": "477baa971d94cd38a956a283410728c2335d28fcf9af1c0cd0d66c93cc718894"
+			},
+			{
+				"path": "src/server/agent-store.ts",
+				"sha256": "d0470960118e968cd8be1d267a4c18e0c4d1d9604f16aab830cb6a3ddd772b85"
+			},
+			{
+				"path": "src/server/agent-types.ts",
+				"sha256": "c3e464f1c7a7d6434cd89d2bcd064e7f602c39fafc352c1983027d0d80e84c19"
+			},
+			{
+				"path": "src/server/auth-store.ts",
+				"sha256": "dcda8454ced228f933e5be4f2aa4f4c6e5ec0adfdfecd06dc70f307a49aca146"
+			},
+			{
+				"path": "src/server/central.ts",
+				"sha256": "fae08ba29ab1ef399fbebbf24e28e38b1f13f62c47cd6a597eb2afd1be003606"
+			},
+			{
+				"path": "src/server/client.ts",
+				"sha256": "fed864ed34719f949bda5f456a61a4cbd135abc83d5e01e418abd513700994d6"
+			},
+			{
+				"path": "src/server/database.ts",
+				"sha256": "d89a1f5b78ff4bf9e91208a4d510f00602e6e563d20667f61997ac0eb606302b"
+			},
+			{
+				"path": "src/server/index.ts",
+				"sha256": "b57e1eea48e5c27c4aba8f3db24c26040761e8696d3e68a204a20739f48f95a6"
+			},
+			{
+				"path": "src/server/mutation-store.ts",
+				"sha256": "564288c98100c1052b0561c901cb572170016d581aef43c4e63c40da85f8f848"
+			},
+			{
+				"path": "src/server/mutation-types.ts",
+				"sha256": "2435124b1c7b1188627ec9dafbb8bb44d0c7056b7f6e585f142a64297f6b11ff"
+			},
+			{
+				"path": "src/server/mutations.ts",
+				"sha256": "a60c16c364037163c4f70c3911f17d10fd929db34d377f847ddf0b33044e33d9"
+			},
+			{
+				"path": "src/server/observation-store.ts",
+				"sha256": "8b68678545317c10f5a6b195f01522af5a7e37dad678bf059935124092ade42c"
+			},
+			{
+				"path": "src/server/observation-types.ts",
+				"sha256": "4c5f7a6aab35b9aa2154fd701d58b93ba9e084bcb528a747429607084a593396"
+			},
+			{
+				"path": "src/server/observation.ts",
+				"sha256": "a4589a349a5dda980dab7c975f80811884fa407f9976fc1cc8838580aea6c30c"
+			},
+			{
+				"path": "src/test/central-auth.test.ts",
+				"sha256": "e42aefdce4f6c06aa1e3dcde4f283fca0aaa770bf34ed0aea112a36b8f7493fe"
+			},
+			{
+				"path": "src/test/central-observation-http.test.ts",
+				"sha256": "f989a9a53bf55cb68829908a72661201dda5b6d640e54540c1d482879f7f6f5f"
+			},
+			{
+				"path": "src/test/central-prepared-write.test.ts",
+				"sha256": "0f219945b8a44b9ea1551d46cd0138e0aa525d72027687f5f8e7ff5eec55a64e"
+			},
+			{
+				"path": "src/test/central-project-registration.test.ts",
+				"sha256": "ab4f486c6f9344c104b6b374a0a7b0757d8beffa2a19dcc509bdd6e7c7945f27"
+			},
+			{
+				"path": "src/test/central-registration-admin-race.test.ts",
+				"sha256": "3b6a404101fc8626965a43aa1b1e1f4b5e3b545327ca4b04dca3d5106104f022"
+			},
+			{
+				"path": "src/test/central-server.test.ts",
+				"sha256": "02821634e77cbb973aec369a117c591ad633244cbeceee62026f3c2290a50a4f"
+			},
+			{
+				"path": "src/test/cli-connected.test.ts",
+				"sha256": "bfd4603eb39d0a64cb05f60798f6fb7025c4e854c85c2663475e1a007882e797"
+			},
+			{
+				"path": "src/test/mcp-connected-stdio.test.ts",
+				"sha256": "45047523ec7e8fcc99e48dabc2f97dd267c61f34ca2a589d2d6f92f1dd24b95d"
+			},
+			{
+				"path": "src/test/mcp-connected.test.ts",
+				"sha256": "c583ea2ebddbedb60e1ac8a3a459b849f078b0b4b5874c152cece8438ea627a8"
+			},
+			{
+				"path": "src/test/server-agent-access.test.ts",
+				"sha256": "d7d9fcd379091cb5eeb98c45405dfbd19977373cccc3faf92f708a356d32b6f1"
+			},
+			{
+				"path": "src/test/server-agent-edit-bridge.test.ts",
+				"sha256": "dc7fbe80038572d4afa50d3ae0c8185e5e4818adcd23a7b1d07500a86409ad31"
+			},
+			{
+				"path": "src/test/server-agent-observation-store.test.ts",
+				"sha256": "c58f845cf4ed27756d0e7753ec06fba3e218119524922ca8dcb57ff965dff9b7"
+			},
+			{
+				"path": "src/test/server-auth-store.test.ts",
+				"sha256": "6779b2931c7bcba5745e5ed076f4540887b0d925d2be4a181fdf5d3cf5f0b134"
+			},
+			{
+				"path": "src/test/server-folder-areas.test.ts",
+				"sha256": "b9363767f1c076ea55f742b4432e551bb8b19c4c5400eea3a6c2db2169cdc1d6"
+			},
+			{
+				"path": "src/test/server-mutation-sigkill.test.ts",
+				"sha256": "783fc501f88e67fd96ffdb8f2f2e39bf1210952a7ff03f6531a4b7f2d7a3dbc9"
+			},
+			{
+				"path": "src/test/server-mutation-store.test.ts",
+				"sha256": "1926636cb7f0fa644e6014b82c54a3b5f30aa856b45212076be54967e16da6c9"
+			},
+			{
+				"path": "src/test/server-observation.test.ts",
+				"sha256": "f6ac4d374700452ba056f6365fe7d54cf6f45ca37cbfc08971c9e50597449677"
+			},
+			{
+				"path": "src/test/server-project-boundary.test.ts",
+				"sha256": "8a1c2f7cae172b17cf676d719115ff089055d933dad73827976d3b831d862c83"
+			},
+			{
+				"path": "src/test/server-project-permissions.test.ts",
+				"sha256": "ee76284febb936fa4956280bf4195a70952d4604e8a08e7114dd1ffa0ee80687"
+			},
+			{
+				"path": "src/test/web-agent-keys.test.tsx",
+				"sha256": "3da993b6f28b30e1d7fe205c7f975dae25078a354af7c5a6cd0273d8bc7e79f1"
+			},
+			{
+				"path": "src/test/web-auth.test.tsx",
+				"sha256": "bf9a4485fa85f8022f66941e0b5c29e6fc7a4b33ec9c1386b59aad939ee5fbc2"
+			},
+			{
+				"path": "src/test/web-project-selector.test.tsx",
+				"sha256": "c6a624284a83505d23138248fd8b9f9bbe7045469d42c625e7b9ff4fc19dbb40"
+			},
+			{
+				"path": "src/web/App.tsx",
+				"sha256": "bad1253f0ac3ee108be2ba4546b11a7977e2960aee08c39aaf496a18df55f5db"
+			},
+			{
+				"path": "src/web/components/AdminUsers.tsx",
+				"sha256": "c25bf23e1e0f753da063b557cfd3c6c43479e51234136242b4e494b1ebe659fc"
+			},
+			{
+				"path": "src/web/components/AgentKeys.tsx",
+				"sha256": "f6417310d8dcd6972f638e11da8c2a903b6c7b83b273e4170e434d162dc1155e"
+			},
+			{
+				"path": "src/web/components/ArchivePage.tsx",
+				"sha256": "cbdf46812ac6d21015b20c8aa9fd470ed45850cb55b89915305b3855b7c23485"
+			},
+			{
+				"path": "src/web/components/Board.tsx",
+				"sha256": "93a928b3ec95456df012081ca798d7a20cf328bcea2443f106ed462be78aca7b"
+			},
+			{
+				"path": "src/web/components/CleanupModal.tsx",
+				"sha256": "6461581eca5569a71ade3cc5de1362615855318e11ff7883b2a8cfbe47dc9186"
+			},
+			{
+				"path": "src/web/components/DecisionDetail.tsx",
+				"sha256": "f804cbc7f45eed65c4fe9db2045133f656e3b6d1197fc9cde56337d60faf1f8e"
+			},
+			{
+				"path": "src/web/components/DocumentationDetail.tsx",
+				"sha256": "c760a03851be3736a0277f694fcae6113165d20cf48789b124b41099a65b36f5"
+			},
+			{
+				"path": "src/web/components/DraftsList.tsx",
+				"sha256": "a8f7d92d6bce014553c458c06eac17fba5a634001bf5d449d72e8303be04bc8b"
+			},
+			{
+				"path": "src/web/components/DuplicateIdRepairModal.tsx",
+				"sha256": "7163e2bde7592009ca2ea96a273c1f88f7010ce3e4852f2e8969ee4e9cc284d5"
+			},
+			{
+				"path": "src/web/components/Layout.tsx",
+				"sha256": "4670b4c6f8188d8f893752b721df87309dcb4a25286d471b885bb4729f9de8d3"
+			},
+			{
+				"path": "src/web/components/MilestonesPage.tsx",
+				"sha256": "39203bed909baf568eb00b3ed33da66b69b389546c6599afede77839647e1da3"
+			},
+			{
+				"path": "src/web/components/ObservationStatus.tsx",
+				"sha256": "87cadb0efa874bc86cde20a29efd88cb006f2d029c869377d07380397d3f7bff"
+			},
+			{
+				"path": "src/web/components/ProjectSelector.tsx",
+				"sha256": "850eaf02d666127a404753344150bb407cb7288d8719f580f90fc82fecc27600"
+			},
+			{
+				"path": "src/web/components/Settings.tsx",
+				"sha256": "7603856ecb56826080827fe50b9e28275863b3cef415cf1e7e5190144bb51a5c"
+			},
+			{
+				"path": "src/web/components/SideNavigation.tsx",
+				"sha256": "45e27885578797714a486f21e0335e80458467951c619a74c226268c11cd4f98"
+			},
+			{
+				"path": "src/web/components/TaskCard.tsx",
+				"sha256": "92db2b860537e64d845aaeb5025513502c0d9bfa9139173f7cebc8ce096bda5c"
+			},
+			{
+				"path": "src/web/components/TaskDetailsModal.tsx",
+				"sha256": "7bb15d425656c0a2ce05c6931d0acab02eee74b1ade606e9990f46a16c22b98c"
+			},
+			{
+				"path": "src/web/components/TaskList.tsx",
+				"sha256": "07428273e5ed1085349ea93e92f578f656ad5eec76971fde096716e806e3e7fd"
+			},
+			{
+				"path": "src/web/contexts/AuthContext.tsx",
+				"sha256": "30810a52cdb651cf5bf0b52e962eb1003bbdaed4db69b74996f111acaa9f394d"
+			}
+		],
+		"nativeExecutableSha256": "b9ec89cc1a8464428d99c27b9b6cc262d4e187ef224466ce5cdef77c65246f3b"
+	},
+	"approvedDecisions": {
+		"agentOwnership": "User-bound keys with explicit project grants intersected with current owner permissions; no admin bypass for keys.",
+		"externalMoves": "Keep recordKey only with strong unique physical identity; visible ID or content alone never merges histories.",
+		"invalidFiles": "Pause writes in the affected project, preserve trusted reads and reopen after a complete successful check; unsafe path boundaries still fail closed.",
+		"externalTime": "Unknown actor, null occurredAt and actual UTC detectedAt; display scan time in Europe/Istanbul.",
+		"cutover": "First safe A-05 scan starts observation without fabricating unrecorded A-04 events.",
+		"keyLifecycle": "Hash-only storage, one-time secret response, explicit revocation; account disable/admin password reset revoke keys; immutable grants and no automatic expiry."
+	},
+	"implementation": {
+		"storage": "Existing ServerDatabase policy and v5 migration; agent keys/grants, exact-key operation ownership, nullable external occurrence time and transactional observation checkpoints.",
+		"authorization": "Cookie/CSRF and Bearer share project dispatch, current permissions and the prepared writer; queue/replay/transaction checks revalidate access.",
+		"connectedCli": "Explicit server flags selected before local root/config migration. Existing noninteractive records, shared search JSON, polling JSON watch, config reads, history and operation inspection use one ServerClient.",
+		"mcp": "Existing 24 optional stdio tools use the same client and a fixed project; writes require the read revision.",
+		"outcomes": "UUID retries and canonical requestHash correlation protect lost network/body responses and reused IDs; uncertain outcomes retain their operation ID even after access is revoked.",
+		"observation": "Guarded inventory, stability checks, startup/Backlog directory watcher/30s comparison, transactional event+identity+checkpoint, managed-write echo suppression and shutdown/tracking race guards.",
+		"ui": "Existing Users, Projects and Kanban frame/theme; one-time key display, scan status, explicit paused-write notice and disabled controls."
+	},
+	"publicInterfaces": {
+		"admin": [
+			"server agent-key create/list/revoke",
+			"GET/POST /api/admin/agent-keys",
+			"POST /api/admin/agent-keys/:id/revoke"
+		],
+		"connectionFlags": [
+			"--server-url",
+			"--server-project",
+			"--agent-key-file",
+			"--allow-http-loopback",
+			"--if-match",
+			"--operation-id"
+		],
+		"connectedReads": ["history list", "operation view", "task list --json --watch"],
+		"additiveDtos": [
+			"agent actor includes agentKeyId and userId",
+			"operation requestHash for authenticated outcome correlation",
+			"project observation state/checkedAt/lastSuccessfulScanAt/error",
+			"external occurredAt nullable and detectedAt populated"
+		]
+	},
+	"checks": {
+		"fullSuite": {
+			"command": "BACKLOG_TEST_CLI_BUNDLE=/tmp/backlog-a05/test-cli/cli.js bun scripts/run-ci-tests.ts --profile=full --parallel=2 --isolate --timeout=10000 --max-concurrency=2 --reporter=junit --reporter-outfile=/tmp/backlog-a05/test-results.xml",
+			"exitCode": 0,
+			"passed": 3967,
+			"skipped": 13,
+			"failed": 0,
+			"tests": 3980,
+			"files": 360,
+			"expectations": 19855,
+			"phaseSeconds": 373.299938304,
+			"phases": [
+				{
+					"junitFile": "/tmp/backlog-a05/test-results.xml",
+					"tests": 3507,
+					"passed": 3494,
+					"skipped": 13,
+					"failed": 0,
+					"files": 315,
+					"expectations": 17007,
+					"seconds": 338.535090835
+				},
+				{
+					"junitFile": "/tmp/backlog-a05/test-results-dom.xml",
+					"tests": 473,
+					"passed": 473,
+					"skipped": 0,
+					"failed": 0,
+					"files": 45,
+					"expectations": 2848,
+					"seconds": 34.764847469
+				}
+			],
+			"skippedCases": [
+				"walks the highlight with real xterm shift-arrows and recruits the task the fallback cannot reach",
+				"renders unrelated healthy drafts beside an unparsable twin",
+				"uses AGENTS.md and completes without opening an editor",
+				"shows a CLI mutation in the open board within a bounded time",
+				"selects the next neighbor when the open task is removed",
+				"launches terminal editor from board view and marks task updated",
+				"launches terminal editor from task list view and marks task updated",
+				"keeps j and k moving the task list selection after each of two editor sessions",
+				"filters blocked tasks out of the very first render",
+				"shows the rows --plain prints, in the same order, for the default order and every option",
+				"shows the default order when the list is reached from the board, a task view, or search",
+				"keeps an open list sorted and its selection on the same task when tasks change on disk",
+				"marks each configured priority with an arrow, and with an ASCII arrow without Unicode"
+			]
+		},
+		"types": {
+			"command": "bun run check:types",
+			"exitCode": 0,
+			"files": 623
+		},
+		"biome": {
+			"command": "bun run check .",
+			"exitCode": 0,
+			"files": 534
+		},
+		"tsxDifferential": {
+			"checkedFiles": 23,
+			"baseline": {
+				"changed": 0,
+				"unchanged": 20,
+				"matches": 0,
+				"duration": 46596135,
+				"errors": 159,
+				"warnings": 41,
+				"infos": 5,
+				"skipped": 0,
+				"suggestedFixesSkipped": 0,
+				"diagnosticsNotPrinted": 0,
+				"scannerDuration": 1002486
+			},
+			"current": {
+				"changed": 0,
+				"unchanged": 23,
+				"matches": 0,
+				"duration": 43925935,
+				"errors": 158,
+				"warnings": 39,
+				"infos": 5,
+				"skipped": 0,
+				"suggestedFixesSkipped": 0,
+				"diagnosticsNotPrinted": 0,
+				"scannerDuration": 185669
+			},
+			"introducedDiagnostics": 0,
+			"differentialGatePassed": true,
+			"rawExitCode": 1,
+			"limitation": "Existing TSX diagnostics are reported separately; the repository default check does not include TSX."
+		},
+		"nativeBuild": {
+			"command": "BACKLOG_BUILD_OUTFILE=/tmp/backlog-a05/build/backlog bun scripts/build.ts",
+			"exitCode": 0
+		},
+		"testCliBuild": {
+			"command": "BACKLOG_BUILD_OUTDIR=/tmp/backlog-a05/test-cli bun scripts/build.ts",
+			"exitCode": 0
+		},
+		"compiledSmoke": {
+			"command": "bun scripts/smoke-compiled-build.ts /tmp/backlog-a05/build/backlog 1.53.0",
+			"exitCode": 0
+		},
+		"diffCheck": {
+			"command": "git diff --check",
+			"exitCode": 0
+		}
+	},
+	"chromium": {
+		"result": "passed",
+		"browser": "HeadlessChrome/153.0.8010.12",
+		"assertions": [
+			"shared login inherits system dark theme",
+			"admin login and mandatory password change use the shared frame",
+			"v5 first safe scan establishes a baseline without external events",
+			"existing board and ready file check remain visible",
+			"regular account created in existing Users view",
+			"agent owner has current project membership",
+			"agent owner completed mandatory password change before key issuance",
+			"key secret appears only in first create response",
+			"same agent key file has mode 0600",
+			"key belongs to regular user and lists six explicit permission booleans",
+			"safe list and localStorage contain no bearer secret",
+			"dismissing the secret removes it from the DOM",
+			"same key file reads the task through native connected CLI",
+			"native connected CLI applies revisioned task edit",
+			"native connected MCP retains task tools",
+			"native MCP task read exposes current revision",
+			"native MCP task edit uses the same key and explicit revision",
+			"existing Kanban board reflects connected edits",
+			"revoked key denies native CLI and project HTTP with 401",
+			"watcher updates the board and records unknown actor with detection time",
+			"degraded board shows error and disables New Task",
+			"backend rejects a degraded write with typed 503",
+			"Projects card shows degraded state, last successful scan and error",
+			"board task creation opens again after repair",
+			"390px light Projects remains within the viewport",
+			"390px light Users key section remains within the viewport",
+			"no unhandled Chromium runtime exceptions"
+		],
+		"runtimeExceptions": [],
+		"networkResponsesMocked": false,
+		"runDirectory": "/tmp/backlog-a05/browser/final-ui-TZJyQa",
+		"personalProjectUsed": false,
+		"secretInReport": false,
+		"secretInScreenshots": false,
+		"temporaryKeyFileMode": "0600; file removed after test",
+		"visualReview": [
+			"Existing dark Kanban with explicit Writes are paused, Istanbul time and visibly disabled New Task",
+			"390px light Agent keys form and revoked key",
+			"Dark Projects card with degraded status and last successful scan"
+		]
+	},
+	"realProcessInterruption": {
+		"testFile": "src/test/server-mutation-sigkill.test.ts",
+		"scenarios": 6,
+		"coveredByFinalFullSuite": true,
+		"completedRecoveryProducesExternalEcho": false,
+		"otherEvidence": "SQLite observation commit rollback/CAS/pending/untracking tests and offline restart tests are in the final suite; exception injection is not counted as SIGKILL."
+	},
+	"acceptanceMapping": {
+		"BACK-807": [
+			"server-agent-observation-store.test.ts",
+			"server-agent-access.test.ts",
+			"server-auth-store.test.ts",
+			"server-mutation-store.test.ts"
+		],
+		"BACK-808": [
+			"server-observation.test.ts",
+			"central-observation-http.test.ts",
+			"server-project-boundary.test.ts",
+			"server-mutation-sigkill.test.ts",
+			"server-recovery.test.ts"
+		],
+		"BACK-809": [
+			"server-agent-access.test.ts",
+			"central-auth.test.ts",
+			"central-server.test.ts",
+			"central-registration-admin-race.test.ts",
+			"cli-connected.test.ts",
+			"native Chromium key/revocation/permission checks"
+		],
+		"BACK-810": [
+			"cli-connected.test.ts",
+			"watch-json.test.ts",
+			"mcp-connected.test.ts",
+			"mcp-connected-stdio.test.ts",
+			"mcp-stdio-exit.test.ts",
+			"server-agent-edit-bridge.test.ts",
+			"native CLI and MCP read/edit with the same key"
+		],
+		"BACK-811": [
+			"web-agent-keys.test.tsx",
+			"web-auth.test.tsx",
+			"web-project-selector.test.tsx",
+			"all 473 DOM tests",
+			"native Chromium 27 assertions"
+		],
+		"BACK-812": [
+			"final full CI/JUnit",
+			"types/default Biome/TSX differential",
+			"native build and compiled smoke",
+			"six actual SIGKILL scenarios",
+			"native Chromium and source snapshot hashes"
+		]
+	},
+	"diagnostics": {
+		"initialFullRun": {
+			"accepted": false,
+			"passed": 3957,
+			"skipped": 13,
+			"failed": 10,
+			"tests": 3980,
+			"files": 360,
+			"seconds": 694.39,
+			"log": "/tmp/backlog-a05/diagnostic-full-1.log",
+			"resolutions": [
+				"Updated exact project DTO assertions for the approved observation fields while preserving authorization/path privacy checks.",
+				"Verified actual persisted cleanup plus authorized API output rather than a separate internal Core instance cached snapshot.",
+				"Ran the JS test bundle startup fixture from its emitted asset directory; shipped native binaries embed assets and passed separately.",
+				"Hardened the raw SQLite authority-race fixture with busy_timeout, durable commit acknowledgement and child exit checks; the permission assertion remains 401.",
+				"Kept final UI copy/style changes and assertions on one frozen snapshot."
+			]
+		},
+		"nativeStartupRegression": "The new root allow-http-loopback option initially shadowed the server start child option; the action now reads the global fallback, and both real CLI and native browser startup passed.",
+		"partialAndScopedRunsAreNotAddedToFullTotals": true
+	},
+	"screenshots": [
+		{
+			"path": "verification/server/a05-board-degraded-dark.png",
+			"sha256": "60bcb66737029366c7ac2c334c7fb849f9fdac66e01b8d2089400fa4c94c728b",
+			"bytes": 88288
+		},
+		{
+			"path": "verification/server/a05-agent-keys-mobile-light.png",
+			"sha256": "093f5ac7b6ac24ec0c6c364fff1a3284d545ded04569a752a5b5c8b7a118aa61",
+			"bytes": 46489
+		},
+		{
+			"path": "verification/server/a05-projects-degraded-dark.png",
+			"sha256": "d46958026a23e715d1a15b2981fd6d74baf58431b8805400ae364790958fb708",
+			"bytes": 44215
+		}
+	],
+	"release": {
+		"copiedAt": "2026-10-23T07:37:04.421782+00:00",
+		"oldBinarySha256": "d02af95cdc9d242fbc9727c9750792568a9082c93fa007deb15dff725b872122",
+		"newBinarySha256": "b9ec89cc1a8464428d99c27b9b6cc262d4e187ef224466ce5cdef77c65246f3b",
+		"copiedTo": "dist/backlog",
+		"previousBinaryBackup": "/tmp/backlog-a05/previous-backlog",
+		"personalServerRestarted": false,
+		"personalServerDatabaseOpenedOrChanged": false
+	},
+	"simplicityReview": "Reused Core/FileSystem parser/serializer/allocator/prepared writer, one SQLite connection/migration policy, one ServerClient/canonical hash and JSON-watch loop, one project authorization/dispatch path and existing frame/theme/permission controls. No second task domain, new Kanban or remote execution service.",
+	"limitations": [
+		"Single Linux application instance; the existing 13 platform/PTY skips are not claimed as passing.",
+		"Non-cooperating external writers cannot provide atomic multi-file history or unseen intermediate steps.",
+		"Unsupported or ambiguous physical move identity starts a new record identity.",
+		"First A-05 observation does not backfill earlier external changes.",
+		"Existing TSX lint debt remains; zero introduced diagnostic signatures is a separate gate.",
+		"Only temporary projects/databases were exercised; personal application data was not opened or modified by the agent and its running process was not restarted.",
+		"Groma was unavailable; no Groma-owned files or MANIFESTO.md were edited.",
+		"Raw /tmp evidence is ephemeral; this report and representative screenshots are durable repository records.",
+		"A-06 history/review/acceptance screens and real Finbee rollout remain separate stages."
+	],
+	"evidenceFiles": [
+		{
+			"path": "/tmp/backlog-a05/source-manifest.json",
+			"sha256": "aec91b6d264f8875fcf0a533ea71b92e042cab3437d2b4dc96a8d9f682a16aac",
+			"bytes": 71408
+		},
+		{
+			"path": "/tmp/backlog-a05/full-tests-final.log",
+			"sha256": "c65196d084182278527a60bbe5fe3dbbff3eb771e202a78f3385b8321b493a93",
+			"bytes": 587360
+		},
+		{
+			"path": "/tmp/backlog-a05/test-results.xml",
+			"sha256": "66924c02d66c4df1ebbbe8efd83297adb023a4b9f6e9c2d88355e0f15e6695ca",
+			"bytes": 951184
+		},
+		{
+			"path": "/tmp/backlog-a05/test-results-dom.xml",
+			"sha256": "2c7c9eba48221db69bad5178148c5055a5c050b33d69ddf97806ea3e379b0f2d",
+			"bytes": 127584
+		},
+		{
+			"path": "/tmp/backlog-a05/native-build-final.log",
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"bytes": 0
+		},
+		{
+			"path": "/tmp/backlog-a05/test-cli-build-final.log",
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+			"bytes": 0
+		},
+		{
+			"path": "/tmp/backlog-a05/types-final.log",
+			"sha256": "adbaadd368ca75ac136b73324db17f52d650e489a381f2d8df6b2c75d0e6fc7f",
+			"bytes": 57
+		},
+		{
+			"path": "/tmp/backlog-a05/biome-final.log",
+			"sha256": "0c47a0ce76fbf134894e6dc3b2c19670b5b1632d209ae0a73b9feb5574431183",
+			"bytes": 64
+		},
+		{
+			"path": "/tmp/backlog-a05/compiled-smoke-final.log",
+			"sha256": "4b03effb34b5d6a8abe1e1904e02cacf675a395ce1052d91921047ec7517de4a",
+			"bytes": 71
+		},
+		{
+			"path": "/tmp/backlog-a05/release.json",
+			"sha256": "961163bf15490db11a77a571379c3b7015e9d03e0469257dce85acf0617c350c",
+			"bytes": 410
+		},
+		{
+			"path": "/tmp/backlog-a05/diagnostic-full-1.log",
+			"sha256": "7c4a99b061bec2d3ad07d9be900e297e835a7562fac6e3e6a9b0bfe3f48d85f8",
+			"bytes": 572140
+		},
+		{
+			"path": "/tmp/backlog-a05-web-tsx/compare.json",
+			"sha256": "848c8d441226c0947ee33184ff530d3fe5fc6159cccf433191fdb0873c462442",
+			"bytes": 2425
+		},
+		{
+			"path": "/tmp/backlog-a05/browser/browser-result.json",
+			"sha256": "e93e9c7f43c6d22e289011032a348da3faa009188e5b9c12a1026e6aa10b364a",
+			"bytes": 24753
+		},
+		{
+			"path": "/tmp/backlog-a05/browser/coverage.md",
+			"sha256": "fe09cca674b2f9ac52a71a05d8cb337835e630f08d9bf1dc99a5ae30e3df2993",
+			"bytes": 3275
+		},
+		{
+			"path": "/tmp/backlog-a05/browser/harness.mjs",
+			"sha256": "cab158e8e2028b8b35149d7a74f5a88733b6250f31024eb25b22acf149be10fa",
+			"bytes": 24778
+		}
+	],
+	"gitDelivery": {
+		"committed": false,
+		"pushed": false,
+		"branch": "tasks/server-a05-agent-observation"
+	},
+	"taskStatus": "Done"
+}

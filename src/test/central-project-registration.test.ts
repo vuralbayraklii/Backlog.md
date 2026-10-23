@@ -210,7 +210,18 @@ describe("central prepared-project registration", () => {
 			expect(auth.listMembers(project.id)).toEqual([
 				{ projectId: project.id, userId: member.session.user.id, permissions: DEFAULT_PERMISSIONS },
 			]);
-			expect(await (await request("/api/projects", member)).json()).toEqual([{ id: project.id, name: "Display" }]);
+			expect(await (await request("/api/projects", member)).json()).toEqual([
+				{
+					id: project.id,
+					name: "Display",
+					observation: {
+						state: "ready",
+						error: null,
+						checkedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+						lastSuccessfulScanAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T.*Z$/),
+					},
+				},
+			]);
 			expect((await request(`/api/projects/${project.id}/tasks`, member)).status).toBe(200);
 			expect((await request(`/api/projects/${project.id}/tasks`, other)).status).toBe(404);
 			expect(await snapshot(path)).toEqual(before);

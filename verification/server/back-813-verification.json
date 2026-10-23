@@ -1,0 +1,300 @@
+{
+	"taskId": "BACK-813",
+	"result": "passed",
+	"recordedAtUtc": "2026-10-23T11:05:26.139466+00:00",
+	"scope": "Kullanıcının dokuz A-05 inceleme bulgusunun düzeltmesi. Önceki a05-verification.json tarihsel kanıttır; bu kayıt güncel düzeltmelerin kabulüdür.",
+	"source": {
+		"branch": "tasks/server-a05-agent-observation",
+		"head": "0dffa5b328a5d9376305cf3eec7417f9bde63dfe",
+		"workingTree": "A-05 ve BACK-813 yerel değişiklikleri; commit/push yapılmadı",
+		"manifest": {
+			"files": 645,
+			"sha256": "c5334e793b662ed845a7ac4e1d980b4b72eab8833581a8c21b9ac9b0d52f8b62",
+			"definition": "src altındaki tüm dosyalar ve package.json, bun.lock, bunfig.toml, scripts/build.ts, scripts/run-ci-tests.ts; path ve sha256 alanlarından oluşan sıralı compact UTF-8 JSON dizisi"
+		},
+		"changedSourceFiles": [
+			{
+				"path": "src/server/mutations.ts",
+				"sha256": "67cec21d6fde6c6508cdf7d2c29bcbac0d5084f15224574efaeff6ada5d1c5ff"
+			},
+			{
+				"path": "src/server/central.ts",
+				"sha256": "98ec62be6f14664ea2986fa0b15b546b0fc6e57d02341d9a5e16f06ba6d62332"
+			},
+			{
+				"path": "src/server/index.ts",
+				"sha256": "184d6435e3b8f40b01a533ee10aff99ab570b0a2dc8ccf82d88e9003233fc236"
+			},
+			{
+				"path": "src/server/client.ts",
+				"sha256": "f8800b033e635646f96346da790256b6883d54be6d2d65fb3543a827d2102732"
+			},
+			{
+				"path": "src/commands/connected.ts",
+				"sha256": "2d5c07c9649065fb8a9d17b375a40662dec45397ab72c289d6e0cd699a79afd9"
+			},
+			{
+				"path": "src/mcp/connected.ts",
+				"sha256": "75570fecdd88c29aefe1031c267feb6dec9befe45df0aafef39b705586f32d39"
+			},
+			{
+				"path": "src/test/server-observation.test.ts",
+				"sha256": "57ae34f71f4017610f91b977763277326a147e9e5946ebed85976cbfa59a093d"
+			},
+			{
+				"path": "src/test/central-observation-http.test.ts",
+				"sha256": "c54758edd20d3e8b3760c18739926f737ae6352a9563a174841075e7ed281405"
+			},
+			{
+				"path": "src/test/cli-connected.test.ts",
+				"sha256": "b0dcc9e0fc5f96ec35a577b4ed8b7bb33b18282ba579cd8db0bd3c501170ae39"
+			},
+			{
+				"path": "src/test/mcp-connected.test.ts",
+				"sha256": "ddf3a1cd0c62702d42c4aec1bb5f61326e38419169165a572c6ddf115aa0e4c6"
+			}
+		]
+	},
+	"fixes": [
+		{
+			"finding": "P1 gözlem görüntüsünü kayıt başına yeniden yükleme",
+			"implementation": "İstek ve toplu precondition başına tek doğrulanmış checkpoint ve path Map; yaşam döngüsü/içerik eşleşmesi korunur.",
+			"test": "server-observation: resolves 1000 identities from one validated checkpoint and rejects mismatched content"
+		},
+		{
+			"finding": "P2 yeniden başlatmada güvenilir liste/arama kaybı",
+			"implementation": "Yeni handler kalıcı güvenilir görüntüyü ilk gözlemden önce yayınlar; handler yenilenirse yayın hedefi yeniden çözülür.",
+			"test": "central-observation-http: hydrates trusted lists and search after restarting with an invalid file; iki restart, 503 detay/yazma; native Chromium restart kontrolü"
+		},
+		{
+			"finding": "P2 search/doc search q yerine query",
+			"implementation": "Bağlı CLI API query parametresini kullanır.",
+			"test": "cli-connected: UniqueNeedle ve UnrelatedZebra, task+document ve doc search"
+		},
+		{
+			"finding": "P2 çoklu arama filtreleri",
+			"implementation": "ServerClient array değerlerini ayrı parametrelerle gönderir; type/status/excludeStatus/project/modifiedFile çoklu değerleri korunur.",
+			"test": "cli-connected: sends search text and repeated filters, including configured task types"
+		},
+		{
+			"finding": "P2 taskType uygulanmıyor",
+			"implementation": "API yapılandırılmış türleri ortak resolver ile doğrular ve SearchService filters.type alanına verir; task-only varsayılanı ve yanlış type birleşimi denetlenir.",
+			"test": "cli-connected: FEATURE/bug, geçersiz tür ve document-only filtre reddi"
+		},
+		{
+			"finding": "P2 belge güncelleme tekrarı",
+			"implementation": "Açık content ile güncelleme güncel kaydı okumadan özgün revision/UUID ile gider; güncel revision kontrolü sunucuya bırakılır.",
+			"test": "cli-connected: replays document updates with their original revision and rejects changed retry bodies; CLI işleminin MCP tekrarı, stale edit reddi ve tek olay"
+		},
+		{
+			"finding": "P2 milestone tekrarı",
+			"implementation": "CLI/MCP özgün adı/IDyi gönderir; sunucu replay kontrolünü aktif çözümlemeden önce yapar. URL ID bir kez çözülür, precondition aynı ad/ID/sayısal alias için fail closed çalışır.",
+			"test": "cli-connected: replays milestone rename, archive and remove by the original name in CLI and MCP; altı durum, değişmiş girdi reddi, tek olay"
+		},
+		{
+			"finding": "P2 karar revision bilgisi",
+			"implementation": "Karar listesi JSON/metinde recordKey ve revision korur.",
+			"test": "cli-connected: keeps decision revisions and paginates JSON with the shared list window"
+		},
+		{
+			"finding": "P2 karar JSON sayfalaması",
+			"implementation": "decisionListJson ortak list window ile max-count/skip/total/nextSkip ve count kullanır.",
+			"test": "cli-connected: iki kayıt, birer sayfa, son nextSkip null ve count"
+		}
+	],
+	"checks": {
+		"fullSuite": {
+			"command": "BACKLOG_TEST_CLI_BUNDLE=/tmp/backlog-review-fixes/test-cli/cli.js bun scripts/run-ci-tests.ts --profile=full --parallel=2 --isolate --timeout=10000 --max-concurrency=2 --reporter=junit --reporter-outfile=/tmp/backlog-review-fixes/test-results-final.xml",
+			"exitCode": 0,
+			"passed": 3973,
+			"skipped": 13,
+			"failed": 0,
+			"tests": 3986,
+			"files": 360,
+			"expectations": 20942,
+			"phases": [
+				{
+					"junitFile": "/tmp/backlog-review-fixes/test-results-final.xml",
+					"tests": 3513,
+					"passed": 3500,
+					"skipped": 13,
+					"failed": 0,
+					"errors": 0,
+					"files": 315,
+					"expectations": 18094,
+					"seconds": 342.121526229
+				},
+				{
+					"junitFile": "/tmp/backlog-review-fixes/test-results-final-dom.xml",
+					"tests": 473,
+					"passed": 473,
+					"skipped": 0,
+					"failed": 0,
+					"errors": 0,
+					"files": 45,
+					"expectations": 2848,
+					"seconds": 36.673922534
+				}
+			]
+		},
+		"types": {
+			"command": "bun run check:types",
+			"exitCode": 0,
+			"files": 623
+		},
+		"biome": {
+			"command": "bun run check .",
+			"exitCode": 0,
+			"writes": false
+		},
+		"nativeBuild": {
+			"command": "BACKLOG_BUILD_OUTFILE=/tmp/backlog-review-fixes/build/backlog bun scripts/build.ts",
+			"exitCode": 0,
+			"sha256": "c72c754738aaff6484faada2d1a71ad265040408de3cc1f2fe8d560052cbd865"
+		},
+		"testBundle": {
+			"command": "BACKLOG_BUILD_OUTDIR=/tmp/backlog-review-fixes/test-cli bun scripts/build.ts",
+			"exitCode": 0
+		},
+		"smoke": {
+			"command": "bun scripts/smoke-compiled-build.ts /tmp/backlog-review-fixes/build/backlog 1.53.0",
+			"exitCode": 0
+		},
+		"chromium": {
+			"result": "passed",
+			"browser": "HeadlessChrome/153.0.8010.12",
+			"assertions": [
+				"shared login inherits system dark theme",
+				"admin login and mandatory password change use the shared frame",
+				"v5 first safe scan establishes a baseline without external events",
+				"existing board and ready file check remain visible",
+				"regular account created in existing Users view",
+				"agent owner has current project membership",
+				"agent owner completed mandatory password change before key issuance",
+				"key secret appears only in first create response",
+				"same agent key file has mode 0600",
+				"key belongs to regular user and lists six explicit permission booleans",
+				"safe list and localStorage contain no bearer secret",
+				"dismissing the secret removes it from the DOM",
+				"same key file reads the task through native connected CLI",
+				"native connected CLI applies revisioned task edit",
+				"native connected MCP retains task tools",
+				"native MCP task read exposes current revision",
+				"native MCP task edit uses the same key and explicit revision",
+				"existing Kanban board reflects connected edits",
+				"revoked key denies native CLI and project HTTP with 401",
+				"watcher updates the board and records unknown actor with detection time",
+				"degraded board shows error and disables New Task",
+				"backend rejects a degraded write with typed 503",
+				"Projects card shows degraded state, last successful scan and error",
+				"restart with invalid Markdown preserves trusted board and search while writes stay disabled",
+				"board task creation opens again after repair",
+				"390px light Projects remains within the viewport",
+				"390px light Users key section remains within the viewport",
+				"no unhandled Chromium runtime exceptions"
+			],
+			"count": 28,
+			"runtimeErrors": 0,
+			"networkResponsesMocked": false,
+			"realPersonalProjectUsed": false,
+			"runDir": "/tmp/backlog-review-fixes/browser/run"
+		},
+		"identityBenchmark": {
+			"records": 1000,
+			"recordBytes": 2291786,
+			"oldSnapshotLoads": 1000,
+			"newSnapshotLoads": 1,
+			"oldMs": 11317.222931999999,
+			"newMs": 13.425432,
+			"equalIdentities": true,
+			"method": "Aynı 1000 kayıt/2,29 MB fixture üzerinde eski recordKeyFor algoritmasının mevcut ObservationStore ile yeniden üretimi ve yeni resolver karşılaştırması. Tam HTTP liste süresi değildir."
+		},
+		"sourceUnchangedAfterChecks": true
+	},
+	"simplicity": [
+		"Tek istek ömründe resolver; kalıcı önbellek veya yeni depo yok.",
+		"CLI/MCP milestone aktif çözümleme kopyaları kaldırıldı; aynı sunucu yolu kullanılır.",
+		"Tek ServerClient query kodu ve mevcut tür/list-window/JSON yardımcıları kullanılır."
+	],
+	"delivery": {
+		"binary": "dist/backlog",
+		"sha256": "c72c754738aaff6484faada2d1a71ad265040408de3cc1f2fe8d560052cbd865",
+		"previousBinary": "/tmp/backlog-review-fixes/previous-backlog",
+		"personalServiceRestarted": false,
+		"committed": false,
+		"pushed": false
+	},
+	"limitations": [
+		"Linux koşusu; mevcut 13 platform/PTY atlaması başarı sayılmaz.",
+		"Ölçüm yalnız kimlik çözümüdür; tam liste gecikmesi veya genel olay döngüsü gecikmesi ölçümü değildir.",
+		"Ham günlükler ve harness /tmp altındadır; kalıcı yedek değildir.",
+		"Groma kurulu değildi; yönetilen mimari dosyaları ve manifesto değiştirilmedi.",
+		"İlk sandbox testinde localhost dinlenemedi; eski kaynaklı ilk tanı hataları nihai kabul toplamına eklenmedi. Son full CI sabit kaynakta koştu."
+	],
+	"artifacts": [
+		{
+			"path": "/tmp/backlog-review-fixes/before.patch",
+			"sha256": "982d8d056f76ad9752a398565d53ffd77a4ce1ba905eadd5824ebbf3dff2d5c6"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/before-untracked.tar.gz",
+			"sha256": "b6bd72ff7ce8c938135617a60998246d2d841eaeaf385a943832d336e770077a"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/before-status.txt",
+			"sha256": "7b0ce6f8d28cbc44c2ef7df7d6d0146936d25c6e174b9652c7cb986c2afdeb87"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/final-source-manifest.json",
+			"sha256": "c5334e793b662ed845a7ac4e1d980b4b72eab8833581a8c21b9ac9b0d52f8b62"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/types.log",
+			"sha256": "5ac18cb0e644970840293dcaa2265a7d88adb105e62d58865b993fccdae68493"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/biome.log",
+			"sha256": "d32ed352d6c5c66aa72c8fb218ea16e3086817b461027c5a9640dfda738efce0"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/build.log",
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/test-cli-build.log",
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/smoke.log",
+			"sha256": "ee06885cdbd2d00aea830e8cbf253c371bfe2fe7a61d61968fdb10b7b1968b95"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/full-ci-final.log",
+			"sha256": "7fb1391645a6d072dc64661877a7434cc51e3cb9f53fdf2fc467ff689be98f82"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/test-results-final.xml",
+			"sha256": "8db4db967b44515b7a82c1c08c9c26e6623b03272e0cba3373738ef18530c278"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/test-results-final-dom.xml",
+			"sha256": "7126fb996755afd62abb1949620d10b0225b90f590fd3d205d7b6d2378f800ba"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/benchmark.ts",
+			"sha256": "85c08dfaf29923e962961f13d377a7fde8fa7da9301cb7563c33dc2c01f8d744"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/benchmark-result.json",
+			"sha256": "65273427722269d25d286b9c0049ce8fd5d2a3358b43958e8ffd7780c3156910"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/browser/harness.mjs",
+			"sha256": "eb26581d2f9112980a531a2f566aeebbc671f412d0f356a945dc92b355f2006a"
+		},
+		{
+			"path": "/tmp/backlog-review-fixes/browser/run/browser-result.json",
+			"sha256": "64abe8e9fe37b014cca358b2a30334c4528f7ad7def56309308bd54948313a3d"
+		}
+	]
+}

@@ -215,7 +215,7 @@ type TaskModalState =
     };
 
 function AppContent() {
-  const { ready, session, central } = useAuth();
+  const { ready, session, central, refresh } = useAuth();
   const [modal, setModal] = useState<TaskModalState>({ kind: 'closed' });
   // Each entry into the modal takes the next session number, so a response can name the modal it
   // was read for.
@@ -853,6 +853,13 @@ function AppContent() {
       } else if (event.data === "config-updated") {
         // Reload statuses when config changes
         loadAllData();
+      } else if (typeof event.data === 'string' && event.data.startsWith('{')) {
+        try {
+          const notification = JSON.parse(event.data) as { type?: string; projectId?: string };
+          if (notification.type === 'observation-updated' && notification.projectId === projectScope.id) void refresh();
+        } catch {
+          // Ignore unrelated websocket messages.
+        }
       }
     };
 	ws.onclose = () => {
@@ -864,7 +871,7 @@ function AppContent() {
 		disposed = true;
 		ws.close();
 	};
-  }, [ready, refreshData, refreshMilestoneData, fullRefreshData, loadAllData, applyLoadError]);
+  }, [ready, refreshData, refreshMilestoneData, fullRefreshData, loadAllData, applyLoadError, refresh]);
 
   const handleSubmitTask = async (taskData: Partial<Task>) => {
     // Don't catch errors here - let TaskDetailsModal handle them

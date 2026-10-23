@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { createHash, randomUUID } from "node:crypto";
-import { dirname, resolve } from "node:path";
+import { type FSWatcher, watch } from "node:fs";
+import { basename, dirname, relative, resolve } from "node:path";
 import {
 	type FileEntry,
 	fileEntriesEqual,
@@ -8,6 +9,7 @@ import {
 	type PreparedRecordKeyResolver,
 	snapshotFileEntry,
 } from "../file-system/prepared-change.ts";
+import { parseMilestone } from "../markdown/parser.ts";
 import type { ProjectMutationContext } from "./index.ts";
 import { type MutationIntent, MutationStore, type StoredRecord } from "./mutation-store.ts";
 import type {
@@ -21,10 +23,13 @@ import type {
 	SafeHttpResult,
 	WriteState,
 } from "./mutation-types.ts";
+import type { ObservedInventory, ScannedRecord } from "./observation.ts";
+import { ObservationConflictError, ObservationStore } from "./observation-store.ts";
+import type { ObservationState, ObservedPathSnapshot } from "./observation-types.ts";
 import { assertProjectBoundary, readProjectFile } from "./project-paths.ts";
 
 export interface ManagementAuditChange {
-	kind: "user" | "membership" | "folder-area" | "project";
+	kind: "user" | "membership" | "folder-area" | "project" | "agent-key";
 	recordKey: string;
 	visibleId: string;
 	before: unknown | null;
@@ -305,6 +310,33 @@ export interface CentralRecordSnapshot {
 	bytes: Uint8Array;
 }
 
+export interface ObservationHooks {
+	publish: (entries: readonly ObservedPathSnapshot[]) => Promise<void>;
+	needsPublication?: () => boolean;
+	onState?: (state: ObservationState) => void;
+	onPublicationFailure?: () => Promise<void>;
+	watchDirectory?: string;
+}
+
+type ObservationScan = (
+	previousPaths: readonly string[],
+	previousEntries?: readonly ObservedPathSnapshot[],
+) => Promise<ObservedInventory>;
+
+const OBSERVATION_PERIOD_MS = 30_000;
+
+interface TrackedObservation {
+	project: CentralProject;
+	scan: ObservationScan;
+	hooks: ObservationHooks;
+	watchDirectory: string;
+	watchers: FSWatcher[];
+	interval: ReturnType<typeof setInterval>;
+	debounce?: ReturnType<typeof setTimeout>;
+	running?: Promise<void>;
+	repeat?: boolean;
+}
+
 export type MutationCheckpoint = (
 	stage: "before_intent" | "after_intent" | "after_file" | "before_finalize" | "after_finalize",
 	operationId: string,
@@ -425,11 +457,69 @@ function existingResult(operation: OperationView): Response {
 	});
 }
 
+function physicalIdentity(entry: {
+	kind: string;
+	visibleId: string;
+	identity: ObservedPathSnapshot["identity"];
+}): string | null {
+	const id = entry.identity;
+	return id ? `${entry.kind}\0${entry.visibleId.toLowerCase()}\0${id.dev}\0${id.ino}\0${id.birthtimeNs}` : null;
+}
+
+function observedRevision(entry: ObservedPathSnapshot): string {
+	return recordRevision(entry.recordKey, entry.path, entry.lifecycle, entry.recordBytes);
+}
+
+function observedText(entry: ObservedPathSnapshot): string {
+	return Buffer.from(entry.recordBytes).toString("utf8");
+}
+
+function changedObservedRecord(
+	before: ObservedPathSnapshot | undefined,
+	after: ObservedPathSnapshot | undefined,
+): boolean {
+	if (!before || !after) return true;
+	return (
+		before.path !== after.path ||
+		before.kind !== after.kind ||
+		before.visibleId !== after.visibleId ||
+		before.lifecycle !== after.lifecycle ||
+		!fileEntriesEqual(before.entry, after.entry) ||
+		observedRevision(before) !== observedRevision(after)
+	);
+}
+
+function inventoryMatchesCheckpoint(
+	current: readonly ScannedRecord[],
+	stored: readonly ObservedPathSnapshot[],
+): boolean {
+	return (
+		current.length === stored.length &&
+		current.every((entry, index) => {
+			const before = stored[index];
+			return Boolean(
+				before &&
+					before.path === entry.path &&
+					before.kind === entry.kind &&
+					before.visibleId === entry.visibleId &&
+					before.lifecycle === entry.lifecycle &&
+					fileEntriesEqual(before.entry, entry.entry) &&
+					Buffer.from(before.recordBytes).equals(Buffer.from(entry.recordBytes)) &&
+					JSON.stringify(before.identity) === JSON.stringify(entry.identity),
+			);
+		})
+	);
+}
+
 export class CentralMutations {
 	readonly store: MutationStore;
+	readonly observations: ObservationStore;
 	private readonly queue = new MutationQueue();
 	private readonly blocked = new Map<string, string | null>();
 	private readonly resolved = new Set<string>();
+	private readonly observationEnabled = new Set<string>();
+	private readonly observedProjects = new Map<string, TrackedObservation>();
+	private readonly activeObservations = new Map<string, Set<Promise<unknown>>>();
 
 	constructor(
 		dataDirectory: string,
@@ -437,6 +527,342 @@ export class CentralMutations {
 		private readonly checkpoint?: MutationCheckpoint,
 	) {
 		this.store = new MutationStore(dataDirectory);
+		this.observations = new ObservationStore(dataDirectory);
+	}
+
+	observationState(projectId: string): ObservationState {
+		return this.observations.load(projectId).state;
+	}
+
+	private buildObservationCommit(
+		projectId: string,
+		inventory: ObservedInventory,
+		prior: readonly ObservedPathSnapshot[],
+		baseline: boolean,
+		checkedAt: string,
+	): {
+		entries: ObservedPathSnapshot[];
+		recordUpdates: StoredRecord[];
+		event: HistoryEvent | null;
+	} {
+		const priorByPath = new Map(prior.map((entry) => [entry.path, entry]));
+		const currentPaths = new Set(inventory.entries.map((entry) => entry.path));
+		const vanishedByIdentity = new Map<string, ObservedPathSnapshot[]>();
+		const arrivedByIdentity = new Map<string, ScannedRecord[]>();
+		if (!baseline) {
+			for (const old of prior) {
+				if (currentPaths.has(old.path)) continue;
+				const key = physicalIdentity(old);
+				if (key) vanishedByIdentity.set(key, [...(vanishedByIdentity.get(key) ?? []), old]);
+			}
+			for (const current of inventory.entries) {
+				if (priorByPath.has(current.path)) continue;
+				const key = physicalIdentity(current);
+				if (key) arrivedByIdentity.set(key, [...(arrivedByIdentity.get(key) ?? []), current]);
+			}
+		}
+		const entries = inventory.entries.map((current) => {
+			const old = priorByPath.get(current.path);
+			let recordKey =
+				old?.kind === current.kind && old.visibleId.toLowerCase() === current.visibleId.toLowerCase()
+					? old.recordKey
+					: undefined;
+			if (!recordKey && !baseline) {
+				const identity = physicalIdentity(current);
+				const former = identity ? vanishedByIdentity.get(identity) : undefined;
+				if (former?.length === 1 && arrivedByIdentity.get(identity as string)?.length === 1)
+					recordKey = former[0]?.recordKey;
+			}
+			if (!recordKey && baseline) {
+				const existing = this.store.findRecordByPath(projectId, current.path);
+				if (existing?.kind === current.kind && existing.visibleId.toLowerCase() === current.visibleId.toLowerCase())
+					recordKey = existing.recordKey;
+			}
+			return { ...current, recordKey: recordKey ?? randomUUID() } satisfies ObservedPathSnapshot;
+		});
+		const nextByKey = new Map(entries.map((entry) => [entry.recordKey, entry]));
+		const oldByKey = new Map(prior.map((entry) => [entry.recordKey, entry]));
+		const recordUpdates: StoredRecord[] = [];
+		const changes: HistoryRecordChange[] = [];
+		for (const key of new Set([...oldByKey.keys(), ...nextByKey.keys()])) {
+			const before = oldByKey.get(key);
+			const after = nextByKey.get(key);
+			if (!baseline && !changedObservedRecord(before, after)) continue;
+			if (after) {
+				recordUpdates.push({
+					recordKey: key,
+					projectId,
+					kind: after.kind,
+					visibleId: after.visibleId,
+					path: after.path,
+					lifecycle: after.lifecycle,
+					revision: observedRevision(after),
+				});
+			} else if (before) {
+				recordUpdates.push({
+					recordKey: key,
+					projectId,
+					kind: before.kind,
+					visibleId: before.visibleId,
+					path: null,
+					lifecycle: "deleted",
+					revision: null,
+				});
+			}
+			if (baseline) continue;
+			const record = after ?? before;
+			if (!record) continue;
+			changes.push({
+				recordKey: key,
+				kind: record.kind,
+				visibleId: record.visibleId,
+				beforeRevision: before ? observedRevision(before) : null,
+				afterRevision: after ? observedRevision(after) : null,
+				before: before ? observedText(before) : null,
+				after: after ? observedText(after) : null,
+			});
+		}
+		if (baseline) {
+			for (const existing of this.store.listRecords(projectId)) {
+				if (existing.lifecycle === "deleted" || nextByKey.has(existing.recordKey)) continue;
+				recordUpdates.push({ ...existing, path: null, lifecycle: "deleted", revision: null });
+			}
+		}
+		const operationId = randomUUID();
+		const event: HistoryEvent | null = changes.length
+			? {
+					eventId: operationId,
+					operationId,
+					scope: { kind: "project", projectId },
+					source: "external",
+					actor: { kind: "unknown" },
+					action: "external_file_change",
+					occurredAt: null,
+					detectedAt: checkedAt,
+					changes,
+				}
+			: null;
+		return { entries, recordUpdates, event };
+	}
+
+	async ensureObserved(
+		project: CentralProject,
+		scan: ObservationScan,
+		hooks?: ObservationHooks,
+	): Promise<ObservationState> {
+		return await this.reconcileObserved(project, scan, hooks);
+	}
+
+	async reconcileObserved(
+		project: CentralProject,
+		scan: ObservationScan,
+		hooks?: ObservationHooks,
+	): Promise<ObservationState> {
+		this.observationEnabled.add(project.id);
+		const pending = this.queue.run(`project:${project.id}`, async () => {
+			let prior = this.observations.load(project.id);
+			if (this.project(project.id)?.tracking !== true) return prior.state;
+			if (this.writeState(project.id).writeState === "recovery_required") return prior.state;
+			if (hooks?.needsPublication?.() && prior.state.lastSuccessfulScanAt !== null) {
+				try {
+					await hooks.publish(prior.entries);
+				} catch (error) {
+					if (hooks.onPublicationFailure) await hooks.onPublicationFailure();
+					throw error;
+				}
+			}
+			for (let attempt = 0; attempt < 3; attempt++) {
+				try {
+					const previousState = prior.state;
+					let inventory: ObservedInventory;
+					try {
+						inventory = await scan(
+							prior.entries.map((entry) => entry.path),
+							prior.entries,
+						);
+					} catch (error) {
+						inventory = {
+							entries: [],
+							missing: [],
+							fingerprint: "",
+							problems: [{ path: project.rootPath, state: "unreadable", error: String(error) }],
+						};
+					}
+					const checkedAt = new Date().toISOString();
+					if (this.project(project.id)?.tracking !== true) return this.observations.load(project.id).state;
+					if (inventory.problems.length) {
+						const first = inventory.problems[0];
+						const displayPath = first ? relative(project.rootPath, first.path) : "";
+						const degraded = this.observations.markDegraded(project.id, {
+							expectedFingerprint: prior.fingerprint,
+							checkedAt,
+							error: `${first?.state ?? "unreadable"}: ${displayPath && !displayPath.startsWith("..") ? displayPath : "project files"}`,
+						});
+						if (previousState.state !== "degraded") hooks?.onState?.(degraded.state);
+						return degraded.state;
+					}
+					const baseline = prior.state.lastSuccessfulScanAt === null;
+					if (
+						!baseline &&
+						previousState.state === "ready" &&
+						inventoryMatchesCheckpoint(inventory.entries, prior.entries)
+					) {
+						const lastChecked = prior.state.checkedAt ? Date.parse(prior.state.checkedAt) : 0;
+						const elapsed = Date.now() - lastChecked;
+						if (elapsed >= 0 && elapsed < OBSERVATION_PERIOD_MS) return prior.state;
+						return this.observations.confirmUnchanged(project.id, {
+							expectedFingerprint: prior.fingerprint,
+							checkedAt,
+						}).state;
+					}
+					const prepared = this.buildObservationCommit(project.id, inventory, prior.entries, baseline, checkedAt);
+					const committed = this.observations.commit(project.id, {
+						...prepared,
+						expectedFingerprint: prior.fingerprint,
+						checkedAt,
+					});
+					if (hooks && (baseline || prepared.event || previousState.state !== "ready")) {
+						try {
+							await hooks.publish(committed.entries);
+						} catch (error) {
+							if (hooks.onPublicationFailure) await hooks.onPublicationFailure();
+							else throw error;
+						}
+					}
+					if (previousState.state !== "ready") hooks?.onState?.(committed.state);
+					return committed.state;
+				} catch (error) {
+					if (!(error instanceof ObservationConflictError)) throw error;
+					if (this.project(project.id)?.tracking !== true) return this.observations.load(project.id).state;
+					prior = this.observations.load(project.id);
+				}
+			}
+			throw new ObservationConflictError();
+		});
+		let active = this.activeObservations.get(project.id);
+		if (!active) {
+			active = new Set();
+			this.activeObservations.set(project.id, active);
+		}
+		active.add(pending);
+		try {
+			return await pending;
+		} finally {
+			active.delete(pending);
+			if (active.size === 0) this.activeObservations.delete(project.id);
+		}
+	}
+
+	setObservationTracking(project: CentralProject, scan: ObservationScan, hooks: ObservationHooks): void {
+		const watchDirectory = hooks.watchDirectory ?? resolve(project.rootPath, "backlog");
+		const current = this.observedProjects.get(project.id);
+		if (
+			current?.project.rootPath === project.rootPath &&
+			current.watchDirectory === watchDirectory &&
+			current.watchers.length >= 2
+		) {
+			current.project = project;
+			current.scan = scan;
+			current.hooks = hooks;
+			return;
+		}
+		this.stopTrackingProject(project.id);
+		this.observationEnabled.add(project.id);
+		const watchers: FSWatcher[] = [];
+		const schedule = () => {
+			const tracked = this.observedProjects.get(project.id);
+			if (!tracked) return;
+			if (tracked.debounce) clearTimeout(tracked.debounce);
+			tracked.debounce = setTimeout(() => this.runTrackedObservation(tracked), 150);
+			tracked.debounce.unref?.();
+		};
+		try {
+			const watcher = watch(project.rootPath, { recursive: false }, (_event, filename) => {
+				const name = filename?.toString();
+				if (!name || [basename(watchDirectory), "backlog.config.yml", "backlog", ".backlog"].includes(name)) schedule();
+			});
+			watcher.on("error", schedule);
+			watcher.unref?.();
+			watchers.push(watcher);
+		} catch {
+			// The periodic scan remains active if the root cannot be watched.
+		}
+		try {
+			const watcher = watch(watchDirectory, { recursive: true }, (_event, filename) => {
+				if (
+					filename
+						?.toString()
+						.split(/[\\/]/)
+						.some((part) => part.startsWith("."))
+				)
+					return;
+				schedule();
+			});
+			watcher.on("error", schedule);
+			watcher.unref?.();
+			watchers.push(watcher);
+		} catch {
+			try {
+				const watcher = watch(watchDirectory, (_event, filename) => {
+					if (
+						filename
+							?.toString()
+							.split(/[\\/]/)
+							.some((part) => part.startsWith("."))
+					)
+						return;
+					schedule();
+				});
+				watcher.on("error", schedule);
+				watcher.unref?.();
+				watchers.push(watcher);
+			} catch {
+				// The root watcher and periodic scan cover replacement or missing folders.
+			}
+		}
+		const interval = setInterval(() => {
+			const tracked = this.observedProjects.get(project.id);
+			if (tracked) this.runTrackedObservation(tracked);
+		}, OBSERVATION_PERIOD_MS);
+		interval.unref?.();
+		this.observedProjects.set(project.id, { project, scan, hooks, watchDirectory, watchers, interval });
+	}
+
+	private runTrackedObservation(tracked: TrackedObservation): void {
+		if (tracked.running) {
+			tracked.repeat = true;
+			return;
+		}
+		const running = (async () => {
+			do {
+				tracked.repeat = false;
+				await this.reconcileObserved(tracked.project, tracked.scan, tracked.hooks).catch(() => {});
+			} while (tracked.repeat && this.observedProjects.get(tracked.project.id) === tracked);
+		})();
+		tracked.running = running;
+		void running.finally(() => {
+			if (tracked.running === running) tracked.running = undefined;
+		});
+	}
+
+	private stopTrackingProject(projectId: string): void {
+		const tracked = this.observedProjects.get(projectId);
+		if (!tracked) return;
+		this.observedProjects.delete(projectId);
+		if (tracked.debounce) clearTimeout(tracked.debounce);
+		clearInterval(tracked.interval);
+		for (const watcher of tracked.watchers) watcher.close();
+	}
+
+	async stopObservationTracking(projectId: string): Promise<void> {
+		this.stopTrackingProject(projectId);
+		this.observationEnabled.delete(projectId);
+		await Promise.allSettled([...(this.activeObservations.get(projectId) ?? [])]);
+	}
+
+	async stopObservation(): Promise<void> {
+		for (const projectId of this.observedProjects.keys()) this.stopTrackingProject(projectId);
+		await Promise.allSettled([...this.activeObservations.values()].flatMap((pending) => [...pending]));
 	}
 
 	writeState(projectId: string): { writeState: WriteState; pendingOperationId?: string } {
@@ -472,33 +898,28 @@ export class CentralMutations {
 		this.blocked.set(projectId, null);
 	}
 
-	recordKeyFor(
+	/** Resolve a whole read against one validated checkpoint, indexed by path. */
+	recordKeysFor(
 		projectId: string,
-		kind: StoredRecord["kind"],
-		visibleId: string,
-		recordPath: string,
-		observed?: Pick<CentralRecordSnapshot, "lifecycle" | "bytes">,
-	): string | undefined {
-		const matches = this.store.findRecords(projectId, kind, visibleId).filter((record) => record.path === recordPath);
-		if (matches.length > 1) throw new MutationError("Record identity is ambiguous.", 409, "AMBIGUOUS_ID");
-		if (matches[0]) return matches[0].recordKey;
-		if (!observed || this.writeState(projectId).writeState !== "ready") return undefined;
-		if (this.store.findRecordByPath(projectId, recordPath)) {
-			throw new MutationError("Record identity is ambiguous.", 409, "AMBIGUOUS_ID");
-		}
-		// A guarded read can discover a new local file without inventing an external
-		// history event. Unmatched external moves receive a new key until A-05.
-		const recordKey = randomUUID();
-		this.store.upsertRecord({
-			recordKey,
-			projectId,
-			kind,
-			visibleId,
-			path: recordPath,
-			lifecycle: observed.lifecycle,
-			revision: recordRevision(recordKey, recordPath, observed.lifecycle, observed.bytes),
-		});
-		return recordKey;
+	): (...args: Parameters<NonNullable<ProjectMutationContext["recordKeyFor"]>>) => string | undefined {
+		const checkpoint = this.observations.load(projectId);
+		const paths = new Map(checkpoint.entries.map((entry) => [entry.path, entry]));
+		return (kind, visibleId, recordPath, observed) => {
+			if (checkpoint.state.lastSuccessfulScanAt !== null) {
+				const match = paths.get(recordPath);
+				if (match?.kind !== kind || match.visibleId !== visibleId) return undefined;
+				if (
+					observed &&
+					(match.lifecycle !== observed.lifecycle ||
+						!Buffer.from(match.recordBytes).equals(Buffer.from(observed.bytes)))
+				)
+					return undefined;
+				return match.recordKey;
+			}
+			const matches = this.store.findRecords(projectId, kind, visibleId).filter((record) => record.path === recordPath);
+			if (matches.length > 1) throw new MutationError("Record identity is ambiguous.", 409, "AMBIGUOUS_ID");
+			return matches[0]?.recordKey;
+		};
 	}
 
 	private async assertPreconditions(
@@ -515,8 +936,9 @@ export class CentralMutations {
 		);
 		if (!bulk && !target && path !== "config") return;
 		const snapshots = await snapshot();
+		const recordKeyFor = this.recordKeysFor(projectId);
 		const version = (current: CentralRecordSnapshot) => {
-			const recordKey = this.recordKeyFor(projectId, current.kind, current.visibleId, current.recordPath, current);
+			const recordKey = recordKeyFor(current.kind, current.visibleId, current.recordPath, current);
 			if (!recordKey)
 				throw new MutationError("Record identity requires recovery inspection.", 503, "RECOVERY_REQUIRED");
 			return { recordKey, revision: recordRevision(recordKey, current.recordPath, current.lifecycle, current.bytes) };
@@ -581,9 +1003,15 @@ export class CentralMutations {
 							? "milestone"
 							: "task";
 		const id = path === "config" ? "config" : decodeURIComponent(target?.[2] ?? "");
-		const matches = snapshots.filter(
-			(record) => record.kind === kind && record.visibleId.toLowerCase() === id.toLowerCase(),
-		);
+		const matches = snapshots.filter((record) => {
+			if (record.kind !== kind) return false;
+			if (kind !== "milestone") return record.visibleId.toLowerCase() === id.toLowerCase();
+			if (record.lifecycle !== "active") return false;
+			const milestone = parseMilestone(new TextDecoder("utf-8", { fatal: true }).decode(record.bytes));
+			return [milestone.id, milestone.title, milestone.id.replace(/^m-/i, "")].some(
+				(alias) => alias.toLowerCase() === id.trim().toLowerCase(),
+			);
+		});
 		if (matches.length > 1) throw new MutationError("Record identity is ambiguous.", 409, "AMBIGUOUS_ID");
 		if (!matches[0]) throw new MutationError("The record no longer exists.", 409, "REVISION_CONFLICT");
 		check(matches[0], request.headers.get("if-match"));
@@ -697,6 +1125,13 @@ export class CentralMutations {
 					operationId: recovery.pendingOperationId,
 				});
 			}
+			if (this.observationEnabled.has(project.id) && this.observationState(project.id).state !== "ready") {
+				throw new MutationError(
+					"Project file observation is incomplete. Writes will resume after a safe scan.",
+					503,
+					"OBSERVATION_UNAVAILABLE",
+				);
+			}
 			const operationId = requireOperationId(request);
 			const hash = await requestHash(request);
 			let payload: Record<string, unknown> | null = null;
@@ -736,8 +1171,7 @@ export class CentralMutations {
 			let committed = false;
 			const context: ProjectMutationContext = {
 				resolveRecordKey,
-				recordKeyFor: (kind, visibleId, recordPath, observed) =>
-					this.recordKeyFor(project.id, kind, visibleId, recordPath, observed),
+				recordKeyFor: this.recordKeysFor(project.id),
 				commit: async (mutation, apply, publish, revalidateWrite) => {
 					const revoked = revalidateWrite();
 					if (revoked) throw new MutationAbortResponse(revoked);
@@ -751,7 +1185,7 @@ export class CentralMutations {
 								eventId: operationId,
 								operationId,
 								scope,
-								source: "browser",
+								source: actor.kind === "agent" ? "agent" : "browser",
 								actor,
 								action: mutation.action,
 								occurredAt: new Date().toISOString(),
@@ -762,7 +1196,7 @@ export class CentralMutations {
 						operationId,
 						scope,
 						actor,
-						source: "browser",
+						source: actor.kind === "agent" ? "agent" : "browser",
 						requestHash: hash,
 						action: mutation.action,
 						files,

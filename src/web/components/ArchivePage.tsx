@@ -20,7 +20,7 @@ interface ArchivedRecord {
 	consequences?: string;
 }
 export default function ArchivePage({ onRefreshData }: { onRefreshData: () => Promise<void> }) {
-	const { permissions, writeState } = useAuth();
+	const { permissions, writesAvailable } = useAuth();
 	const [kind, setKind] = useState<Kind>("tasks");
 	const [records, setRecords] = useState<ArchivedRecord[]>([]);
 	const [selected, setSelected] = useState<ArchivedRecord | null>(null);
@@ -129,7 +129,7 @@ export default function ArchivePage({ onRefreshData }: { onRefreshData: () => Pr
 									<button
 										type="button"
 										className={buttonClass}
-										disabled={busy || writeState !== "ready"}
+										disabled={busy || !writesAvailable}
 										onClick={() => void mutate(record, false)}
 									>
 										Restore
@@ -139,7 +139,7 @@ export default function ArchivePage({ onRefreshData }: { onRefreshData: () => Pr
 									<button
 										type="button"
 										className="rounded-md bg-red-700 px-4 py-2 text-sm text-white disabled:opacity-50"
-										disabled={busy || writeState !== "ready"}
+										disabled={busy || !writesAvailable}
 										onClick={() => void mutate(record, true)}
 									>
 										Delete permanently

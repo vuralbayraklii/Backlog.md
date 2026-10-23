@@ -100,9 +100,9 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 	const isArchived = currentDecision?.archived === true;
 	// The editor opens on request (the Edit button, `?edit=true` in the URL, the new page), but never
 	// for an archived decision: the request can come before or after the record has loaded.
-	const { permissions, central, writeState } = useAuth();
+	const { permissions, central, writesAvailable } = useAuth();
 	const mayEdit = permissions.decisionsWrite && (!currentDecision || currentDecision.status === "proposed" || permissions.decisionsManage);
-	const canWrite = mayEdit && writeState === 'ready';
+	const canWrite = mayEdit && writesAvailable;
 	const isEditing = editRequested && !isArchived && mayEdit;
 	const hasChanges = content !== originalContent || decisionTitle !== originalDecisionTitle;
 	const clearUnsaved = useUnsavedChanges(isEditing && hasChanges);
@@ -379,7 +379,7 @@ export default function DecisionDetail({ decisions, onRefreshData, dateFormat }:
 								</button>
 							) : null}
 							{currentDecision && !isNewDecision && !isEditing && !isArchived && permissions.archive && (
-								<ArchiveButton onClick={archive} disabled={isArchiving || writeState !== 'ready'} />
+								<ArchiveButton onClick={archive} disabled={isArchiving || !writesAvailable} />
 							)}
 							{isEditing && (
 								<div className="flex items-center space-x-2">

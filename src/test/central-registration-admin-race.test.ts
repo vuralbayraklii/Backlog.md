@@ -6,6 +6,7 @@ import { Core } from "../core/backlog.ts";
 import { AuthStore } from "../server/auth-store.ts";
 import type { AuthSession } from "../server/auth-types.ts";
 import { CentralServer } from "../server/central.ts";
+import type { ServerDatabase } from "../server/database.ts";
 import { findNextAvailablePort } from "../server/index.ts";
 import { ProjectStore } from "../server/project-store.ts";
 import type { ProjectPreview } from "../server/registration-types.ts";
@@ -70,6 +71,7 @@ describe("central registration authority and preview privacy", () => {
 		await mkdir(folder);
 		const area = await auth.upsertFolderArea(member.session.user.id, folder);
 		const commitSignal = join(root, "commit-admin-revocation");
+		const enterWriteSignal = join(root, "enter-folder-removal-write");
 		// Handshakes make the ordering deterministic: the child holds a write lock until
 		// DELETE has checked the old session and is about to enter removeFolderArea.
 		const child = Bun.spawn(
@@ -80,18 +82,26 @@ describe("central registration authority and preview privacy", () => {
 				import { Database } from "bun:sqlite";
 				import { watch } from "node:fs";
 				const watchdog = setTimeout(() => process.exit(2), 5000);
-				const commit = new Promise((resolve) => {
+				let allowCommit;
+				let enteredWrite;
+				const commit = new Promise((resolve) => { allowCommit = resolve; });
+				const writeAttempt = new Promise((resolve) => { enteredWrite = resolve; });
 					const watcher = watch(process.env.A03_REVIEW_ROOT, (_event, name) => {
-						if (String(name) === "commit-admin-revocation") { watcher.close(); resolve(); }
+						if (String(name) === "commit-admin-revocation") allowCommit();
+						if (String(name) === "enter-folder-removal-write") enteredWrite();
 					});
-				});
 				const database = new Database(process.env.A03_REVIEW_DATABASE);
+				database.exec("PRAGMA busy_timeout=5000");
 				database.exec("BEGIN IMMEDIATE");
 				database.query("UPDATE users SET role='user' WHERE id=?").run(process.env.A03_REVIEW_ADMIN);
 				database.query("DELETE FROM sessions WHERE user_id=?").run(process.env.A03_REVIEW_ADMIN);
 				console.log("locked");
 				await commit;
+				await writeAttempt;
+				await new Promise((resolve) => setTimeout(resolve, 300));
 				database.exec("COMMIT");
+				console.log("committed");
+				watcher.close();
 				database.close();
 				clearTimeout(watchdog);
 			`,
@@ -109,7 +119,10 @@ describe("central registration authority and preview privacy", () => {
 		);
 		const reader = child.stdout.getReader();
 		const requestAuth = Reflect.get(server, "auth") as AuthStore;
+		const requestDatabase = Reflect.get(requestAuth, "database") as ServerDatabase;
 		const remove = requestAuth.removeFolderArea.bind(requestAuth);
+		const write = requestDatabase.write.bind(requestDatabase);
+		let writeWaitMs = 0;
 		try {
 			const signal = await reader.read();
 			expect(new TextDecoder().decode(signal.value)).toContain("locked");
@@ -117,15 +130,31 @@ describe("central registration authority and preview privacy", () => {
 				writeFileSync(commitSignal, "commit");
 				remove(id, beforeCommit, audit);
 			};
+			requestDatabase.write = ((action) => {
+				writeFileSync(enterWriteSignal, "write");
+				const started = Date.now();
+				try {
+					return write(action);
+				} finally {
+					writeWaitMs = Date.now() - started;
+				}
+			}) as typeof requestDatabase.write;
 			const response = await request(`/api/admin/folder-areas/${area.id}`, admin, "DELETE");
-			expect(response.status).toBe(401);
-			expect(await response.json()).toEqual({ error: "Authentication required." });
+			const committed = await reader.read();
+			await child.exited;
+			expect(child.exitCode, await new Response(child.stderr).text()).toBe(0);
+			expect(new TextDecoder().decode(committed.value)).toContain("committed");
+			expect(writeWaitMs).toBeGreaterThanOrEqual(150);
 			expect(auth.loadSession(admin.token)).toBeNull();
 			expect(auth.loadUser(admin.session.user.id)?.role).toBe("user");
+			expect(response.status).toBe(401);
+			expect(await response.json()).toEqual({ error: "Authentication required." });
 			expect(auth.listFolderAreas()).toEqual([area]);
 		} finally {
 			requestAuth.removeFolderArea = remove;
+			requestDatabase.write = write;
 			writeFileSync(commitSignal, "commit");
+			writeFileSync(enterWriteSignal, "write");
 			reader.releaseLock();
 			await child.exited;
 		}

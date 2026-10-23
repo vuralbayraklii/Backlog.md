@@ -374,8 +374,12 @@ describe("archive lifecycle", () => {
 			success: true,
 			cleanedTaskIds: ["TASK-2"],
 		});
-		expect((await core.getTask("TASK-2"))?.dependencies).toEqual([]);
-		expect((await core.getTask("TASK-2"))?.references).toEqual([]);
+		const persisted = await core.fs.loadTask("TASK-2");
+		expect(persisted?.dependencies).toEqual([]);
+		expect(persisted?.references).toEqual([]);
+		const delivered = await request("/api/tasks/TASK-2");
+		expect(delivered.status).toBe(200);
+		expect(await delivered.json()).toMatchObject({ dependencies: [], references: [] });
 	});
 
 	it("reports documentation references without changing them", async () => {

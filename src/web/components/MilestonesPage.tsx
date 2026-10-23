@@ -59,8 +59,8 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	onRefreshData,
 	dateFormat,
 }) => {
-	const { permissions, writeState } = useAuth();
-	const canWrite = permissions.tasksWrite && writeState === 'ready';
+	const { permissions, writesAvailable } = useAuth();
+	const canWrite = permissions.tasksWrite && writesAvailable;
 	const [newMilestone, setNewMilestone] = useState("");
 	const [newMilestoneDueDate, setNewMilestoneDueDate] = useState("");
 	const [error, setError] = useState<string | null>(null);
@@ -273,7 +273,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 
 	const handleArchiveMilestone = useCallback(
 		async (bucket: MilestoneBucket) => {
-			if (!bucket.milestone || writeState !== 'ready') return;
+			if (!bucket.milestone || !writesAvailable) return;
 
 			const label = bucket.label || bucket.milestone;
 			const confirmed = window.confirm(
@@ -301,7 +301,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 				setArchivingMilestoneKey(null);
 			}
 		},
-		[onRefreshData, milestoneEntities, writeState],
+		[onRefreshData, milestoneEntities, writesAvailable],
 	);
 
 	const findDuplicateMilestone = (title: string, currentMilestoneId?: string): Milestone | undefined => {
@@ -409,7 +409,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 	};
 
 	const handleRemoveMilestone = async () => {
-		if (writeState !== 'ready') return;
+		if (!writesAvailable) return;
 		const bucket = removingBucket;
 		if (!bucket?.milestone) return;
 		const selectedTaskHandling = removeTaskHandling;
@@ -624,7 +624,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							<button
 								type="button"
 								onClick={() => openRemoveModal(bucket)}
-								disabled={!permissions.delete || writeState !== 'ready' || isArchiving || isSavingMilestone || isRemoving}
+								disabled={!permissions.delete || !writesAvailable || isArchiving || isSavingMilestone || isRemoving}
 								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-red-200 dark:border-red-800 text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors disabled:opacity-60"
 							>
 								<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -635,7 +635,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 							<button
 								type="button"
 								onClick={() => handleArchiveMilestone(bucket)}
-								disabled={!permissions.archive || writeState !== 'ready' || isArchiving || isSavingMilestone || isRemoving}
+								disabled={!permissions.archive || !writesAvailable || isArchiving || isSavingMilestone || isRemoving}
 								className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition-colors disabled:opacity-60"
 							>
 								<svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1114,7 +1114,7 @@ const MilestonesPage: React.FC<MilestonesPageProps> = ({
 						<button
 							type="button"
 							onClick={handleRemoveMilestone}
-							disabled={!permissions.delete || writeState !== 'ready' || removingMilestoneKey !== null || (removeTaskHandling === "reassign" && !removeReassignTo)}
+							disabled={!permissions.delete || !writesAvailable || removingMilestoneKey !== null || (removeTaskHandling === "reassign" && !removeReassignTo)}
 							className="px-4 py-2 rounded-md text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60 transition-colors"
 						>
 							{removingMilestoneKey ? "Removing..." : "Remove milestone"}

@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it, spyOn } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { cp, mkdir, rename, symlink, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import type { ServerWebSocket } from "bun";
 import { Core } from "../core/backlog.ts";
 import { BacklogServer, type ProjectReadContext } from "../server/index.ts";
+import type { ObservedPathSnapshot } from "../server/observation-types.ts";
 import { assertProjectBoundary, readProjectFile } from "../server/project-paths.ts";
 import { ProjectStore } from "../server/project-store.ts";
 import { createTestDirOutsideRepository, initializeFilesystemTestProject, safeCleanup } from "./test-utils.ts";
@@ -15,7 +16,7 @@ const SECRET = "---\nid: TASK-1\ntitle: PRIVATE_EXTERNAL_SENTINEL\nstatus: To Do
 async function waitFor(predicate: () => boolean): Promise<void> {
 	const until = Date.now() + 4000;
 	while (!predicate()) {
-		if (Date.now() > until) throw new Error("Expected filesystem watcher condition was not observed.");
+		if (Date.now() > until) throw new Error("Expected asynchronous condition was not observed.");
 		await new Promise((resolve) => setTimeout(resolve, 20));
 	}
 }
@@ -166,52 +167,29 @@ describe("registered project boundaries", () => {
 	});
 
 	it.each(["task", "config"])(
-		"a transient external %s link cannot fill caches before the link is restored",
+		"a transient external %s link cannot fill central caches before observation",
 		async (kind) => {
 			const server = handler();
 			expect((await read(server)).status).toBe(200);
-			const filesystem = (server as unknown as { core: Core }).core.filesystem;
+			const contentStore = await (server as unknown as { core: Core }).core.getContentStore();
+			const beforeVersion = contentStore.publicationVersion();
 			const localPath = kind === "task" ? join(core.fs.tasksDir, "task-1 - Safe.md") : core.fs.configFilePath;
 			const external = join(testDir, kind === "task" ? "private.md" : "private.yml");
 			await Bun.write(
 				external,
 				kind === "task" ? SECRET : 'project_name: "PRIVATE_EXTERNAL_SENTINEL"\nstatuses: ["To Do"]\n',
 			);
-			let attempted = false;
-			const originalText = filesystem.readText.bind(filesystem);
-			const originalBytes = filesystem.readBytes.bind(filesystem);
-			const textSpy =
-				kind === "config"
-					? spyOn(filesystem, "readText").mockImplementation(async (path) => {
-							if (path === localPath) attempted = true;
-							return await originalText(path);
-						})
-					: null;
-			const byteSpy =
-				kind === "task"
-					? spyOn(filesystem, "readBytes").mockImplementation(async (path) => {
-							if (path === localPath) attempted = true;
-							return await originalBytes(path);
-						})
-					: null;
-			try {
-				await rename(localPath, `${localPath}.safe`);
-				await symlink(external, localPath);
-				await waitFor(() => attempted);
-				// No API guard is called while the link escapes: only the real watcher reads it.
-				await unlink(localPath);
-				await rename(`${localPath}.safe`, localPath);
-				const response = await read(server);
-				expect(response.status).toBe(503);
-				expect(await response.text()).not.toContain("PRIVATE_EXTERNAL_SENTINEL");
-				await server.stop();
-				const restored = await read(handler());
-				expect(restored.status).toBe(200);
-				expect(await restored.text()).toContain("Safe source");
-			} finally {
-				textSpy?.mockRestore();
-				byteSpy?.mockRestore();
-			}
+			await rename(localPath, `${localPath}.safe`);
+			await symlink(external, localPath);
+			const unsafe = await server.scanObservedFiles();
+			expect(unsafe.problems.length).toBeGreaterThan(0);
+			expect(JSON.stringify(unsafe)).not.toContain("PRIVATE_EXTERNAL_SENTINEL");
+			expect(contentStore.publicationVersion()).toBe(beforeVersion);
+			await unlink(localPath);
+			await rename(`${localPath}.safe`, localPath);
+			const response = await read(server);
+			expect(response.status).toBe(200);
+			expect(await response.text()).toContain("Safe source");
 		},
 	);
 
@@ -226,7 +204,7 @@ describe("registered project boundaries", () => {
 		expect((await read(server)).status).toBe(200);
 	});
 
-	it("publishes a new bound revision when watched Markdown bytes change without changing parsed fields", async () => {
+	it("publishes a new bound revision after observed Markdown bytes are committed", async () => {
 		const server = handler();
 		const opened = (await (await read(server)).json()) as Array<{ title: string; revision: string }>;
 		const original = opened[0];
@@ -235,7 +213,12 @@ describe("registered project boundaries", () => {
 		const beforeVersion = contentStore.publicationVersion();
 		const task = join(core.fs.tasksDir, "task-1 - Safe.md");
 		await Bun.write(task, SOURCE.replace("\n---\nSafe content.", "\n# preserved comment\n---\nSafe content."));
-		await waitFor(() => contentStore.publicationVersion() > beforeVersion);
+		const scanned = await server.scanObservedFiles();
+		expect(scanned.problems).toEqual([]);
+		await server.publishObservedFiles(
+			scanned.entries.map((entry) => ({ ...entry, recordKey: `test:${entry.path}` })) satisfies ObservedPathSnapshot[],
+		);
+		expect(contentStore.publicationVersion()).toBeGreaterThan(beforeVersion);
 		const changed = (await (await read(server)).json()) as Array<{ title: string; revision: string }>;
 		expect(changed[0]?.title).toBe(original.title);
 		expect(changed[0]?.revision).not.toBe(original.revision);

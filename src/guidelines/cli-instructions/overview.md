@@ -18,6 +18,23 @@ For long lists, use `--max-count` and `--skip`, follow the printed `Next` comman
 
 For scripts, `task list`, `task view`, `task <id>`, and `search` accept versioned `--json` output instead of `--plain`. `task list --json --watch` emits complete replacement responses; read successive JSON values, not individual lines. Filters and local scope are unchanged; intermediate edits may be coalesced. Restart for a fresh snapshot.
 
+### Connecting to an application on this machine
+
+When an administrator supplies an agent key, keep it in an owner-readable file outside the project and pass
+`--server-url <origin> --server-project <registered-id> --agent-key-file <path>` to the same CLI commands.
+Local HTTP additionally requires `--allow-http-loopback`; otherwise use HTTPS. `--server-project` does not replace
+the task metadata `--project` field. A failed connection never falls back to writing local files.
+
+Read the record first (`task view <id> --json`, or the corresponding document read). Pass the returned `revision`
+with `--if-match '<revision>'` for every edit, archive, restore or delete. For a multi-task edit, repeat
+`--if-match '<task-id>=<revision>'` for each task. Do not fetch a fresh revision merely to force an old edit through.
+On conflict, preserve your intended change and review the current record.
+
+If a write's result is uncertain, inspect `operation view <operation-id> --json` with the same connection.
+Explicit retries use identical input, the original revision and `--operation-id <original-uuid>`.
+Connected `history list --json` reads project events. Interactive editors, TUI, initialization, Git, local maintenance,
+and config writes are unavailable; use noninteractive record commands. Connected `task list --json --watch` emits changed replacement snapshots.
+
 ### Required Guides
 
 Read the matching guide before taking these actions; this overview does not replace it:

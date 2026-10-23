@@ -9,6 +9,7 @@ import { Command, type OptionValues } from "commander";
 import { runAdvancedConfigWizard } from "./commands/advanced-config-wizard.ts";
 import { type CompletionInstallResult, installCompletion, registerCompletionCommand } from "./commands/completion.ts";
 import { configureAdvancedSettings } from "./commands/configure-advanced-settings.ts";
+import { installConnectedCommands } from "./commands/connected.ts";
 import {
 	addHelpSchema,
 	choiceType,
@@ -55,6 +56,7 @@ import {
 } from "./index.ts";
 import { MilestoneHandlers, type MilestoneRemoveArgs } from "./mcp/tools/milestones/handlers.ts";
 import type { CallToolResult } from "./mcp/types.ts";
+import { hasServerConnection } from "./server/client.ts";
 import {
 	type BacklogConfig,
 	type ContentRecordKind,
@@ -1033,6 +1035,7 @@ function getMcpStartCwdOverrideFromArgv(argv = process.argv): string | undefined
 // Global config migration - run before any command processing
 // Server commands use explicit paths and must never migrate the terminal's local project.
 const shouldRunMigration =
+	!hasServerConnection(process.argv) &&
 	process.argv[2] !== "server" &&
 	!process.argv.includes("init") &&
 	!process.argv.includes("--help") &&
@@ -6149,6 +6152,8 @@ registerInstructionsCommand(program);
 registerMcpCommand(program);
 
 registerServerCommand(program);
+
+installConnectedCommands(program);
 
 program
 	.parseAsync(process.argv)

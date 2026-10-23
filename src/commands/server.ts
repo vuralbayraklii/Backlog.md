@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { isCancel, password as promptPassword } from "@clack/prompts";
 import type { Command } from "commander";
 import { printJson } from "../formatters/json-output.ts";
+import { AgentStore } from "../server/agent-store.ts";
+import type { AgentGrant, AgentKey } from "../server/agent-types.ts";
 import { AuthStore } from "../server/auth-store.ts";
 import {
 	PERMISSION_NAMES,
@@ -29,8 +32,8 @@ const humanTime = new Intl.DateTimeFormat("sv-SE", {
 	hour12: false,
 });
 
-function formatEventTime(utc: string): string {
-	return `${humanTime.format(new Date(utc))} Europe/Istanbul`;
+function formatEventTime(utc: string | null): string {
+	return utc ? `${humanTime.format(new Date(utc))} Europe/Istanbul` : "Unknown occurrence time";
 }
 
 function formatProject(project: ServerProject): string {
@@ -76,12 +79,84 @@ function localAudit(
 	});
 }
 
+function registerAgentKeyCommands(server: Command): void {
+	const command = server.command("agent-key").description("manage user-owned agent access to this application");
+	const store = () => new AgentStore(server.opts<{ dataDir: string }>().dataDir);
+	const print = (key: AgentKey, json?: boolean, secret?: string) => {
+		if (json) printJson({ schemaVersion: 1, kind: "server-agent-key", key, ...(secret && { secret }) });
+		else {
+			console.log(
+				`${key.id} - ${key.name}\n  User: ${key.userId}\n  Projects: ${key.grants.map((grant) => grant.projectId).join(", ")}\n  Revoked: ${key.revokedAt ?? "no"}\n  Revision: ${key.revision}`,
+			);
+			if (secret) console.log(`  Access key (shown once): ${secret}`);
+		}
+	};
+	addHelpSchema(command.command("create <userId>"), {
+		required: [
+			{ name: "userId", type: "User ID" },
+			{ name: "--name", type: "String" },
+			{
+				name: "--grants-file",
+				type: "JSON file",
+				description: "Array of {projectId,permissions}; name all six boolean permissions explicitly",
+			},
+		],
+		optional: [{ name: "--json", type: "Boolean" }],
+		writes: "Creates a user-owned key and safe audit in server.sqlite; only a hash of the secret is stored",
+		output: "Key metadata and the access key, shown once. Keep the key in an owner-readable file outside the project.",
+		examples: [
+			"backlog server --data-dir ./server-data agent-key create <user-id> --name local-agent --grants-file grants.json --json",
+		],
+	})
+		.requiredOption("--name <name>")
+		.requiredOption("--grants-file <path>")
+		.option("--json")
+		.action(async (userId: string, options: { name: string; grantsFile: string; json?: boolean }) => {
+			const grants: unknown = JSON.parse(await readFile(options.grantsFile, "utf8"));
+			const result = store().create(
+				{ userId, name: options.name, grants: grants as AgentGrant[] },
+				localAudit(server, "agent-key.create", { status: 201 }),
+			);
+			print(result.key, options.json, result.secret);
+		});
+	addHelpSchema(command.command("list"), {
+		required: [],
+		optional: [
+			{ name: "--user", type: "User ID" },
+			{ name: "--json", type: "Boolean" },
+		],
+		reads: "Non-secret agent key metadata from server.sqlite",
+		output: "User-owned keys and project permissions",
+	})
+		.option("--user <id>")
+		.option("--json")
+		.action((options: { user?: string; json?: boolean }) => {
+			const keys = store().list(options.user);
+			if (options.json) printJson({ schemaVersion: 1, kind: "server-agent-keys", keys });
+			else if (!keys.length) console.log("No agent keys.");
+			else for (const key of keys) print(key);
+		});
+	addHelpSchema(command.command("revoke <keyId>"), {
+		required: [{ name: "keyId", type: "Agent key ID" }],
+		optional: [{ name: "--json", type: "Boolean" }],
+		writes: "Permanently revokes this access key and appends safe audit atomically",
+		output: "Revoked key metadata; the secret is never returned",
+	})
+		.option("--json")
+		.action((keyId: string, options: { json?: boolean }) => {
+			const current = store().load(keyId);
+			if (!current) throw new Error("Agent key not found.");
+			print(store().revoke(current.id, current.userId, localAudit(server, "agent-key.revoke")), options.json);
+		});
+}
+
 export function registerServerCommand(program: Command): void {
 	const server = program
 		.command("server")
 		.description("manage central Backlog.md server data")
 		.requiredOption("--data-dir <directory>", "directory containing server.sqlite (required; no default)")
 		.addHelpText("after", "\nPaths are relative to the terminal working directory. BACKLOG_CWD is not used.");
+	registerAgentKeyCommands(server);
 	addHelpSchema(server.command("start"), {
 		required: [
 			{ name: "--data-dir", type: "Directory", description: "Server data directory" },
@@ -112,7 +187,8 @@ export function registerServerCommand(program: Command): void {
 			try {
 				await central.start(port, options.open ?? false, {
 					publicUrl: options.publicUrl,
-					allowHttpLoopback: options.allowHttpLoopback,
+					allowHttpLoopback:
+						options.allowHttpLoopback || program.opts<{ allowHttpLoopback?: boolean }>().allowHttpLoopback,
 				});
 			} catch (error) {
 				console.error(error instanceof Error ? error.message : String(error));
@@ -597,6 +673,7 @@ function registerHistoryCommands(server: Command): void {
 					"membership",
 					"folder-area",
 					"project",
+					"agent-key",
 				];
 				if (options.kind && !kinds.includes(options.kind as HistoryKind)) throw new Error("Unknown history kind.");
 				const page = store().listHistory({
@@ -609,8 +686,14 @@ function registerHistoryCommands(server: Command): void {
 				if (options.json) printJson({ schemaVersion: 1, kind: "server-history-page", scope, ...page });
 				else {
 					for (const event of page.items) {
-						const actor = event.actor.kind === "user" ? event.actor.userId : "unknown";
+						const actor =
+							event.actor.kind === "user"
+								? event.actor.userId
+								: event.actor.kind === "agent"
+									? `agent ${event.actor.agentKeyId} (user ${event.actor.userId})`
+									: "unknown";
 						console.log(`${formatEventTime(event.occurredAt)}  ${event.action}  ${actor}  ${event.operationId}`);
+						if (event.detectedAt) console.log(`  Detected: ${formatEventTime(event.detectedAt)}`);
 						for (const change of event.changes)
 							console.log(`  ${change.kind} ${change.visibleId} (${change.recordKey})`);
 					}

@@ -1,10 +1,12 @@
 import { Outlet } from "react-router-dom";
 import type { DuplicateRepairPlan } from "../../core/duplicate-task-repair";
-import { type Decision, type Document, type Task } from "../../types";
+import type { Decision, Document, Task } from "../../types";
+import { useAuth } from "../contexts/AuthContext";
 import AppFrame from "./AppFrame";
 import { DuplicateIdWarning } from "./DuplicateIdWarning";
 import { HealthIndicator, HealthSuccessToast } from "./HealthIndicator";
 import Navigation from "./Navigation";
+import { ObservationStatus } from "./ObservationStatus";
 import SideNavigation from "./SideNavigation";
 
 interface LayoutProps {
@@ -34,6 +36,7 @@ export default function Layout({
 	onRefreshData,
 	duplicateRepairPlan = null,
 }: LayoutProps) {
+	const { observation } = useAuth();
 	return (
 		<>
 			<HealthIndicator />
@@ -52,6 +55,7 @@ export default function Layout({
 				navigation={
 					<>
 						<Navigation projectName={projectName} loadingMessage={loadingMessage} />
+						<ObservationStatus observation={observation} />
 						<DuplicateIdWarning plan={duplicateRepairPlan} onRepaired={onRefreshData} />
 					</>
 				}

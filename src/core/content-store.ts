@@ -247,6 +247,43 @@ export class ContentStore {
 		return { publish: () => resume(true), abort: (freeze) => (freeze ? Promise.resolve() : resume(false)) };
 	}
 
+	/** Install exact bytes from a durable central observation; no watcher read can get ahead of it. */
+	publishObservedContent(input: {
+		activeTasks: Task[];
+		archivedTasks: Task[];
+		documents: Document[];
+		decisions: Decision[];
+		config: BacklogConfig;
+	}): void {
+		if (!this.initialized || this.closed || this.managedWritePending) return;
+		const previous = this.getSnapshot();
+		const identityIndex = this.taskIdentityIndex?.withWorkingCopyCorpus(input.activeTasks, input.archivedTasks);
+		const visible = identityIndex?.getTasks(false) ?? input.activeTasks;
+		const tasksChanged = this.hasTaskListChanged(previous.tasks, visible);
+		const documentsChanged = this.hasCollectionChanged(previous.documents, input.documents, (a, b) =>
+			this.hasDocumentChanged(a, b),
+		);
+		const decisionsChanged = this.hasCollectionChanged(previous.decisions, input.decisions, (a, b) =>
+			this.hasDecisionChanged(a, b),
+		);
+		const configChanged = JSON.stringify(this.taskCorpusConfig) !== JSON.stringify(input.config);
+		this.publishedRoot = this.currentRoot();
+		this.installTaskCorpus({
+			tasks: visible,
+			activeTasks: input.activeTasks,
+			archivedTasks: input.archivedTasks,
+			identityIndex,
+			branchStateEntries: this.branchTaskStateEntries,
+			config: input.config,
+		});
+		this.replaceDocuments(input.documents);
+		this.replaceDecisions(input.decisions);
+		if (tasksChanged) this.notify("tasks");
+		if (documentsChanged) this.notify("documents");
+		if (decisionsChanged) this.notify("decisions");
+		if (configChanged) this.notifyConfig(input.config);
+	}
+
 	async refreshTasks(): Promise<void> {
 		this.assertOpen();
 		if (this.managedWritePending) return;
@@ -711,7 +748,7 @@ export class ContentStore {
 	 * Called when the config file is created after the server started.
 	 */
 	async ensureConfigWatcher(): Promise<void> {
-		if (this.closed) {
+		if (this.closed || !this.enableWatchers) {
 			return;
 		}
 		const rootNeedsReconciliation =

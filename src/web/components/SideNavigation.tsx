@@ -273,7 +273,7 @@ const SideNavigation = memo(function SideNavigation({
 	error,
 	onRetry
 }: SideNavigationProps) {
-	const { central, session, permissions, writeState } = useAuth();
+	const { central, session, permissions, writesAvailable } = useAuth();
 	const [isCollapsed, setIsCollapsed] = useState(() => {
 		const saved = localStorage.getItem(projectStorageKey('sideNavCollapsed'));
 		return saved ? JSON.parse(saved) : false;
@@ -748,7 +748,7 @@ const SideNavigation = memo(function SideNavigation({
 									</span>
 								</div>
 									<button
-										disabled={!permissions.docsWrite || writeState !== 'ready'}
+										disabled={!permissions.docsWrite || !writesAvailable}
                                         onClick={handleCreateDocument}
 										className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors duration-200"
 										title="Create new document"
@@ -813,7 +813,7 @@ const SideNavigation = memo(function SideNavigation({
 										Decisions (<NavigationCount count={decisions.length} isLoading={isLoading} error={error} label="decision" />)
 									</span>
 								</div>
-								{central && permissions.decisionsWrite && <button type="button" disabled={writeState !== 'ready'} onClick={() => navigate('/decisions/new')} title="Create new decision" className="p-1 text-gray-500 hover:text-gray-900 dark:hover:text-gray-100">+</button>}
+								{central && permissions.decisionsWrite && <button type="button" disabled={!writesAvailable} onClick={() => navigate('/decisions/new')} title="Create new decision" className="p-1 text-gray-500 hover:text-gray-900 dark:hover:text-gray-100">+</button>}
 							</div>
 							
 							{/* Decision List */}

@@ -1,10 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { ADMIN_PERMISSIONS, type AuthSession, type ProjectPermissions } from "../../server/auth-types";
 import type { WriteState } from "../../server/mutation-types";
+import { LoginForm, PasswordForm } from "../components/AccountForms";
+import type { ProjectObservation } from "../components/ObservationStatus";
+import { ProjectWriteNotice } from "../components/ProjectWriteNotice";
 import { projectScope, setProjectStorageAccount } from "../lib/project-scope";
 import { HttpError, onSessionExpired, requestJson, setRequestSession } from "../lib/request";
-import { LoginForm, PasswordForm } from "../components/AccountForms";
-import { ProjectWriteNotice } from "../components/ProjectWriteNotice";
 import { useConfirmDiscardChanges } from "./UnsavedChangesContext";
 
 interface AuthState {
@@ -12,6 +13,8 @@ interface AuthState {
 	session: AuthSession | null;
 	permissions: ProjectPermissions;
 	writeState: WriteState;
+	observation: ProjectObservation | null;
+	writesAvailable: boolean;
 	pendingOperationId: string | null;
 	ready: boolean;
 	logoutPending: boolean;
@@ -33,6 +36,8 @@ const AuthContext = createContext<AuthState>({
 	session: null,
 	permissions: ADMIN_PERMISSIONS,
 	writeState: "ready",
+	observation: null,
+	writesAvailable: true,
 	pendingOperationId: null,
 	ready: true,
 	logoutPending: false,
@@ -53,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 	const [session, setSession] = useState<AuthSession | null>(null);
 	const [permissions, setPermissions] = useState<ProjectPermissions>(NO_PERMISSIONS);
 	const [writeState, setWriteState] = useState<WriteState>("ready");
+	const [observation, setObservation] = useState<ProjectObservation | null>(null);
 	const [pendingOperationId, setPendingOperationId] = useState<string | null>(null);
 	const [checked, setChecked] = useState(!central);
 	const [mounted, setMounted] = useState(!central);
@@ -97,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				const detail = await requestJson<{
 					permissions: ProjectPermissions;
 					writeState?: WriteState;
+					observation?: ProjectObservation;
 					pendingOperationId?: string;
 				}>(projectScope.apiBase);
 				if (owner !== generation.current) return;
@@ -104,10 +111,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 					JSON.stringify(current) === JSON.stringify(detail.permissions) ? current : detail.permissions,
 				);
 				setWriteState(detail.writeState ?? "ready");
+				setObservation((current) => {
+					const next = detail.observation ?? null;
+					return current?.state === next?.state &&
+						current?.lastSuccessfulScanAt === next?.lastSuccessfulScanAt &&
+						current?.checkedAt === next?.checkedAt &&
+						current?.error === next?.error
+						? current
+						: next;
+				});
 				setPendingOperationId(detail.pendingOperationId ?? null);
 			} else {
 				setPermissions(next.user.role === "admin" ? ADMIN_PERMISSIONS : NO_PERMISSIONS);
 				setWriteState("ready");
+				setObservation(null);
 				setPendingOperationId(null);
 			}
 			setError(null);
@@ -116,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			if (owner !== generation.current) return;
 			setPermissions(NO_PERMISSIONS);
 			setWriteState("ready");
+			setObservation(null);
 			setPendingOperationId(null);
 			setError(reason instanceof Error ? reason.message : String(reason));
 		}
@@ -159,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			setSession(null);
 			setPermissions(NO_PERMISSIONS);
 			setWriteState("ready");
+			setObservation(null);
 			setPendingOperationId(null);
 			setError(null);
 			setChecked(true);
@@ -232,6 +251,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 			setSession(null);
 			setPermissions(NO_PERMISSIONS);
 			setWriteState("ready");
+			setObservation(null);
 			setPendingOperationId(null);
 			setError(null);
 			setMounted(false);
@@ -254,6 +274,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 				session,
 				permissions: central ? permissions : ADMIN_PERMISSIONS,
 				writeState,
+				observation,
+				writesAvailable: writeState === "ready" && (observation?.state ?? "ready") === "ready",
 				pendingOperationId,
 				ready,
 				logoutPending,

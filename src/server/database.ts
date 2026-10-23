@@ -97,6 +97,55 @@ CREATE INDEX history_scope ON history_events(scope_kind,project_id,sequence);
 PRAGMA user_version = 4;
 `;
 
+const HISTORY_V5_TABLE = `CREATE TABLE history_events (
+	sequence INTEGER PRIMARY KEY AUTOINCREMENT,
+	event_id TEXT NOT NULL UNIQUE, operation_id TEXT NOT NULL UNIQUE REFERENCES operations(operation_id),
+	scope_kind TEXT NOT NULL CHECK(scope_kind IN ('project','admin','registration')),
+	project_id INTEGER REFERENCES projects(id), occurred_at TEXT, detected_at TEXT, event_json TEXT NOT NULL,
+	CHECK((scope_kind='project' AND project_id IS NOT NULL) OR (scope_kind IN ('admin','registration') AND project_id IS NULL)),
+	CHECK(occurred_at IS NOT NULL OR detected_at IS NOT NULL)
+) STRICT`;
+
+const AGENT_OBSERVATION_SCHEMA = `
+CREATE TABLE agent_keys (
+	id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id), name TEXT NOT NULL,
+	secret_hash TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL, revoked_at TEXT
+) STRICT;
+CREATE INDEX agent_keys_user ON agent_keys(user_id,created_at,id);
+CREATE TABLE agent_key_grants (
+	agent_key_id TEXT NOT NULL REFERENCES agent_keys(id), project_id INTEGER NOT NULL REFERENCES projects(id),
+	tasks_write INTEGER NOT NULL CHECK(tasks_write IN (0,1)), docs_write INTEGER NOT NULL CHECK(docs_write IN (0,1)),
+	decisions_write INTEGER NOT NULL CHECK(decisions_write IN (0,1)),
+	decisions_manage INTEGER NOT NULL CHECK(decisions_manage IN (0,1)),
+	archive INTEGER NOT NULL CHECK(archive IN (0,1)), permanent_delete INTEGER NOT NULL CHECK(permanent_delete IN (0,1)),
+	PRIMARY KEY(agent_key_id,project_id)
+) STRICT;
+CREATE TABLE operation_agents (
+	operation_id TEXT PRIMARY KEY REFERENCES operations(operation_id),
+	agent_key_id TEXT NOT NULL REFERENCES agent_keys(id), user_id TEXT NOT NULL REFERENCES users(id)
+) STRICT;
+CREATE INDEX operation_agents_key ON operation_agents(agent_key_id);
+CREATE TABLE observation_projects (
+	project_id INTEGER PRIMARY KEY REFERENCES projects(id), generation INTEGER NOT NULL CHECK(generation>=0),
+	state TEXT NOT NULL CHECK(state IN ('checking','ready','degraded')),
+	last_successful_scan_at TEXT, checked_at TEXT, error TEXT
+) STRICT;
+CREATE TABLE observed_paths (
+	project_id INTEGER NOT NULL REFERENCES projects(id), path TEXT NOT NULL,
+	record_key TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('task','document','decision','milestone','config')),
+	visible_id TEXT NOT NULL, lifecycle TEXT NOT NULL CHECK(lifecycle IN ('active','draft','archived','deleted')),
+	entry_kind TEXT NOT NULL CHECK(entry_kind IN ('file','symlink')),
+	entry_bytes BLOB, link_target TEXT, record_bytes BLOB NOT NULL, entry_hash TEXT NOT NULL, record_hash TEXT NOT NULL,
+	file_dev TEXT, file_ino TEXT, birthtime_ns TEXT,
+	PRIMARY KEY(project_id,path),
+	CHECK((entry_kind='file' AND entry_bytes IS NOT NULL AND link_target IS NULL)
+		OR (entry_kind='symlink' AND entry_bytes IS NULL AND link_target IS NOT NULL)),
+	CHECK((file_dev IS NULL AND file_ino IS NULL AND birthtime_ns IS NULL)
+		OR (file_dev IS NOT NULL AND file_ino IS NOT NULL AND birthtime_ns IS NOT NULL))
+) STRICT;
+CREATE INDEX observed_paths_key ON observed_paths(project_id,record_key);
+`;
+
 function normalizedSql(sql: string): string {
 	return sql
 		.replace(/'(?:''|[^'])*'|[^']+/g, (part) => (part.startsWith("'") ? part : part.replace(/\s+/g, "").toLowerCase()))
@@ -116,6 +165,24 @@ const SCHEMA_V3: Record<string, string> = {
 	projects: normalizedSql(PROJECT_SCHEMA.replace("\n) STRICT", `, ${TRACKING_COLUMN}) STRICT`)),
 };
 const SCHEMA_V4 = { ...SCHEMA_V3, ...declarations(MUTATION_SCHEMA) };
+const SCHEMA_V5: Record<string, string> = {
+	...SCHEMA_V4,
+	...declarations(AGENT_OBSERVATION_SCHEMA),
+	history_events: normalizedSql(HISTORY_V5_TABLE),
+};
+
+function migrateV5(database: Database): void {
+	// history_events has no incoming foreign keys. Rebuild it to represent unknown occurrence as SQL NULL.
+	database.exec("ALTER TABLE history_events RENAME TO history_events_v4");
+	database.exec(HISTORY_V5_TABLE);
+	database.exec(
+		"INSERT INTO history_events(sequence,event_id,operation_id,scope_kind,project_id,occurred_at,detected_at,event_json) SELECT sequence,event_id,operation_id,scope_kind,project_id,occurred_at,NULL,event_json FROM history_events_v4",
+	);
+	database.exec("DROP TABLE history_events_v4");
+	database.exec("CREATE INDEX history_scope ON history_events(scope_kind,project_id,sequence)");
+	database.exec(AGENT_OBSERVATION_SCHEMA);
+	database.exec("PRAGMA user_version = 5");
+}
 
 function schemaVersion(database: Database, allowEmpty = false): number {
 	const version = database.query<{ user_version: number }, []>("PRAGMA user_version").get()?.user_version;
@@ -125,9 +192,13 @@ function schemaVersion(database: Database, allowEmpty = false): number {
 		)
 		.all();
 	if (allowEmpty && version === 0 && objects.length === 0) return -1;
-	const schema = version === 4 ? SCHEMA_V4 : version === 3 ? SCHEMA_V3 : SCHEMA_V2;
+	const schema = version === 5 ? SCHEMA_V5 : version === 4 ? SCHEMA_V4 : version === 3 ? SCHEMA_V3 : SCHEMA_V2;
 	const expected =
-		version === 0 ? ["projects"] : version === 2 || version === 3 || version === 4 ? Object.keys(schema).sort() : [];
+		version === 0
+			? ["projects"]
+			: version === 2 || version === 3 || version === 4 || version === 5
+				? Object.keys(schema).sort()
+				: [];
 	if (
 		!expected.length ||
 		expected.length !== objects.length ||
@@ -173,6 +244,7 @@ export class ServerDatabase {
 					if (version < 2) database.exec(AUTH_SCHEMA);
 					if (version < 3) database.exec(REGISTRATION_SCHEMA);
 					if (version < 4) database.exec(MUTATION_SCHEMA);
+					if (version < 5) migrateV5(database);
 					return action(database);
 				})
 				.immediate();

@@ -467,9 +467,84 @@ path boundaries, then adds a separate recovery event; the original operation rem
 There is no automatic partial replay or rollback. The project response exposes `writeState: ready | recovery_required`, and
 the browser shows the read-only state.
 
-The first server version supports one Linux application instance. Shared locks and revision checks protect cooperating
-writers; a writer that ignores those locks can race a physical write. Continuous external-change attribution and server-connected
-agent credentials belong to the next stage; full history and user acceptance screens follow separately.
+The application supports one Linux instance on this machine. Shared locks and revision checks protect cooperating
+writers; a writer that ignores those locks can race a physical write. Full history and user acceptance screens follow separately.
+
+### Agent access on this machine
+
+An administrator manages **Agent keys** from the existing Users screen, or from the local management CLI:
+
+```bash
+backlog server --data-dir ./server-data agent-key create <userId> --name local-agent --grants-file grants.json --json
+backlog server --data-dir ./server-data agent-key list --json
+backlog server --data-dir ./server-data agent-key revoke <keyId> --json
+```
+
+`grants.json` names registered project IDs and all six operation permissions explicitly. Selecting a project with every
+permission false grants read access only:
+
+```json
+[{"projectId":"1","permissions":{"tasksWrite":true,"docsWrite":true,"decisionsWrite":true,"decisionsManage":false,"archive":false,"delete":false}}]
+```
+
+The secret is shown once. Store it in an owner-readable file outside the project, such as `~/.config/backlog/local-agent.key`
+with mode `600`; it is never returned by later list or revoke calls. Each key is bound to its owner and its explicit project
+permissions. The owner's current permissions also apply, including when the owner is an administrator. Keys cannot administer
+accounts, projects, memberships or configuration. Revocation, account deactivation and administrator password resets disable
+the key. Keys have no automatic expiry; replace grants by revoking the old key and creating a new one.
+
+Use the same CLI against the running local application:
+
+```bash
+backlog --server-url http://127.0.0.1:6420 --server-project 1 \
+  --agent-key-file ~/.config/backlog/local-agent.key --allow-http-loopback task list --json
+backlog --server-url http://127.0.0.1:6420 --server-project 1 \
+  --agent-key-file ~/.config/backlog/local-agent.key --allow-http-loopback task TASK-1 --json
+backlog --server-url http://127.0.0.1:6420 --server-project 1 \
+  --agent-key-file ~/.config/backlog/local-agent.key --allow-http-loopback \
+  --if-match '<revision-from-the-read>' task edit TASK-1 --status 'In Progress'
+```
+
+`--server-project` is the registered project ID; the task's existing `--project` metadata remains separate. Connected mode
+does not initialize, migrate or write a local project, and connection failures never fall back to local files. HTTPS is
+required except for an explicitly allowed HTTP loopback origin. Access keys are read from files rather than arguments or URLs.
+The connected surface covers noninteractive task/draft, document, decision and milestone record commands, search, config
+reads, `history list` and `operation view`. Interactive editors/TUI, Git, initialization, local maintenance and config writes
+are unavailable. Connected `task list --json --watch` polls the application and emits changed complete replacement snapshots.
+
+Read before changing an existing record and pass its returned `revision` with `--if-match`. For several task IDs, repeat
+`--if-match 'TASK-1=<revision>'` for each ID. Each write uses a UUID operation ID. If its result is uncertain, inspect
+`operation view <operationId> --json` using the same connection, then explicitly retry identical input with
+`--operation-id <operationId>` and its original revision. Do not retry with a fresh ID or silently replace the revision.
+Authorized operation views also carry a canonical, non-secret `requestHash`; the client verifies it before accepting a
+recovered result, so an older result cannot be mistaken for a different request using the same operation ID.
+
+The existing optional MCP adapter uses the same connection flags with `mcp start`. Its project is fixed for the session;
+client workspace roots cannot redirect it. Existing tools remain available, write tools require the revision from their
+read result, and accept an optional `operationId` for an explicit retry. CLI instructions remain the canonical workflow.
+
+The same project HTTP endpoints accept `Authorization: Bearer <key>`. Administrator key management uses
+`GET/POST /api/admin/agent-keys` and `POST /api/admin/agent-keys/:id/revoke`; browser CSRF protection still applies.
+Create requires an idempotency key, returns `{key,secret}` once and replays safe `{key}` metadata. Revoke requires the
+key metadata's revision. Neither the plaintext secret nor its hash enters operation results or history.
+
+### Changes made directly to files
+
+Every tracked project is checked at startup, on Backlog directory notifications, and every 30 seconds, even with no
+browser open. The first A-05 scan establishes a trusted observation point; it does not reconstruct earlier unrecorded changes.
+Later external changes are recorded with source `external`, actor `unknown`, `occurredAt: null` and a real `detectedAt`.
+Offline changes record the observed difference, without inventing intermediate operations or completion dates.
+
+The scanner checks tasks, drafts, documents, decisions, milestones, config and their archives. It waits for matching guarded
+reads before accepting a snapshot. A skipped, invalid or unreadable file is not evidence of deletion. Strong unique physical
+file identity can preserve `recordKey` across a move; matching visible IDs or content alone cannot. Uncertain moves and
+recreation after an observed deletion start new identities. Normal atomic saves at the same path keep their identity.
+
+Project responses expose `observation` with `state: checking | ready | degraded`, `lastSuccessfulScanAt`, `checkedAt` and
+`error`. A degraded project blocks writes, displays the problem in the existing UI and reopens after a successful full check.
+Trusted lists/search remain readable; a changed invalid detail, raw file, or unsafe filesystem boundary fails closed.
+`writeState: recovery_required` remains a separate interrupted-operation condition. Application writes advance the observation
+checkpoint with their own durable result, so filesystem notifications do not create duplicate external events.
 
 ---
 

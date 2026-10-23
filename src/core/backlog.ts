@@ -786,7 +786,7 @@ export class Core {
 	async previewDuplicateTaskIdRepair(options: { includeBranches?: boolean } = {}): Promise<DuplicateRepairPlan> {
 		const storeAlreadyReady = this.contentStore?.isInitialized() ?? false;
 		const store = await this.getContentStore();
-		if (storeAlreadyReady) {
+		if (storeAlreadyReady && !this.serverMode) {
 			if (options.includeBranches) await this.refreshTasksForTaskRead();
 			else await store.refreshLocalTaskCorpus();
 		}
@@ -1124,6 +1124,7 @@ export class Core {
 
 	/** Refresh the existing cross-branch store only when relevant config or refs changed. */
 	async refreshTasksForTaskRead(): Promise<boolean> {
+		if (this.serverMode) return false;
 		while (true) {
 			const generation = this.projectGeneration;
 			const filesystem = this.fs;
@@ -1406,7 +1407,7 @@ export class Core {
 				return filtered;
 			};
 
-			if (!includeCrossBranch) {
+			if (!includeCrossBranch && !this.serverMode) {
 				const localTasks = await filesystem.listTasks();
 				if (projectChanged()) continue;
 				const tasks = trimmedQuery ? createTaskSearchIndex(localTasks).search({ query: trimmedQuery }) : localTasks;
@@ -4483,14 +4484,18 @@ export class Core {
 		await this.createDecision(updatedDecision, autoCommit);
 	}
 
-	async createDecisionWithTitle(title: string, autoCommit?: boolean): Promise<Decision> {
+	async createDecisionWithTitle(
+		title: string,
+		autoCommit?: boolean,
+		status: Decision["status"] = "proposed",
+	): Promise<Decision> {
 		const id = await generateNextDecisionId(this);
 
 		const decision: Decision = {
 			id,
 			title,
 			date: new Date().toISOString().slice(0, 16).replace("T", " "),
-			status: "proposed",
+			status,
 			context: "[Describe the context and problem that needs to be addressed]",
 			decision: "[Describe the decision that was made]",
 			consequences: "[Describe the consequences of this decision]",

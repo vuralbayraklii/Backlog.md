@@ -5,6 +5,7 @@ import type { RecordVersionLike } from "../lib/api";
 import { requestJson } from "../lib/request";
 import { buttonClass, inputClass } from "./AccountForms";
 import AdminProjectRegistration from "./AdminProjectRegistration";
+import AgentKeys from "./AgentKeys";
 import { isMutationConflict, MutationConflictNotice } from "./MutationConflictNotice";
 import ServerLayout from "./ServerLayout";
 
@@ -163,6 +164,9 @@ export default function AdminUsers() {
 				<a href="#project-tracking" className="underline">
 					Project tracking
 				</a>
+				<a href="#agent-keys" className="underline">
+					Agent keys
+				</a>
 			</div>
 			{error && (
 				<MutationConflictNotice
@@ -225,6 +229,7 @@ export default function AdminUsers() {
 					Create user
 				</button>
 			</form>
+			<AgentKeys users={users} />
 			<AdminProjectRegistration users={users} />
 			<ul className="space-y-4">
 				{users.map((user) => (

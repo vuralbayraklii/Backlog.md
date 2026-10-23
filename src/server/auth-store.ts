@@ -223,7 +223,12 @@ export class AuthStore {
 			database
 				.query("UPDATE users SET display_name=?,role=?,active=? WHERE id=?")
 				.run(label ?? row.displayName, role, Number(active), id);
-			if (!active) database.query("DELETE FROM sessions WHERE user_id=?").run(id);
+			if (!active) {
+				database.query("DELETE FROM sessions WHERE user_id=?").run(id);
+				database
+					.query("UPDATE agent_keys SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL")
+					.run(new Date().toISOString(), id);
+			}
 			const user = publicUser(this.requireUser(database, id));
 			audit?.(database, { kind: "user", recordKey: `user:${id}`, visibleId: id, before, after: user }, user);
 			return user;
@@ -237,6 +242,9 @@ export class AuthStore {
 			const before = publicUser(this.requireUser(database, id));
 			database.query("UPDATE users SET password_hash=?,must_change_password=1 WHERE id=?").run(passwordHash, id);
 			database.query("DELETE FROM sessions WHERE user_id=?").run(id);
+			database
+				.query("UPDATE agent_keys SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL")
+				.run(new Date().toISOString(), id);
 			const user = publicUser(this.requireUser(database, id));
 			audit?.(database, { kind: "user", recordKey: `user:${id}`, visibleId: id, before, after: user }, user);
 			return user;
