@@ -3,13 +3,23 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-23 20:47'
+updated_date: '2026-10-24 07:45'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-06 ve A-06 inceleme düzeltmeleri BACK-820/BACK-821/BACK-822 tamamlandı; BACK-814–822 Done. Güncel dal tasks/server-a06-review-history, uygulama/kanıt henüz commit edilmedi ve gönderilmedi. Güncel düzeltme kabulü verification/server/back-822-verification.json; önceki back-821-verification.json, back-820-verification.json ve a06-verification.json tarihsel olarak korunur, onaylı plan doc-8. Bütün bileşenler mevcut makinede tek uygulama örneğidir. Git durumunu doğrula ve yerel kayıtları koru. A-07 başlamadı.
+Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-06 ve inceleme düzeltmeleri BACK-820/BACK-821/BACK-822 tamamlandı; BACK-814–822 Done. A-06 uygulaması ve kabul kayıtları e239ceab35a97055c255b20dad03be2ae263bcda commit’iyle origin/tasks/server-a06-review-history dalına gönderildi; uzak HEAD doğrulandı. Bu teslim kaydı aynı dalda ayrı takip commit’iyle korunur; son HEAD’i Git’ten doğrula. Güncel düzeltme kabulü verification/server/back-822-verification.json; önceki raporlar tarihsel kanıttır, onaylı plan doc-8. Bütün bileşenler mevcut makinede tek uygulama örneğidir. A-07 başlamadı.
+
+## A-06 ve BACK-820–822 Git teslimi — 24 Ekim 2026
+
+Kullanıcı son değişikliklerin uygunluk kontrolü ardından commit ve push yapılmasını açıkça onayladı. A-06 BACK-814–819 ve BACK-820/BACK-821/BACK-822 düzeltmeleri, kaynaklar ve kabul kayıtları e239ceab35a97055c255b20dad03be2ae263bcda uygulama commit’iyle origin/tasks/server-a06-review-history dalına normal push ile gönderildi. git ls-remote uzak dalın aynı commit’i taşıdığını doğruladı. Aşağıdaki uygulama kayıtlarındaki commit/push yapılmadı ifadeleri tarihsel durumu anlatır. Bu teslim kaydı ayrı bir BACK-822 takip commit’idir; origin/server değiştirilmedi.
+
+Uygunluk denetimi BACK-820 tam CI kaynak manifestinin SHA-256 değerini kayıtlı 7e020e7d18c32824644db1accbd2441172f39770e318073407228bfb20b430f4 ile eşleştirdi. BACK-821 ve BACK-822 dosya özetleri bu manifest üzerine sırayla uygulandı; 662 kaynak/derleme girdisinin tamamı mevcut kaynakla birebir aynı, ek/eksik src dosyası yok. Birleşik manifest SHA-256 4238d1ec03be82004bc49909823d49adb1b5c189738b32bc4d2fc9a1f45efecc. BACK-820/821/822 ham kanıt dosyalarının 48 özeti ve A-06 üç ekran görüntüsü doğrulandı. Normal Husky/lint-staged Biome kancası geçti; commit sonrasında kaynak ve kabul dosyalarının değişmediği tekrar doğrulandı. git diff --check geçti.
+
+Kaynak değişmediği için test/build/tarayıcı yeniden çalıştırılmadı. Korunan kanıtlar: BACK-820 tam CI 4018 başarılı / 13 atlanan / 0 hata ve gerçek Chromium 10/10; BACK-821 odaklı 278 başarılı / 1 mevcut PTY atlaması / 0 hata; BACK-822 odaklı 218 başarılı / 0 hata / 0 atlama. Son iki düzeltmede tam CI/Chromium yeniden koşulmadığı sınırı korunur. Kabul raporları tarihsel kanıt olarak değiştirilmedi.
+
+Teslim öncesi diff, indeks ve kişisel server-data hariç izlenmeyen kaynak/kayıt yedeği /tmp/backlog-a06-git-delivery-prqf3t99 içinde korundu; /tmp kalıcı yedek değildir. Kişisel server-data okunmadı ve Git teslimine alınmadı. Groma kurulu değil; manifesto/yönetilen mimari değişmedi. dist/backlog hâlâ BACK-820 binary’sidir; BACK-822 doğrulanmış binary /tmp/backlog-review-three-lsr_rl80/backlog içindedir. Bu Git teslimi binary kurulumunu veya kişisel sürecin yeniden başlatılmasını içermedi. Gerçek Finbee ve A-07 kapsamına geçilmedi.
 
 ## BACK-822 — İnceleme talep bağları ve serileştirme (23 Ekim 2026)
 
@@ -399,9 +409,9 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00–A-06, BACK-813, BACK-820 ve BACK-821 tamamlandı. Güncel iki düzeltmenin kabulü verification/server/back-821-verification.json; önceki kabuller verification/server/back-820-verification.json ve verification/server/a06-verification.json, planı doc-8, görevleri BACK-814–821. Yeni dal tasks/server-a06-review-history yerel ve değişiklikler commit/push edilmedi. A-05 ve önceki aşamaların Git teslimleri yukarıda tarihsel olarak korunur; son HEAD ve yerel durum Git'ten doğrulanır.
+A-00–A-06 ve BACK-820/BACK-821/BACK-822 inceleme düzeltmeleri tamamlandı; BACK-814–822 Done. Güncel düzeltme kabulü verification/server/back-822-verification.json; önceki back-821-verification.json, back-820-verification.json ve a06-verification.json tarihsel kanıttır, onaylı plan doc-8. Uygulama e239ceab35a97055c255b20dad03be2ae263bcda commit’iyle origin/tasks/server-a06-review-history dalına gönderildi. Teslim kaydı aynı dalda ayrı takip commit’iyle korunur; son HEAD ve yerel durumu Git’ten doğrula. dist/backlog son BACK-821/BACK-822 düzeltmelerini içermez; kişisel süreç bu teslimde yenilenmedi.
 
-Sıradaki aşama A-07 Finbee pilotudur: kullanıcı kapsamı belirledikten sonra güncel gerçek kaynaklar okunur, bağlama/geçiş önizlemesi hazırlanır ve kaynaklar korunarak insan-agent aynı kayıt akışı kabul edilir. Bu çalışmada A-07 görevi açılmadı ve gerçek Finbee'ye bağlanılmadı. A-08 diğer projeler ve işletim/yedekleme ayrı aşamadır.
+Sıradaki aşama A-07 Finbee pilotudur: kullanıcı kapsamı belirledikten sonra güncel gerçek kaynaklar okunur, bağlama/geçiş önizlemesi hazırlanır ve kaynaklar korunarak insan-agent aynı kayıt akışı kabul edilir. A-07 görevi açılmadı ve gerçek Finbee’ye bağlanılmadı. A-08 diğer projeler ve işletim/yedekleme ayrı aşamadır.
 
 ## Sonraki aşamalarda karar gerektiren konular
 
@@ -412,11 +422,11 @@ Sıradaki aşama A-07 Finbee pilotudur: kullanıcı kapsamı belirledikten sonra
 ## Yeni sohbete verilecek başlangıç mesajı
 
 ```text
-Backlog.md uygulamasında A-00–A-06 ve BACK-820/BACK-821 inceleme düzeltmeleri tamamlandı; mevcut makinede tek uygulama örneği varsayımı korunuyor.
-Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5/doc-8, a00-baseline.json, a06-verification.json, back-820-verification.json ve back-821-verification.json oku; BACK-814–821 görevlerini CLI ile doğrula.
-A-06 dalı tasks/server-a06-review-history. Kaynak/kanıt yerel; commit/push/merge yapılmadı. Git durumunu ve yerel kayıtları korumadan dal değiştirme.
-Güncel kabul verification/server/back-821-verification.json. Önceki BACK-820, A-06 ve A-05/BACK-813 raporları tarihsel kanıttır.
-dist/backlog BACK-820 binary; BACK-821 doğrulanan binary /tmp/backlog-review-validation-he_6qq15/backlog içinde, kurulmadı. Güncel kaynak için yeniden build/kurulum gerekir; kişisel süreç yeniden başlatılmadı. Admin yeniden oluşturulmaz. Gerçek Finbee ajan tarafından açılmadı/değiştirilmedi.
-A-06 Markdown workflow, açık hesap ataması, agent doğrulaması/insan kabulü, RO yanıtı, sürüm ve insan CLI kararları doc-8'de onaylı ve uygulanmış; yeniden sorma.
+Backlog.md uygulamasında A-00–A-06 ve BACK-820/BACK-821/BACK-822 inceleme düzeltmeleri tamamlandı; mevcut makinede tek uygulama örneği varsayımı korunuyor.
+Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5/doc-8, a00-baseline.json, a06-verification.json ve back-820/back-821/back-822-verification.json oku; BACK-814–822 görevlerini CLI ile doğrula.
+A-06 dalı tasks/server-a06-review-history. Uygulama e239ceab35a97055c255b20dad03be2ae263bcda commit’iyle origin/tasks/server-a06-review-history dalına gönderildi; teslim kaydı ayrı takip commit’idir. Son HEAD ve uzak/yerel durumu Git’ten doğrula; origin/server değiştirilmedi.
+Güncel düzeltme kabulü verification/server/back-822-verification.json. Önceki raporlar tarihsel kanıttır; son iki düzeltmede tam CI/Chromium yeniden çalıştırılmadı. Git teslimi öncesi ve hook sonrası 662 kaynak/derleme girdisi kayıtlı doğrulamayla birebir eşleşti.
+dist/backlog BACK-820 binary; BACK-822 doğrulanan binary /tmp/backlog-review-three-lsr_rl80/backlog içinde, kurulmadı. /tmp kalıcı yedek değildir; güncel kaynak için build/kurulum gerekir. Kişisel süreç yeniden başlatılmadı; admin yeniden oluşturulmaz. server-data kişiseldir, Git dışında korunur. Gerçek Finbee ajan tarafından açılmadı/değiştirilmedi.
+A-06 Markdown workflow, açık hesap ataması, agent doğrulaması/insan kabulü, RO yanıtı, sürüm ve insan CLI kararları doc-8’de onaylı ve uygulanmış; yeniden sorma.
 Sıradaki A-07 Finbee pilotunun güncel kaynak ve kapsamını mevcut kullanıcı vuralbayraklii belirler. Henüz A-07 görevi açılmadı.
 ```

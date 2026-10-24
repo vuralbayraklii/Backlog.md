@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@codex'
 created_date: '2026-10-23 20:40'
-updated_date: '2026-10-24 07:43'
+updated_date: '2026-10-24 07:45'
 labels:
   - server
   - a-06
@@ -57,6 +57,8 @@ Başlangıç dalı tasks/server-a06-review-history ve mevcut çalışmalar korun
 Üç bulgu doğrulandı: eski kaynakta 8 regresyon başarısız. Eski yanıt/iptal, güncel talep olayın özgün talebiyle aynı olmadıkça güven kazanmaz. Anahtar sırasından bağımsız derin karşılaştırma YAML biçimlendirmesinde güveni korur. Ortak içerik özeti serializer/parser sonucundan hesaplanır; boş AC/DoD serileştirmesi yerel ve HTTP yanıtını artık eskitmez. Üretim değişikliği yalnız central.ts ve core/task-review.ts içinde. Son ilgili grup 198/0, DOM20/0: toplam218 başarılı/0 hata/0 atlama. Tip637, yazmasız Biome, diff, geçici paket/native build ve CLI/web/MCP smoke geçti. Tam CI/native Chromium yeniden koşulmadı. Kişisel server-data/süreç ve dist/backlog değiştirilmedi. Kanıt verification/server/back-822-verification.json, devir doc-5 güncellendi. Sadelik incelemesi mevcut iki üretim dosyası ve ortak serializer/parser ile sınırlı; yeni servis/depo/API/UI yok.
 
 Kullanıcı A-06 ve son düzeltmeler için uygunluk denetimi ardından commit/push yapılmasını onayladı. Başlangıç diff, indeks ve kişisel server-data hariç izlenmeyen kaynak/kayıt yedeği /tmp/backlog-a06-git-delivery-prqf3t99 içinde korundu. BACK-820 tam CI kaynak manifesti ile BACK-821/BACK-822 dosya özetleri birleştirildi: 662 kaynak/derleme girdisi birebir eşleşiyor; ek veya eksik src dosyası yok. Birleşik manifest SHA-256 4238d1ec03be82004bc49909823d49adb1b5c189738b32bc4d2fc9a1f45efecc. BACK-820/821/822 ham kanıt dosyalarının 48 özeti doğrulandı. Kaynak değişikliği gerekmedi; tam CI ve tarayıcı yeniden çalıştırılmadı. Git diff kontrolü geçti; normal pre-commit kancasıyla mevcut özellik dalına teslim hazırlanıyor.
+
+Git teslimi: A-06 BACK-814–819 ve BACK-820–822 düzeltmeleri e239ceab35a97055c255b20dad03be2ae263bcda commit’iyle origin/tasks/server-a06-review-history dalına gönderildi; git ls-remote aynı commit’i doğruladı. Normal Husky/lint-staged kancası geçti. Hook sonrası 662 kaynak/derleme girdisi ve kabul dosyaları değişmedi; A-06 üç ekran görüntüsü kayıtlı özetleriyle eşleşti. doc-5 teslim durumu ve yeni sohbet başlangıcı güncellendi; bu kayıt aynı dalda ayrı takip commit’iyle korunur. Kişisel server-data Git dışında, dist/backlog ve kişisel süreç değişmedi; A-07 başlamadı.
 <!-- SECTION:NOTES:END -->
 
 ## Final Summary
