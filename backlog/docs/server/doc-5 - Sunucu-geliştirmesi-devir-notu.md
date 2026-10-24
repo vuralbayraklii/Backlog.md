@@ -3,13 +3,23 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-24 07:45'
+updated_date: '2026-10-24 07:56'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-06 ve inceleme düzeltmeleri BACK-820/BACK-821/BACK-822 tamamlandı; BACK-814–822 Done. A-06 uygulaması ve kabul kayıtları e239ceab35a97055c255b20dad03be2ae263bcda commit’iyle origin/tasks/server-a06-review-history dalına gönderildi; uzak HEAD doğrulandı. Bu teslim kaydı aynı dalda ayrı takip commit’iyle korunur; son HEAD’i Git’ten doğrula. Güncel düzeltme kabulü verification/server/back-822-verification.json; önceki raporlar tarihsel kanıttır, onaylı plan doc-8. Bütün bileşenler mevcut makinede tek uygulama örneğidir. A-07 başlamadı.
+Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-06 ve BACK-820/BACK-821/BACK-822 inceleme düzeltmeleri tamamlandı; BACK-814–822 Done. Kullanıcının 24 Ekim 2026 onayıyla tasks/server-a06-review-history dalının 15 commit’i server dalına fast-forward ile alındı ve origin/server dalına gönderildi; uzak d95577704859b6a1600f9e3f41d69bf211ea7c1f başı doğrulandı. Bu devir güncellemesi server üzerinde ayrı takip commit’idir; son HEAD’i Git’ten doğrula. Güncel düzeltme kabulü verification/server/back-822-verification.json; önceki raporlar tarihsel kanıttır, onaylı plan doc-8. Bütün bileşenler mevcut makinede tek uygulama örneğidir. A-07 başlamadı.
+
+## server dalına fast-forward birleştirme — 24 Ekim 2026
+
+Kullanıcı A-07 öncesinde tasks/server-a06-review-history → server birleştirmesini ve GitHub’a gönderilmesini onayladı. Uzak dallar fetch ile yenilendi; yerel/uzak başların eşitliği, server dalının A-06 dalının atası olduğu ve aradaki farkın 15 commit olduğu doğrulandı. git merge --ff-only ile server, 2225c4167234fd300b477cc3207689c8454abed1 başından d95577704859b6a1600f9e3f41d69bf211ea7c1f başına ilerletildi. Çatışma veya yeni merge commit’i oluşmadı; bütün aşamaların commit geçmişi korundu.
+
+Normal git push origin server:server başarılı oldu; git ls-remote uzak refs/heads/server için d95577704859b6a1600f9e3f41d69bf211ea7c1f değerini doğruladı. Birleştirme sonrası server ve A-06 dalının ağaçları birebir aynıydı. Bu kayıt yalnız doc-5’i değiştiren ayrı takip commit’i olarak server dalında korunur. Aşağıdaki önceki teslim bölümlerinde geçen server değiştirilmedi veya merge yapılmadı ifadeleri tarihsel durumdur.
+
+Dal değişiminden önce Git durumu, referanslar, çalışma/indeks farkları ve izlenen Backlog/kabul kayıtları /tmp/backlog-server-merge-kaxt3sqk içinde korundu; records-before.tar.gz SHA-256 eb9a76c97f6bf8d63a7044987cd609aefdd83b0f2c4c4e37779ec878d660f25f. /tmp kalıcı yedek değildir. Başlangıçta izlenen dosyalar temizdi; tek izlenmeyen klasör kişisel server-data idi, okunmadı veya Git’e alınmadı. backlog komutu PATH’te bulunmadığı için mevcut kaynak CLI bun run cli kullanıldı. Groma kurulu değil; mimari tarama yapılmadı.
+
+Kaynak veya kabul raporları değiştirilmedi; test/build/tarayıcı yeniden çalıştırılmadı. Mevcut doğrulama kapsamı ve sınırları korundu. dist/backlog ve kişisel süreç yenilenmedi. A-07 görevi veya dalı açılmadı; sonraki A-07 çalışması güncel server üzerinden yeni özellik dalında yürütülecek, Finbee kaynak ve kabul kapsamını kullanıcı belirleyecek.
 
 ## A-06 ve BACK-820–822 Git teslimi — 24 Ekim 2026
 
@@ -291,11 +301,11 @@ Kullanıcının başlangıç planı, tüm A-00–A-08 aşamaları ve zorunlu kab
 - Fork: `https://github.com/vuralbayraklii/Backlog.md`.
 - Origin SSH adresi, kullanıcının `github-backlogmd` takma adını kullanıyor. Kullanıcı bu bağlantıyla klonlama ve `server` dalını gönderme işlemini tamamladı.
 - Kaynak etiketi: `v1.54.0`. Gerçek commit: `2225c4167234fd300b477cc3207689c8454abed1`.
-- Geliştirme tabanı: `server`. Kullanıcı bu dalı belirtilen commit’ten açıp `origin/server` olarak gönderdi.
+- Geliştirme tabanı: `server`. Kullanıcı bu dalı belirtilen commit’ten açtı. 24 Ekim 2026’da A-06 dalının 15 commit’i fast-forward ile alındı; `origin/server` başı `d95577704859b6a1600f9e3f41d69bf211ea7c1f` olarak doğrulandı. Bu devir kaydı ayrı takip commit’idir; son HEAD’i Git’ten doğrula.
 - A-01.3 dalı (tarihsel): `tasks/server-a013-open-project-board`; `origin/tasks/server-a013-open-project-board` dalını izler. Önceki kayıtlar korunarak açıldı; A-01.3 başlangıç yedeği `/tmp/backlog-a013-start.tar.gz`. Uygulama commit’i `ed051888e0dc8835956ae2079d454df682b3263b` uzak özellik dalına gönderildi. `origin/server` sabit kaynak commit’inde kaldı.
 - Fork’un `main` dalı, ilk incelemede kaynak commit’in 12 commit ilerisindeydi. `main` kendiliğinden yeni geliştirme tabanı yapılmayacak.
 - Sabit commit’in `package.json` sürümü `1.53.0`. Bu mevcut upstream metaveri tutarsızlığı raporda kayıtlı; kaynak sabitlemesi commit üzerinden yapılıyor.
-- A-00–A-01.3 görevleri, raporları, plan/devir belgeleri ve kaynak değişiklikleri özellik dalında commit edilip GitHub’a gönderildi. Güncel dal başını `git status` ve `git log` ile doğrula; `server` dalına merge yapılmadı.
+- Tarihsel A-01.3 kapanışında A-00–A-01.3 görevleri, raporları, plan/devir belgeleri ve kaynaklar yalnız özellik dalına gönderilmişti. Güncel durumda A-00–A-06 bütünü `server` ve `origin/server` içindedir; dal başını `git status` ve `git log` ile doğrula.
 - Önceki aşamalarda beklenen Git yazarı A-01.3 sırasında kullanıcı tarafından tanımlandı; A-02 başlangıç/kapanışında mevcut repo kimliği doğrulandı. Yeni bir yazar kimliği uydurulmadı.
 - Yeni oturumda `git status --short --branch` ile kontrol et. Yerel ve izlenmeyen dosyalar bu çalışmanın kayıtlarıdır; başka klon açmak, temizlemek veya dal değiştirmek devrin kayıtlarını taşımak anlamına gelmez.
 
@@ -409,7 +419,7 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00–A-06 ve BACK-820/BACK-821/BACK-822 inceleme düzeltmeleri tamamlandı; BACK-814–822 Done. Güncel düzeltme kabulü verification/server/back-822-verification.json; önceki back-821-verification.json, back-820-verification.json ve a06-verification.json tarihsel kanıttır, onaylı plan doc-8. Uygulama e239ceab35a97055c255b20dad03be2ae263bcda commit’iyle origin/tasks/server-a06-review-history dalına gönderildi. Teslim kaydı aynı dalda ayrı takip commit’iyle korunur; son HEAD ve yerel durumu Git’ten doğrula. dist/backlog son BACK-821/BACK-822 düzeltmelerini içermez; kişisel süreç bu teslimde yenilenmedi.
+A-00–A-06 ve BACK-820/BACK-821/BACK-822 inceleme düzeltmeleri tamamlandı; BACK-814–822 Done. Güncel düzeltme kabulü verification/server/back-822-verification.json; önceki back-821-verification.json, back-820-verification.json ve a06-verification.json tarihsel kanıttır, onaylı plan doc-8. A-06 dalının d95577704859b6a1600f9e3f41d69bf211ea7c1f başı 24 Ekim 2026’da server dalına fast-forward ile alındı ve origin/server eşitliği doğrulandı. Bu devir güncellemesi server üzerinde ayrı takip commit’idir; son HEAD ve yerel durumu Git’ten doğrula. A-07 güncel server üzerinden yeni özellik dalıyla başlayacak. dist/backlog son BACK-821/BACK-822 düzeltmelerini içermez; kişisel süreç bu teslimde yenilenmedi.
 
 Sıradaki aşama A-07 Finbee pilotudur: kullanıcı kapsamı belirledikten sonra güncel gerçek kaynaklar okunur, bağlama/geçiş önizlemesi hazırlanır ve kaynaklar korunarak insan-agent aynı kayıt akışı kabul edilir. A-07 görevi açılmadı ve gerçek Finbee’ye bağlanılmadı. A-08 diğer projeler ve işletim/yedekleme ayrı aşamadır.
 
@@ -424,7 +434,7 @@ Sıradaki aşama A-07 Finbee pilotudur: kullanıcı kapsamı belirledikten sonra
 ```text
 Backlog.md uygulamasında A-00–A-06 ve BACK-820/BACK-821/BACK-822 inceleme düzeltmeleri tamamlandı; mevcut makinede tek uygulama örneği varsayımı korunuyor.
 Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5/doc-8, a00-baseline.json, a06-verification.json ve back-820/back-821/back-822-verification.json oku; BACK-814–822 görevlerini CLI ile doğrula.
-A-06 dalı tasks/server-a06-review-history. Uygulama e239ceab35a97055c255b20dad03be2ae263bcda commit’iyle origin/tasks/server-a06-review-history dalına gönderildi; teslim kaydı ayrı takip commit’idir. Son HEAD ve uzak/yerel durumu Git’ten doğrula; origin/server değiştirilmedi.
+Güncel geliştirme tabanı server. A-06 dalının d95577704859b6a1600f9e3f41d69bf211ea7c1f başı 15 commit’lik fast-forward ile server dalına alındı ve origin/server eşitliği doğrulandı. Bu devir kaydı server üzerinde ayrı takip commit’idir; son HEAD ve uzak/yerel durumu Git’ten doğrula. A-07 çalışması güncel server üzerinden yeni özellik dalında yürütülecek.
 Güncel düzeltme kabulü verification/server/back-822-verification.json. Önceki raporlar tarihsel kanıttır; son iki düzeltmede tam CI/Chromium yeniden çalıştırılmadı. Git teslimi öncesi ve hook sonrası 662 kaynak/derleme girdisi kayıtlı doğrulamayla birebir eşleşti.
 dist/backlog BACK-820 binary; BACK-822 doğrulanan binary /tmp/backlog-review-three-lsr_rl80/backlog içinde, kurulmadı. /tmp kalıcı yedek değildir; güncel kaynak için build/kurulum gerekir. Kişisel süreç yeniden başlatılmadı; admin yeniden oluşturulmaz. server-data kişiseldir, Git dışında korunur. Gerçek Finbee ajan tarafından açılmadı/değiştirilmedi.
 A-06 Markdown workflow, açık hesap ataması, agent doğrulaması/insan kabulü, RO yanıtı, sürüm ve insan CLI kararları doc-8’de onaylı ve uygulanmış; yeniden sorma.
