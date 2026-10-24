@@ -1,0 +1,180 @@
+{
+	"task_id": "BACK-821",
+	"stage": "A-06 review corrections",
+	"result": "passed_with_one_existing_skip",
+	"recorded_at_utc": "2026-10-23T20:21:42.281727+00:00",
+	"branch": "tasks/server-a06-review-history",
+	"findings": [
+		{
+			"priority": "P1",
+			"result": "confirmed_and_fixed",
+			"reproduction": "Before fix, DOM showed Accepted for an authenticated general approval whose request type was changed to acceptance in the file. Real HTTP fixture confirms request 1 is untrusted, response 2 remains trusted, neither is stale.",
+			"fix": "Acceptance summary considers only authenticated, current requests when interpreting a response. Real authenticated acceptance remains visible.",
+			"regressions": [
+				"does not report acceptance when an approved general request was changed in the file",
+				"reports acceptance for an authenticated request, verification and response",
+				"does not authenticate a request whose type was changed after a general approval"
+			]
+		},
+		{
+			"priority": "P2",
+			"result": "confirmed_and_fixed",
+			"reproduction": "Before fix, all three local dedicated/edit/filesystem demote-edit-revert-promote flows approved the original request when TASK-1 was reused.",
+			"fix": "One private revision helper in FileSystem saveTask/saveDraft compares existing task content; lifecycle writers provide their source record. The ContentStore save wrapper forwards the source. Each observed content write advances the revision, including reference cleanup. Legacy identity spellings are normalized for comparison.",
+			"regressions": [
+				"invalidates reviews across draft edits and lifecycle writes through dedicated/edit/filesystem",
+				"keeps a legacy task identity and workflow-only writes on the same review revision"
+			],
+			"observed_revisions": [2, 3, 4, 5],
+			"old_response": "rejected: Task content changed"
+		}
+	],
+	"checks": {
+		"regressions": {
+			"command": "bun test --timeout=10000 src/test/task-review.test.ts src/test/task-updated-date.test.ts src/test/task-edit-preservation.test.ts src/test/atomic-task-edit.test.ts src/test/vacated-task-references.test.ts src/test/draft-lifecycle-autocommit-scope.test.ts src/test/cli-draft-edit.test.ts src/test/cli-released-id-draft-links.test.ts src/test/server-task-review.test.ts src/test/server-drafts-endpoint.test.ts src/test/server-demote-endpoint.test.ts src/test/content-store.test.ts src/test/filesystem.test.ts src/test/filesystem-task-cache.test.ts",
+			"passed": 258,
+			"skipped": 1,
+			"failed": 0,
+			"files": 14,
+			"expectations": 1115,
+			"seconds": 47.78,
+			"skip": "Existing interactive draft picker PTY case: renders unrelated healthy drafts beside an unparsable twin"
+		},
+		"dom": {
+			"command": "bun test --timeout=10000 src/test/web-task-review.test.tsx src/test/web-task-details-modal-unsaved-navigation.test.tsx",
+			"passed": 20,
+			"failed": 0,
+			"files": 2,
+			"expectations": 74
+		},
+		"types": {
+			"command": "bun run check:types",
+			"result": "passed",
+			"files": 637
+		},
+		"biome": {
+			"command": "bun run check",
+			"result": "passed",
+			"files": 549,
+			"writes": false
+		},
+		"tsx_biome": {
+			"result": "passed",
+			"files": 2,
+			"warnings": 0,
+			"writes": false,
+			"note": "Same repository rules with TSX included explicitly; both baseline and final files pass."
+		},
+		"diff": {
+			"command": "git diff --check",
+			"result": "passed"
+		},
+		"native_build": {
+			"command": "BACKLOG_BUILD_OUTFILE=/tmp/backlog-review-validation-he_6qq15/backlog bun run build",
+			"result": "passed"
+		},
+		"compiled_smoke": {
+			"command": "bun scripts/smoke-compiled-build.ts /tmp/backlog-review-validation-he_6qq15/backlog 1.53.0",
+			"result": "passed",
+			"scope": ["CLI", "browser assets", "MCP"]
+		}
+	},
+	"source_manifest": [
+		{
+			"path": "src/core/backlog.ts",
+			"sha256": "354867f4910f32bb1d7f5937491aaef2592a1830ec37777e8aae48a70b71a739"
+		},
+		{
+			"path": "src/core/content-store.ts",
+			"sha256": "cc81945ec9819024c77955f13528bdfb85c1abeadef22197165e2bbb3fb00ea6"
+		},
+		{
+			"path": "src/file-system/operations.ts",
+			"sha256": "4bb57c955240d06cc28cc31c336db57852f2db036ab8e9b9a4c55c0b0ee213e5"
+		},
+		{
+			"path": "src/web/components/TaskReviewPanel.tsx",
+			"sha256": "4cc0ac6c73f9f0562299523b64cb329b0225fd5c79d37922440ce9fbf85160d3"
+		},
+		{
+			"path": "src/test/task-review.test.ts",
+			"sha256": "52cde03cf4ccf3b5366ab44c9d9b341f5bf4ca4bd75e8ea43e05e43db3223105"
+		},
+		{
+			"path": "src/test/server-task-review.test.ts",
+			"sha256": "bf79c17cdd7b83a36f37e591f12b793133da18e5e4470f8ee2ccf75a5cd3b649"
+		},
+		{
+			"path": "src/test/web-task-review.test.tsx",
+			"sha256": "ecd9502185d39780db6ff696c6a0a35cf9caf4dcc4c23eeef05548ac5a1af13e"
+		}
+	],
+	"raw_evidence_directory": "/tmp/backlog-review-validation-he_6qq15",
+	"evidence_manifest": [
+		{
+			"path": "after-dom.log",
+			"sha256": "d6e1f734c650c80a050d5188c0f969e5ac3f6eb45f41acc6fbd02700c321b6a7"
+		},
+		{
+			"path": "after-local-regression.log",
+			"sha256": "59d2da82da7f1f38801c25aaa307f72a511d086740531585782a041308640ca2"
+		},
+		{
+			"path": "after-local.log",
+			"sha256": "021894c5d3d3a98bafda22e9a641af09e6b8e285a2c00685631fa639e01bf923"
+		},
+		{
+			"path": "api-fixture.log",
+			"sha256": "3ee63cfeb2e6f2a4d9e91a390aa560bc7ef8a649f2c91f69bb55363a7fc08153"
+		},
+		{
+			"path": "before-dom.log",
+			"sha256": "8b43f79f2a1420a47310875d1d937b1601c9b6a5ec01903fe3f061d423bd40bd"
+		},
+		{
+			"path": "before-local.log",
+			"sha256": "ef375832eb42b6c6a93288139888a1988f669cce933ebb9e73f128fb620e66b9"
+		},
+		{
+			"path": "biome-tsx-after.log",
+			"sha256": "cfc44eee29bc0c3e74191c4443141ef74fcc5cdf5d6335942c98d2d05ab84aa1"
+		},
+		{
+			"path": "biome-tsx-before.log",
+			"sha256": "4a92263598e249585b1641897db38d357d4f8ada18fd595f21e9174273bda84f"
+		},
+		{
+			"path": "biome.log",
+			"sha256": "b195d094579fc7a6269097038b433c70ee38d0ed43847cdd9afc60a2cd76b59e"
+		},
+		{
+			"path": "final-dom.log",
+			"sha256": "9ae922bd1a456c4251ba98c3f19f3f2837f053f67ba81bde05e0e33f2ca16e12"
+		},
+		{
+			"path": "final-regressions.log",
+			"sha256": "dc5f1cb360c9af653852079c2a16aa3586c1fccb77b94adb8221dfc7f162c268"
+		},
+		{
+			"path": "regressions.log",
+			"sha256": "fd062698491debdeb30e0fd6495c0eb5405fdf0837a88958c4689b5df45b501e"
+		},
+		{
+			"path": "smoke.log",
+			"sha256": "f175c1b8e56afbae3cf19366ccc4278e4e5e6c5451da129f988e8fc947e12dc6"
+		},
+		{
+			"path": "types.log",
+			"sha256": "ee21a1890e196fd9d9e24854cf973842265b98c35c925e2c1048bcd9d4fe2cfb"
+		}
+	],
+	"limits": [
+		"Scoped tests were run; the complete CI suite and native Chromium were not rerun.",
+		"The one existing PTY skip is not counted as passed.",
+		"Local process/HTTP fixture checks used sandbox escalation for local processes and localhost networking.",
+		"The verified native build is in /tmp; dist/backlog and the personal server process were not replaced or restarted.",
+		"Personal server-data and Finbee were not read or changed. No commit, push, merge or A-07 work.",
+		"Groma is unavailable; no architecture scan or managed-file edit.",
+		"The initial dirty tree and local records were preserved; /tmp is not durable storage."
+	]
+}

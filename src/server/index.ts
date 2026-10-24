@@ -17,6 +17,7 @@ import { initializeProject } from "../core/init.ts";
 import type { SearchService } from "../core/search-service.ts";
 import { getTaskStatistics } from "../core/statistics.ts";
 import { loadTaskDetail } from "../core/task-detail.ts";
+import { appendTaskReview, taskReviewContentHash } from "../core/task-review.ts";
 import { FileSystem, isCreateLockError, isTaskLockError } from "../file-system/operations.ts";
 import {
 	attachRecordFileSnapshot,
@@ -42,6 +43,8 @@ import {
 	type TaskUpdateInput,
 } from "../types/index.ts";
 import type { TaskEditArgs } from "../types/task-edit-args.ts";
+import type { ReviewAction, ReviewContext, ReviewPerson, TaskReviewView } from "../types/task-review.ts";
+import { openReviewRequests } from "../types/task-review.ts";
 import { launchBrowser } from "../utils/browser-launch.ts";
 import type { BrowserLoadingState } from "../utils/browser-loading-state.ts";
 import { normalizeDueDate } from "../utils/due-date.ts";
@@ -65,6 +68,7 @@ import {
 	taskNotFoundMessage,
 } from "../utils/task-path.ts";
 import { formatValidTaskTypeValues, resolveTaskTypeValues } from "../utils/task-type-config.ts";
+import { isTerminalStatus } from "../utils/terminal-status.ts";
 import { getVersion } from "../utils/version.ts";
 import { AuthStoreError } from "./auth-store.ts";
 import type { ProjectAuthorization, ProjectPermission } from "./auth-types.ts";
@@ -102,8 +106,16 @@ function formatErrorForWeb(message: string): string {
 type RecordRequest = Request & { params: { id: string } };
 type RoutePermission = ProjectPermission | "read" | "admin";
 type ProjectRouteHandler = ((req: Request) => Promise<Response>) & { permission?: RoutePermission };
+const REVIEW_RECHECK = Symbol("review-recheck");
+
+interface ReviewAccess {
+	context: (task: Task) => ReviewContext;
+	reviewer: (person: ReviewPerson) => ReviewPerson | null;
+	view: (task: Task) => TaskReviewView;
+}
 
 export interface ProjectReadContext {
+	reviews?: ReviewAccess;
 	recordKeyFor?: (
 		kind: "task" | "document" | "decision" | "milestone" | "config",
 		visibleId: string,
@@ -954,6 +966,7 @@ export class BacklogServer {
 									prepared.publish,
 									() =>
 										authorization?.check(permission) ??
+										(req as Request & { [REVIEW_RECHECK]?: () => Response | null })[REVIEW_RECHECK]?.() ??
 										((req as Request & { [DECISION_MANAGE_RECHECK]?: boolean })[DECISION_MANAGE_RECHECK]
 											? authorization?.check("decisionsManage")
 											: null) ??
@@ -985,6 +998,23 @@ export class BacklogServer {
 				}),
 			);
 		return {
+			"/api/tasks/:id/reviews": {
+				GET: route("read", async (req: RecordRequest) => this.handleTaskReviews(req.params.id, mutationContext)),
+			},
+			"/api/tasks/:id/reviews/request": {
+				POST: route("tasksWrite", async (req: RecordRequest) => this.handleTaskReview(req, "request", mutationContext)),
+			},
+			"/api/tasks/:id/reviews/verify": {
+				POST: route("tasksWrite", async (req: RecordRequest) =>
+					this.handleTaskReview(req, "verification", mutationContext),
+				),
+			},
+			"/api/tasks/:id/reviews/respond": {
+				POST: route("read", async (req: RecordRequest) => this.handleTaskReview(req, "response", mutationContext)),
+			},
+			"/api/tasks/:id/reviews/cancel": {
+				POST: route("read", async (req: RecordRequest) => this.handleTaskReview(req, "cancellation", mutationContext)),
+			},
 			"/api/tasks": {
 				GET: route("read", async (req: Request) => this.handleListTasks(req, mutationContext)),
 				POST: route("tasksWrite", async (req: Request) => this.handleCreateTask(req)),
@@ -1904,19 +1934,151 @@ export class BacklogServer {
 			true,
 		);
 		return Response.json(
-			{ ...detail, ...(record.recordKey && { recordKey: record.recordKey, revision: record.revision }) },
+			{
+				...detail,
+				...(record.recordKey && { recordKey: record.recordKey, revision: record.revision }),
+				...(context?.reviews && { reviewView: context.reviews.view(resolved) }),
+			},
 			{
 				headers: record.revision ? { ETag: record.revision } : undefined,
 			},
 		);
 	}
 
+	async taskReviewSummary(userId: string, view: (task: Task) => TaskReviewView) {
+		await this.ensureServicesReady();
+		const tasks = await this.core.queryTasks({ includeCrossBranch: false, refreshCrossBranch: false });
+		const statuses = await getValidStatuses(this.core);
+		const open = tasks.filter((task) => !isTerminalStatus(task.status, statuses));
+		const requests = tasks.flatMap((task) => {
+			if (!task.review?.some((entry) => entry.kind === "request" && entry.reviewer.userId === userId)) return [];
+			const review = view(task);
+			const trust = new Set(review.trustedEntryIds);
+			return openReviewRequests(task.review ?? [], trust)
+				.filter((request) => request.reviewer.userId === userId)
+				.map((request) => ({
+					taskId: task.id,
+					title: task.title,
+					request,
+					stale: request.contentHash !== review.contentHash || review.staleEntryIds.includes(request.id),
+				}));
+		});
+		return {
+			openTasks: open.length,
+			nextDueDate: open.flatMap((task) => (task.dueDate ? [task.dueDate] : [])).sort()[0] ?? null,
+			requests,
+		};
+	}
+
+	private async handleTaskReviews(id: string, context?: ProjectReadContext): Promise<Response> {
+		const task = await this.resolveDetailTask(id);
+		if (task instanceof Response) return task;
+		const record = await this.versionRecord(
+			task,
+			"task",
+			task.source === "archived" ? "archived" : "active",
+			context,
+			true,
+		);
+		return Response.json({
+			taskId: task.id,
+			entries: task.review ?? [],
+			...(context?.reviews?.view(task) ?? { contentHash: taskReviewContentHash(task), trustedEntryIds: [] }),
+			recordKey: record.recordKey,
+			revision: record.revision,
+		});
+	}
+
+	private async handleTaskReview(
+		req: RecordRequest,
+		kind: ReviewAction["kind"],
+		context?: ProjectReadContext,
+	): Promise<Response> {
+		if (this.centralMode && !context?.reviews)
+			return Response.json({ error: "Review identity is unavailable." }, { status: 503 });
+		const failure = (error: unknown) => {
+			if (isAmbiguousIdError(error) || isTaskLockError(error))
+				return this.conflictResponse(error, (error as Error).message);
+			const message = error instanceof Error ? error.message : "Invalid review request.";
+			return Response.json(
+				{ error: message },
+				{
+					status: /assigned person|permission|human session/.test(message)
+						? 403
+						: /changed|closed/.test(message)
+							? 409
+							: 400,
+				},
+			);
+		};
+		try {
+			const body = await req.json();
+			if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("A review object is required.");
+			const fields = {
+				request: ["type", "reviewer", "reason"],
+				verification: ["result", "notes", "evidence", "commit"],
+				response: ["requestId", "outcome", "notes", "decision"],
+				cancellation: ["requestId", "reason"],
+			}[kind];
+			if (
+				Object.keys(body).some((key) => key !== "kind" && !fields.includes(key)) ||
+				(body.kind !== undefined && body.kind !== kind)
+			)
+				throw new Error("Invalid review fields.");
+			const action = { ...body, kind } as ReviewAction;
+			const snapshot = await this.core.loadTaskById(req.params.id, { includeCrossBranch: false });
+			if (!snapshot) return Response.json({ error: "Task not found." }, { status: 404 });
+			const access = context?.reviews;
+			const principal = access?.context(snapshot) ?? {
+				author: { kind: "local" as const, userId: "local", name: "local" },
+				canWrite: true,
+			};
+			if (action.kind === "request" && access) {
+				const target = access.reviewer(action.reviewer);
+				if (!target)
+					return Response.json({ error: "Reviewer must have current access to this project." }, { status: 400 });
+				action.reviewer = target;
+			}
+			const revalidate = () => {
+				if (!access) return null;
+				if (action.kind === "request" && !access.reviewer(action.reviewer))
+					return Response.json({ error: "Reviewer no longer has project access." }, { status: 403 });
+				try {
+					appendTaskReview(snapshot, action, access.context(snapshot));
+				} catch (error) {
+					return failure(error);
+				}
+				return null;
+			};
+			const denied = revalidate();
+			if (denied) return denied;
+			Object.defineProperty(req, REVIEW_RECHECK, { value: revalidate });
+			const updated = await this.core.updateTaskReview(req.params.id, action, principal);
+			this.broadcastDataUpdated();
+			return Response.json(updated);
+		} catch (error) {
+			return failure(error);
+		}
+	}
+
 	private async handleUpdateTask(req: Request, taskId: string): Promise<Response> {
 		const updates = await req.json();
-		const editArgs = updates?.editArgs;
-		if (editArgs !== undefined && (!editArgs || typeof editArgs !== "object" || Array.isArray(editArgs))) {
+		if (!updates || typeof updates !== "object" || Array.isArray(updates))
+			return Response.json({ error: "Task updates must be an object." }, { status: 400 });
+		const editArgs = updates.editArgs;
+		if (editArgs !== undefined && (!editArgs || typeof editArgs !== "object" || Array.isArray(editArgs)))
 			return Response.json({ error: "editArgs must be an object." }, { status: 400 });
-		}
+		if (
+			"review" in updates ||
+			"reviewView" in updates ||
+			"reviewRevision" in updates ||
+			(updates.editArgs &&
+				("review" in updates.editArgs || "reviewView" in updates.editArgs || "reviewRevision" in updates.editArgs))
+		)
+			return Response.json(
+				{ error: "Use the dedicated task review commands to change workflow records." },
+				{ status: 400 },
+			);
 		const dueDate = parseDueDatePayload((editArgs ?? updates)?.dueDate, true);
 		if (!dueDate.ok) return Response.json({ error: dueDate.error }, { status: 400 });
 

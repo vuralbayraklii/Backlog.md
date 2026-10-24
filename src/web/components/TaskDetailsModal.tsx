@@ -21,8 +21,10 @@ import { buildTaskIdIndex, resolveTaskReference } from "../utils/task-id-links";
 import { findDirectSubtasks, findParentTask, summarizeSubtaskProgress } from "../../utils/task-subtasks.ts";
 import { isTerminalStatus } from "../../utils/terminal-status.ts";
 import { createUrlPath } from "../utils/urlHelpers";
-import { useIsUnsavedGuardActive, useUnsavedChanges } from "../contexts/UnsavedChangesContext";
+import { useConfirmDiscardChanges, useIsUnsavedGuardActive, useUnsavedChanges } from "../contexts/UnsavedChangesContext";
 import { scopeMarkdownUrl } from "../lib/project-scope";
+import TaskReviewPanel from "./TaskReviewPanel";
+import HistoryPanel from "./HistoryPanel";
 
 interface Props {
   task?: Task | TaskDetail; // Optional for create mode
@@ -204,7 +206,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
   const { theme } = useTheme();
   const isCreateMode = !task;
   // A task from another branch or in the archive is shown but cannot be changed here.
-  const { permissions, writeState, observation, writesAvailable } = useAuth();
+  const { central, session, permissions, writeState, observation, writesAvailable } = useAuth();
   const isRecordReadOnly = task ? isReadOnlyTask(task) : false;
   const isReadOnly = isRecordReadOnly || !permissions.tasksWrite || !writesAvailable;
   // Promoting a draft replaces it with a new task ID, which the Drafts page does through its own
@@ -713,6 +715,7 @@ export const TaskDetailsModal: React.FC<Props> = ({
     (mode === "edit" || mode === "create") && (isDirty || hasCommentDraft || hasCreateModeEntries);
   useUnsavedChanges(isOpen && hasUnsavedEdits);
   const hasNavigationGuard = useIsUnsavedGuardActive();
+  const confirmDiscardChanges = useConfirmDiscardChanges();
 
   // Links inside the modal (dependency chips, auto-linked task IDs in markdown) leave this
   // task behind, so they ask the same question closing does before the navigation happens.
@@ -1214,10 +1217,9 @@ export const TaskDetailsModal: React.FC<Props> = ({
       isOpen={isOpen}
       onClose={() => {
 		if (demoting) return;
-        // When in edit mode, confirm closing if dirty
-        if (mode === "edit" && isDirty) {
-          if (!window.confirm("Discard unsaved changes and close?")) return;
-        }
+        if (hasNavigationGuard) {
+          if (!confirmDiscardChanges()) return;
+        } else if (hasUnsavedEdits && !window.confirm("Discard unsaved changes and close?")) return;
         refreshAfterCommentChange();
         onClose();
       }}
@@ -1816,6 +1818,8 @@ export const TaskDetailsModal: React.FC<Props> = ({
               )}
             </div>
           )}
+			{task && central && !isOpenDraft && <TaskReviewPanel key={`${task.id}:${session?.user.id}`} task={task} disabled={mode !== "preview" || hasUnsavedEdits || hasCommentDraft || isRecordReadOnly} onSaved={onSaved} />}
+			{task?.recordKey && central && <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800"><HistoryPanel key={`${task.recordKey}:${task.revision}`} recordKey={task.recordKey} /></div>}
         </div>
 
         {/* Sidebar */}

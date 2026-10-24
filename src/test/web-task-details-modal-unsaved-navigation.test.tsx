@@ -7,6 +7,7 @@ import type { Task } from "../types/index.ts";
 import { TaskDetailsModal } from "../web/components/TaskDetailsModal";
 import { TaskIdIndexProvider } from "../web/contexts/TaskIdIndexContext.tsx";
 import { ThemeProvider } from "../web/contexts/ThemeContext";
+import { UnsavedChangesProvider, useUnsavedChanges } from "../web/contexts/UnsavedChangesContext";
 import { setNativeInputValue } from "./react-dom-input.ts";
 
 let activeRoot: Root | null = null;
@@ -76,23 +77,37 @@ function LocationProbe() {
 	return null;
 }
 
-const renderModal = async (modalTask: Task | undefined): Promise<HTMLElement> => {
+function RegisteredDraft({ dirty }: { dirty: boolean }) {
+	useUnsavedChanges(dirty);
+	return null;
+}
+
+const renderModal = async (
+	modalTask: Task | undefined,
+	options: { guard?: boolean; reviewDraft?: boolean; onClose?: () => void } = {},
+): Promise<HTMLElement> => {
 	setupDom();
 	currentPath = "";
 	const container = document.getElementById("root");
 	activeRoot = createRoot(container as HTMLElement);
+	const modal = (
+		<>
+			<RegisteredDraft dirty={options.reviewDraft ?? false} />
+			<TaskDetailsModal
+				task={modalTask}
+				isOpen={true}
+				onClose={options.onClose ?? (() => {})}
+				availableTasks={[task, dependency]}
+			/>
+		</>
+	);
 	await act(async () => {
 		activeRoot?.render(
 			<MemoryRouter initialEntries={["/tasks/BACK-1"]}>
 				<ThemeProvider>
 					<TaskIdIndexProvider tasks={[task, dependency]}>
 						<LocationProbe />
-						<TaskDetailsModal
-							task={modalTask}
-							isOpen={true}
-							onClose={() => {}}
-							availableTasks={[task, dependency]}
-						/>
+						{options.guard ? <UnsavedChangesProvider>{modal}</UnsavedChangesProvider> : modal}
 					</TaskIdIndexProvider>
 				</ThemeProvider>
 			</MemoryRouter>,
@@ -180,6 +195,26 @@ afterEach(() => {
 });
 
 describe("Task details modal navigation with unsaved edits", () => {
+	it("closes a clean preview without prompting when the application guard is present", async () => {
+		let closed = 0;
+		const container = await renderModal(task, { guard: true, onClose: () => closed++ });
+		const prompts = declineOnConfirm();
+		await click(container.querySelector('[aria-label="Close modal"]') as Element);
+		expect(prompts).toHaveLength(0);
+		expect(closed).toBe(1);
+	});
+
+	it("protects a registered review draft on close and closes only after confirmation", async () => {
+		let closed = 0;
+		const container = await renderModal(task, { guard: true, reviewDraft: true, onClose: () => closed++ });
+		const prompts = declineOnConfirm();
+		await click(container.querySelector('[aria-label="Close modal"]') as Element);
+		expect(prompts).toHaveLength(1);
+		expect(closed).toBe(0);
+		window.confirm = () => true;
+		await click(container.querySelector('[aria-label="Close modal"]') as Element);
+		expect(closed).toBe(1);
+	});
 	it("keeps the editor open when a dependency chip is clicked and the discard prompt is declined", async () => {
 		const container = await mountModal();
 		await startEditingWithUnsavedChanges(container);

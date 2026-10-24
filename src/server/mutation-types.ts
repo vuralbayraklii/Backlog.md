@@ -68,6 +68,19 @@ export interface OperationView {
 export interface HistoryPage {
 	items: HistoryEvent[];
 	nextCursor: string | null;
+	actors?: Record<string, string>;
+}
+
+export interface HistoryFilters {
+	recordKey?: string;
+	kind?: HistoryKind;
+	cursor?: string;
+	limit?: number;
+	from?: string;
+	until?: string;
+	actor?: string;
+	action?: string;
+	source?: MutationSource;
 }
 
 export type MutationErrorCode =

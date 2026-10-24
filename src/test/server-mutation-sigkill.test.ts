@@ -13,10 +13,11 @@ import { createTestDirOutsideRepository, initializeFilesystemTestProject, safeCl
 
 const PASSWORD = "real crash acceptance password";
 const CHILD = `
-const [centralPath, dataDir, portText, base, readyPath, markerPath, targetStage, targetIndex] = Bun.argv.slice(2);
+const [centralPath, dataDir, portText, base, readyPath, markerPath, targetStage, targetIndex, targetOperationId] = Bun.argv.slice(2);
 const { CentralServer } = await import(centralPath);
 const server = new CentralServer(dataDir, targetStage === "none" ? undefined : {
   mutationCheckpoint: async (stage, operationId, fileIndex) => {
+    if (targetOperationId && operationId !== targetOperationId) return;
     if (stage !== targetStage || (stage === "after_file" && String(fileIndex) !== targetIndex)) return;
     await Bun.write(markerPath, JSON.stringify({ stage, operationId, fileIndex }));
     await new Promise(() => {});
@@ -110,7 +111,7 @@ describe("real process interruption of a central two-file archive", () => {
 		throw new Error(`Child server did not reach marker ${basename(path)}.`);
 	}
 
-	function spawnServer(stage: string, fileIndex?: number) {
+	function spawnServer(stage: string, fileIndex?: number, operationId?: string) {
 		const readyPath = join(testDir, `ready-${randomUUID()}`);
 		const checkpointPath = join(testDir, `checkpoint-${randomUUID()}`);
 		const child = Bun.spawn(
@@ -125,6 +126,7 @@ describe("real process interruption of a central two-file archive", () => {
 				checkpointPath,
 				stage,
 				String(fileIndex ?? ""),
+				operationId ?? "",
 			],
 			{ cwd: testDir, stdin: "ignore", stdout: "pipe", stderr: "pipe" },
 		);
@@ -168,6 +170,75 @@ describe("real process interruption of a central two-file archive", () => {
 			database.close();
 		}
 	}
+
+	it("recovers an assigned read-only human acceptance after SIGKILL without a second event", async () => {
+		const auth = new AuthStore(dataDir);
+		const reviewer = await auth.createUser({ username: "reviewer", password: PASSWORD });
+		auth.setMember("1", reviewer.id, { tasksWrite: false });
+		const login = await auth.login("reviewer", PASSWORD);
+		const reader = await auth.changePassword(login.token, PASSWORD, `${PASSWORD} reviewer`);
+		const operationId = randomUUID();
+		const original = spawnServer("before_finalize", undefined, operationId);
+		let replacement: ReturnType<typeof spawnServer> | null = null;
+		try {
+			await marker(original.readyPath);
+			for (const [verb, body] of [
+				[
+					"request",
+					{
+						kind: "request",
+						type: "acceptance",
+						reviewer: { userId: reviewer.id, name: "reviewer" },
+						reason: "Accept this work",
+					},
+				],
+				["verify", { kind: "verification", result: "passed", notes: "Verified", evidence: ["test report"] }],
+			] as const) {
+				const opened = (await (await request("/api/projects/1/tasks/TASK-1")).json()) as { revision: string };
+				const result = await request(`/api/projects/1/tasks/TASK-1/reviews/${verb}`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json", "Idempotency-Key": randomUUID(), "If-Match": opened.revision },
+					body: JSON.stringify(body),
+				});
+				expect(result.status, await result.clone().text()).toBe(200);
+			}
+			cookie = `backlog_session=${reader.token}`;
+			csrf = reader.session.csrfToken;
+			const opened = (await (await request("/api/projects/1/tasks/TASK-1")).json()) as { revision: string };
+			const init = {
+				method: "POST",
+				headers: { "Content-Type": "application/json", "Idempotency-Key": operationId, "If-Match": opened.revision },
+				body: JSON.stringify({ kind: "response", requestId: 1, outcome: "approved", notes: "Human accepted" }),
+			};
+			const pending = request("/api/projects/1/tasks/TASK-1/reviews/respond", init).catch(() => null);
+			expect(JSON.parse(await marker(original.checkpointPath)).operationId).toBe(operationId);
+			original.child.kill("SIGKILL");
+			await original.child.exited;
+			await pending;
+			replacement = spawnServer("none");
+			await marker(replacement.readyPath);
+			const replay = await request("/api/projects/1/tasks/TASK-1/reviews/respond", init);
+			expect(replay.status, await replay.clone().text()).toBe(200);
+			expect(operationEvidence(operationId).events).toBe(1);
+			const view = (await (await request("/api/projects/1/tasks/TASK-1/reviews")).json()) as {
+				trustedEntryIds: number[];
+			};
+			expect(view.trustedEntryIds).toContain(3);
+			const summary = (await (await request("/api/projects/1/reviews")).json()) as { requests: unknown[] };
+			expect(summary.requests).toHaveLength(0);
+			expect(
+				new MutationStore(dataDir).listHistory({ scope: { kind: "project", projectId: "1" }, source: "external" })
+					.items,
+			).toHaveLength(0);
+		} finally {
+			original.child.kill("SIGKILL");
+			await original.child.exited;
+			if (replacement) {
+				replacement.child.kill("SIGTERM");
+				await replacement.child.exited;
+			}
+		}
+	}, 15000);
 
 	for (const scenario of scenarios) {
 		it(

@@ -3,13 +3,78 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-23 11:18'
+updated_date: '2026-10-23 20:47'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-05 ve BACK-813 inceleme düzeltmeleri tamamlandı. BACK-807–812 ile BACK-813 Done. Bütün bileşenler mevcut makinede tek uygulama örneğinde çalışır. Dal tasks/server-a05-agent-observation; A-05 ve BACK-813 uygulama/kabul commit’i 5d8761e3b09cb906a5f9908f53b79e8661168a44, origin/tasks/server-a05-agent-observation dalına gönderildi. Git teslimi aşağıda kayıtlıdır. Güncel kabul verification/server/back-813-verification.json; önceki A-05 raporu tarihsel kanıttır. Önce Git durumunu doğrula ve yerel kayıtları koru. A-06 henüz başlamadı.
+Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-06 ve A-06 inceleme düzeltmeleri BACK-820/BACK-821/BACK-822 tamamlandı; BACK-814–822 Done. Güncel dal tasks/server-a06-review-history, uygulama/kanıt henüz commit edilmedi ve gönderilmedi. Güncel düzeltme kabulü verification/server/back-822-verification.json; önceki back-821-verification.json, back-820-verification.json ve a06-verification.json tarihsel olarak korunur, onaylı plan doc-8. Bütün bileşenler mevcut makinede tek uygulama örneğidir. Git durumunu doğrula ve yerel kayıtları koru. A-07 başlamadı.
+
+## BACK-822 — İnceleme talep bağları ve serileştirme (23 Ekim 2026)
+
+Kullanıcı üç review bulgusunu tek tek doğrulayıp gerçek hataları en küçük değişikliklerle düzeltmemizi istedi. BACK-822 standart CLI ile oluşturulup @codex üzerine alındı. Mevcut dal ve yerel çalışmalar korundu; başlangıç diff/indeks/izlenmeyen kayıt yedeği /tmp/backlog-review-three-lsr_rl80 içinde. Kişisel server-data okunmadı.
+
+- P1 doğrulandı: review listesi temizlenip yeni doğrulanmış talep aynı numarayı kullandığında eski doğrulanmış yanıt veya iptal yeni kabul talebini kapatıyordu. Güven taraması artık referans verilen güncel talebi, yanıt/iptalin kimliğini doğrulayan olayın özgün talep görüntüsüyle karşılaştırır. Sahte bağ bekleyen talebi kapatmaz; atanmış insanın gerçek yanıtı kapatır. Önceki talep türü değiştirme testi de yanıtın güvenini reddedecek biçimde güçlendirildi.
+- P2 doğrulandı: boş işaretli AC ve DoD bölümleri serializer tarafından kaldırılıyor, önceden hesaplanmış içerik özeti hemen eski kalıyor ve gerçek insan yanıtı HTTP 409 alıyordu. Tek ortak review içerik özeti mevcut serializer/parser roundtrip sonucundan hesaplanır; serializer ve revizyon yazıcısı değiştirilmedi. Yerel Core ve gerçek HTTP yolları ikisi için de kanıtlıdır.
+- P2 doğrulandı: YAML nesne anahtar sırasını değiştirmek, iç içe author/reviewer alanları dahil, tamamlanmış kabulün güvenini siliyordu. Karşılaştırma node:util isDeepStrictEqual kullanır; anahtar sırası önemsiz, değerler ve dizi sırası anlamlıdır. Gerçek değer değişiklikleri güven kazanmaz.
+
+Eski kaynakta 8 regresyon başarısız oldu; 7 yeni test ve 1 güçlendirilmiş test bu kanıtı korur. Son ilgili test grubu 13 dosyada 198 başarılı / 0 hata / 0 atlama; iki DOM dosyasında 20 başarılı / 0 hata. Toplam 218 başarılı. Tip 637 dosyada, yazmasız Biome ve diff kontrolü geçti. Geçici test CLI paketi ve native binary derlendi; derlenmiş CLI/web/MCP smoke geçti. Tam CI ve native Chromium bu dar düzeltmede yeniden çalıştırılmadı. Gerçek HTTP/alt süreç/kesinti testleri yalnız geçici projelerle sandbox dışında koştu; sandbox içindeki ilk yerel CLI denemesi blessed hatası verdi, son paketli CLI testleri geçti.
+
+Kalıcı kanıt verification/server/back-822-verification.json; ham günlükler, başlangıç yedeği ve doğrulanmış native binary /tmp/backlog-review-three-lsr_rl80 içinde. /tmp kalıcı yedek değildir. Sadelik incelemesi iki üretim dosyasında mevcut güven hesabı ve ortak serializer/parser ile sınırlı kaldı; yeni servis/depo/şema/dış API/UI yok. Groma kurulu değil; manifesto/yönetilen mimari değişmedi. dist/backlog ve kişisel süreç yenilenmedi; gerçek Finbee, commit/push/merge ve A-07 kapsam dışı kaldı.
+
+## BACK-821 — İnceleme güveni ve taslak yaşam döngüsü (23 Ekim 2026)
+
+Kullanıcı iki review bulgusunun tek tek doğrulanmasını ve gerçek hataların en küçük gerekli değişikliklerle düzeltilmesini istedi. BACK-821 standart CLI ile oluşturulup @codex üzerine alındı. Önceki yerel A-06 değişiklikleri ve mevcut dal korundu; başlangıç diff/indeks/izlenmeyen kayıt yedeği /tmp/backlog-review-validation-he_6qq15 içinde. Kişisel server-data okunmadı.
+
+- P1 doğrulandı: genel inceleme onayından sonra talep türü dosyadan acceptance yapılınca gerçek API talebi güvenilmeyen, eski yanıtı güvenilir ve güncel buluyor; önceki DOM yanlış Accepted gösteriyordu. Kabul özeti artık yalnız güvenilir ve güncel talebin türünü kullanır. Gerçek doğrulanmış kabul görünmeye devam eder.
+- P2 doğrulandı: kimliği yeniden kullanan yerel demote/edit/revert/promote akışı dedicated, edit ve filesystem yollarının üçünde de eski incelemeyi onaylıyordu. Revizyon denetimi FileSystem saveTask/saveDraft içinde tek özel yardımcıya taşındı; yaşam döngüsü yazımları önceki kaydı sağlar ve ContentStore sarmalayıcısı bu kaydı iletir. Taslak düzenleme, geçişler ve referans temizliği ortak yazım davranışını kullanır. Eski kimlik yazımları karşılaştırmada normalleştirilir; yalnız workflow değişikliği revizyonu ilerletmez.
+
+Eski kaynakta bir DOM ve üç yerel regresyon başarısız oldu. Son ilgili testler: 14 dosyada 258 başarılı / 1 mevcut PTY atlaması / 0 hata; iki DOM dosyasında 20 başarılı / 0 hata. Toplam 278 başarılı, 1 atlanan. Tip 637 dosyada; yazmasız Biome 549 dosyada ve ayrıca iki ilgili TSX dosyasında sıfır tanıyla geçti. diff kontrolü, geçici native build ve derlenmiş CLI/web/MCP smoke başarılı. Tam CI ve native Chromium bu dar düzeltmede yeniden çalıştırılmadı. Kalıcı kanıt verification/server/back-821-verification.json; ham kanıtlar başlangıç yedeğiyle aynı /tmp dizininde.
+
+Sadelik incelemesi revizyon denetimini dört üretim dosyasındaki küçük değişikliklerle tek ortak kaydetme yolunda tuttu; yeni servis/depo/dış API yok. Groma kurulu değil; yönetilen mimari ve manifesto değişmedi. Doğrulanan binary /tmp/backlog-review-validation-he_6qq15/backlog konumunda; dist/backlog önceki BACK-820 binary'sidir, bu görevde güncellenmedi. Kişisel süreç yeniden başlatılmadı; gerçek Finbee, commit/push/merge ve A-07 kapsam dışı kaldı.
+
+## BACK-820 — A-06 inceleme düzeltmeleri (23 Ekim 2026)
+
+Kullanıcı dört inceleme bulgusunun commit/push öncesi düzeltilmesini istedi. BACK-820 standart CLI ile oluşturulup @codex üzerine alındı; mevcut özellik dalı korundu. Başlangıç diff/indeks ve izlenmeyen kayıtlar /tmp/backlog-a06-review-fixes-5s563zua içinde korundu. Commit/push/merge yapılmadı; origin/server değiştirilmedi.
+
+- Proje ve Projects özetleri geçmişi istek içinde tek sayfalama geçişinde kalıcı recordKey ile gruplar; yol/kimlik indeksi bir kez yüklenir. Görev görünümü bekleyen talep başına tekrar hesaplanmaz. Tekil detay ve özet aynı güven/eski içerik hesaplamasını kullanır. Gerçek geçici SQLite üzerinde aynı 1000 görev/1000 olay: önce 8774,08 ms, 2000 geçmiş okuması ve 2000 view; sonra 421,16 ms, 10 sayfa okuması ve 1000 view. Sonuçlar birebir aynı; yaklaşık 20,8 kat hızlanma. Bu tek yerel ölçüm yalnız özet hesabıdır; proje gözlemi, görev yükleme ve HTTP süresi dışarıdadır.
+- Güncel doğrulama özeti staleEntryIds denetimini kullanır; dış içerik değişip geri alındığında eski Passed gösterilmez. Eski kayıt geçmişte okunur, kabul eski kanıtla açılmaz.
+- Görev penceresi kapanışı koruyucunun varlığı yerine mevcut kirli kayıt onayını çağırır. Temiz önizleme onaysız kapanır; gerçek inceleme taslağı ve görev düzenlemeleri iptalde korunur.
+- Bağlı komutlar Commander optsWithGlobals ile bütün üst komutların seçeneklerini alır. Gerçek CLI testinde task --json review list/request/verify/respond sürümlü JSON üretir; native agent komutları da doğrulandı.
+
+Dört bulgu eski kaynakta başarısız regresyonlarla yeniden üretildi. Son tam CI: 4018 başarılı / 13 atlanan / 0 başarısız; 4031 test, 21161 beklenti. Tip 637 dosyada geçti; yazmasız varsayılan Biome, diff kontrolü, native build ve derlenmiş CLI/web/MCP smoke geçti. Varsayılan Biome TSX kapsamı dışında kalır; aynı kurallarla dört ilgili TSX karşılaştırmasında önce 15, sonra 14 hata ve değişmeyen 4 uyarı var; yeni tanı yok. Tam CI sırasında yalnız biçimsel bir satır kısaltması yapıldı; ilgili DOM aşaması son kaynağı okudu ve yeniden derlenen beş minified çıktı test paketine byte-byte eşit bulundu.
+
+Gerçek native Chromium 10/10, runtime0 ve API yanıtı taklidi yok: üst JSON, Projects talebi, temiz kapanış, gerçek inceleme taslağında iptal/onay, gözlenmiş dış değişiklik+geri alma, güncel özet/geçmiş ayrımı ve görev düzenlemesini koruma. İki önceki harness denemesinde selector yazımı düzeltildi; uygulama kaynağı değişmedi. Son başarılı sonuç raporda korunur.
+
+Kalıcı kanıt [back-820-verification.json](../../../verification/server/back-820-verification.json). Kaynak manifesti 662 girdi; SHA-256 7e020e7d18c32824644db1accbd2441172f39770e318073407228bfb20b430f4. Derlenmiş doğrulanmış binary dist/backlog konumuna atomik alındı; SHA-256 47679a797a06af5eb39b486f2639e5499ddaa217c889682386ab5ee20b223587. Önceki binary /tmp/backlog-a06-review-fixes-5s563zua/previous-backlog içinde. Kişisel süreç yeniden başlatılmadı; kullanıcı aynı data-dir/start komutuyla yeniden açınca düzeltmeler görünür. Kişisel DB ve gerçek Finbee açılmadı/değiştirilmedi; A-07 başlamadı.
+
+Sadelik incelemesi mevcut tarihçe deposu, tek güven hesabı, mevcut kirli kayıt hook'u ve Commander API'sini korudu; yeni kalıcı önbellek, store veya servis yok. Groma komutu bulunamadı; manifesto/yönetilen mimari dosyaları değişmedi. 13 platform/PTY atlaması başarı sayılmaz. Ham günlük/fixture/harness/yedekler /tmp/backlog-a06-review-fixes-5s563zua altında; /tmp kalıcı yedek değildir.
+
+## Tamamlanan A-06 — geçmiş, benden beklenenler ve insan kabulü (23 Ekim 2026)
+
+Kullanıcı bu konuşmada planı ve uygulamayı onayladı. Görevler standart CLI allocator ile oluşturulup @codex üzerine alındı ve kanıtla kapandı. Başlangıç temizdi; /tmp/backlog-a06/start-records.tar.gz korunarak yeni dal açıldı. Commit/push/merge yapılmadı; origin/server değiştirilmedi.
+
+| Görev | Sonuç |
+|---|---|
+| BACK-814 | Markdown review listesi, içerik geri almalarını koruyan review_revision, parser/serializer/Core ve yerel CLI |
+| BACK-815 | Aynı ServerClient üzerinde origin bağlı owner-only insan oturumu; login/password/logout ve eksik bağlantıda yerel göç engeli |
+| BACK-816 | Ortak API/CLI request/verify/respond/cancel; güncel atama/izin, RO insan yanıtı, agent ret ve dış beyan ayrımı |
+| BACK-817 | Tek history sorgusunda tarih/kişi/action/source ve sayfalama; pano/CLI aynı işlem sınıfları |
+| BACK-818 | Mevcut modal/proje Geçmiş ve Projects atanmış talepler/özetler; koyu-açık, 390px ve klavye |
+| BACK-819 | Birleşmiş tam CI, native/Chromium, kalıcı kabul ve devir |
+
+Ürün kararları doc-8'de kapalıdır: esas workflow Markdown; SQLite hesap ve değiştirilemeyen tarihçe. Göreve bağlı review/decision/acceptance; belge/karara ayrı workflow yok. Hedef açık hesap, assignee'den türetilmez. Yalnız atanmış insan kendi oturumuyla yanıtlar; read-only üye yanıtlayabilir. Admin başkası yerine kabul vermez, iptal+yeni taleple yeniden atar. Agent görev yazma yetkisiyle talep/doğrulama yapar, insan yanıtı vermez. Kabul aynı içerikte son güvenilir başarılı veya gerekçeli uygulanmaz doğrulamasına bağlıdır. Genel inceleme/karar bağımsızdır. İçerik değişip geri alınsa da eski sonuç canlanmaz; workflow/otomatik zaman/pano sırası dışarıda kalır. Done ayrı, commit isteğe bağlı; kod/kanıt hedefleri izlenmez. Dış dosya sonucu beyan olarak kalır, doğrulanmış kabul veya talep kapanışı sayılmaz.
+
+Mevcut parser/serializer/Core, prepared writer, UUID/revision, kuyruk, kesinti kurtarması ve ContentStore kullanıldı. Kalıcı ikinci workflow store, yeni servis veya MCP aracı yok. Tek içerik karşılaştırması bekleyen yapılandırılmış alanları da kapsar; altı geri alma ve native yerel CLI kanıtlıdır. Aynı saf review kuralı commit yetki recheck'inde kullanılır. İki agent anahtarının sahipliği ayrıdır; admin rol kaybı, açık @username ve CLI metin/JSON beyan ayrımı testlidir. Tarihçe kalıcı recordKey ile okunur; eski kaydın bağlantısı yeniden oluşturulmuş başka kaydı açmaz. Dış occurredAt bilinmiyorsa null, detectedAt gerçek UTC; İstanbul gösterimi korunur. No-op/retry/self-event ikinci olay üretmez.
+
+Son sabit kaynak: tam CI 4014 başarılı / 13 atlanan / 0 hata; 4027 test, 21136 beklenti. Tip 637 dosyada geçti; varsayılan yazmasız Biome, native build/CLI-web-MCP smoke ve gerçek Chromium 30/30 runtime0 geçti. Kanıt verification/server/a06-verification.json.
+
+Sabit kaynak 662 girdi; SHA-256 b018988839bcbe3fbb616f0a8abd746457cd43d29d7e9c785445b87e462b576b. Native SHA-256 5933031b494e5ad3f9d70225e84f26c516bfa4c3ea9648baf6efaf3314941b9b. Kaynak build/test/browser sonrasında aynı. Değişen beş eski TSX'te aynı kurallarla önce60 hata/6 uyarı, sonra60 hata/6 uyarı; yeni tanı0. Üç yeni TSX temiz; kalıtımlı borç temiz tarama değildir. Önceki tanı/odak koşuları tam CI toplamına eklenmedi. 13 mevcut platform/PTY atlaması başarı sayılmaz.
+
+Gerçek Chromium API yanıtı taklidi olmadan 30 kontrol/runtime0: RO kabul, canlı/stale taslak, belge kanıtı, mevcut formdan talep, iki proje/404, pano Updated sınıfı, dış unknown/detected geçmiş, silme/recreate kimlik engeli, native insan CLI, yerel geri alma, koyu-açık, 390px görev+Projects ve gerçek Tab odağı. Üç PNG verification/server altındadır ve gözle incelendi. Tam koşu yedi gerçek SIGKILL durumunu içerir; RO insan kabulü yeniden açılışta tek sonuç/olaydır.
+
+Doğrulanmış binary dist/backlog'a atomik alındı; önceki binary /tmp/backlog-a06/previous-backlog içinde. Kişisel uygulama/DB ve gerçek Finbee açılmadı/değiştirilmedi; süreç yeniden başlatılmadı. Kullanıcı aynı --data-dir ve start komutuyla yeniden açınca özellikler görünür; admin yeniden oluşturulmaz. Ham kanıt/fixture/JUnit/manifest/harness /tmp/backlog-a06 altında; /tmp kalıcı yedek değildir. Groma yok; manifesto/yönettiği dosyalar değişmedi.
 
 ## A-05 ve BACK-813 Git teslimi — 23 Ekim 2026
 
@@ -334,24 +399,24 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00–A-05, BACK-806 ve BACK-813 inceleme düzeltmeleri tamamlandı. A-05 BACK-807–813 5d8761e3b09cb906a5f9908f53b79e8661168a44 uygulama/kabul commit’iyle origin/tasks/server-a05-agent-observation dalına gönderildi; Git teslim kaydı yukarıdadır. Güncel düzeltme kabulü verification/server/back-813-verification.json içindedir. Kabul verification/server/a05-verification.json, onaylı plan doc-7. Önceki A-04 uygulaması09e336fb/kapanışıfc07f2ce ve BACK-806 uygulaması289bfc2d/kapanışı0dffa5b3 ilgili origin özellik dallarına gönderildi. A-06 kullanıcı tarihçesi, benden beklenenler ve doğrulama/kabul akışları sıradadır; A-07 gerçek Finbee bağlama ve A-08 işletim ayrı aşamalardır.
+A-00–A-06, BACK-813, BACK-820 ve BACK-821 tamamlandı. Güncel iki düzeltmenin kabulü verification/server/back-821-verification.json; önceki kabuller verification/server/back-820-verification.json ve verification/server/a06-verification.json, planı doc-8, görevleri BACK-814–821. Yeni dal tasks/server-a06-review-history yerel ve değişiklikler commit/push edilmedi. A-05 ve önceki aşamaların Git teslimleri yukarıda tarihsel olarak korunur; son HEAD ve yerel durum Git'ten doğrulanır.
 
-Devam eden sohbet önce MANIFESTO.md, CLI overview, doc-4/doc-5/doc-7, a00-baseline.json ve a05-verification.json okumalı; BACK-807–812'yi CLI ile doğrulamalı. Git durumunu ve yerel dosyaları korumadan dal değiştirmemeli. Sonraki kapsamı mevcut kullanıcı vuralbayraklii belirler; önceki öneriler kendiliğinden onaylanmış sayılmaz.
+Sıradaki aşama A-07 Finbee pilotudur: kullanıcı kapsamı belirledikten sonra güncel gerçek kaynaklar okunur, bağlama/geçiş önizlemesi hazırlanır ve kaynaklar korunarak insan-agent aynı kayıt akışı kabul edilir. Bu çalışmada A-07 görevi açılmadı ve gerçek Finbee'ye bağlanılmadı. A-08 diğer projeler ve işletim/yedekleme ayrı aşamadır.
 
 ## Sonraki aşamalarda karar gerektiren konular
 
-- Agent'ın kullanıcı adına doğrulama/kabul yetkisi A-06 kararıdır. Anahtarın kullanıcıyla bağı ve A-05 yetki kesişimi onaylanıp uygulanmıştır; yeniden açık soru sayılmaz.
-- İnceleme taleplerinin alanları, Markdown/SQLite kaynak dağılımı ve serbest metin assignee'lerin hesaplarla eşleştirilmesi.
-- Doğrulama/kabulün hangi içerik veya kod sürümüne ait olduğu ve kapsam değişiminde yeniden inceleme politikası.
-- Yedek/geri yükleme provası ve sonraki işletim kapsamı. A-04 kesinti/olay/ortak kilit sınırları doc-6 bölüm9 ile karara bağlandı; açık öneri değildir.
+- A-06 kaynak dağılımı, atama, agent yetkisi, RO yanıtı, kabul koşulu, sürüm geçerliliği ve insan CLI oturumu doc-8 ile karara bağlandı; yeniden açık soru sayılmaz.
+- A-07 için kullanılacak güncel Finbee klasörü/kayıtları, önizleme ve ilk gerçek kullanımın kabul kapsamı mevcut kullanıcı vuralbayraklii ile belirlenir.
+- Yedek/geri yükleme provası ve işletim kapsamı A-08'de ele alınır. A-04 kesinti/ortak kilit ve A-05 gözlem/anahtar kararları tamamlanmış ürün kararlarıdır.
 
 ## Yeni sohbete verilecek başlangıç mesajı
 
 ```text
-Backlog.md uygulamasında A-00–A-05 tamamlandı. Her şey mevcut makinede tek uygulama örneğinde çalışır.
-A-05 BACK-807–812 ve inceleme düzeltmesi BACK-813 Done; uygulama/kabul commit’i 5d8761e3b09cb906a5f9908f53b79e8661168a44, origin/tasks/server-a05-agent-observation dalına gönderildi. Git teslim kaydı doc-5 başındadır; önce Git durumunu doğrula.
-Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5/doc-7 ve verification/server/a05-verification.json oku; görevleri CLI ile doğrula. Git durumunu ve yerel değişiklikleri koru.
-BACK-813 dokuz inceleme bulgusunu düzeltti; güncel kanıt verification/server/back-813-verification.json. Son sabit kaynak CI3973pass/13skip/0fail, native Chromium28/28. dist/backlog doğrulanmış son binary; kişisel süreç yeniden başlatılmadı, aynı data-dir ile kullanıcı yeniden açmalı.
-Kullanıcıya bağlı anahtar/izin kesişimi, güçlü taşımada kimlik koruma ve bozuk dosyada ilgili projede yazmayı durdurma kararları onaylı ve uygulanmış; yeniden sorma. Gerçek Finbee bu çalışmada bağlanmadı.
-Sıradaki A-06 kullanıcı geçmişi/benden beklenenler/doğrulama-kabul akışıdır; kapsamı ve açık A-06 ürün kararlarını mevcut kullanıcı vuralbayraklii ile netleştir. Henüz A-06 görevi açılmadı.
+Backlog.md uygulamasında A-00–A-06 ve BACK-820/BACK-821 inceleme düzeltmeleri tamamlandı; mevcut makinede tek uygulama örneği varsayımı korunuyor.
+Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5/doc-8, a00-baseline.json, a06-verification.json, back-820-verification.json ve back-821-verification.json oku; BACK-814–821 görevlerini CLI ile doğrula.
+A-06 dalı tasks/server-a06-review-history. Kaynak/kanıt yerel; commit/push/merge yapılmadı. Git durumunu ve yerel kayıtları korumadan dal değiştirme.
+Güncel kabul verification/server/back-821-verification.json. Önceki BACK-820, A-06 ve A-05/BACK-813 raporları tarihsel kanıttır.
+dist/backlog BACK-820 binary; BACK-821 doğrulanan binary /tmp/backlog-review-validation-he_6qq15/backlog içinde, kurulmadı. Güncel kaynak için yeniden build/kurulum gerekir; kişisel süreç yeniden başlatılmadı. Admin yeniden oluşturulmaz. Gerçek Finbee ajan tarafından açılmadı/değiştirilmedi.
+A-06 Markdown workflow, açık hesap ataması, agent doğrulaması/insan kabulü, RO yanıtı, sürüm ve insan CLI kararları doc-8'de onaylı ve uygulanmış; yeniden sorma.
+Sıradaki A-07 Finbee pilotunun güncel kaynak ve kapsamını mevcut kullanıcı vuralbayraklii belirler. Henüz A-07 görevi açılmadı.
 ```

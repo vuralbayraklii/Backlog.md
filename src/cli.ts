@@ -7,6 +7,7 @@ import { createInterface } from "node:readline/promises";
 import * as clack from "@clack/prompts";
 import { Command, type OptionValues } from "commander";
 import { runAdvancedConfigWizard } from "./commands/advanced-config-wizard.ts";
+import { installAuthCommands } from "./commands/auth.ts";
 import { type CompletionInstallResult, installCompletion, registerCompletionCommand } from "./commands/completion.ts";
 import { configureAdvancedSettings } from "./commands/configure-advanced-settings.ts";
 import { installConnectedCommands } from "./commands/connected.ts";
@@ -22,6 +23,7 @@ import {
 import { registerInstructionsCommand } from "./commands/instructions.ts";
 import { registerMcpCommand } from "./commands/mcp.ts";
 import { registerServerCommand } from "./commands/server.ts";
+import { installTaskReviewCommands } from "./commands/task-review.ts";
 import { pickTaskForEditWizard, runTaskCreateWizard, runTaskEditWizard } from "./commands/task-wizard.ts";
 import { watchJson } from "./commands/watch-json.ts";
 import { DEFAULT_DIRECTORIES, DEFAULT_FILES, DEFAULT_STATUSES } from "./constants/index.ts";
@@ -1036,7 +1038,7 @@ function getMcpStartCwdOverrideFromArgv(argv = process.argv): string | undefined
 // Server commands use explicit paths and must never migrate the terminal's local project.
 const shouldRunMigration =
 	!hasServerConnection(process.argv) &&
-	process.argv[2] !== "server" &&
+	!["server", "auth", "reviews", "history", "operation"].includes(process.argv[2] ?? "") &&
 	!process.argv.includes("init") &&
 	!process.argv.includes("--help") &&
 	!process.argv.includes("-h") &&
@@ -1941,6 +1943,7 @@ addHelpSchema(program.command("init [projectName]"), {
 	);
 
 const taskCmd = program.command("task").aliases(["tasks"]);
+installTaskReviewCommands(taskCmd, async () => new Core(await requireProjectRoot()));
 
 /** `--json` and `--plain` may be given to the parent `task` command as well as to its subcommand. */
 function taskReadOptions(options: ReadOutputOptions): ReadOutputOptions {
@@ -1956,7 +1959,7 @@ function getTaskReadOutputMode(options: ReadOutputOptions): ReadOutputMode | nul
 }
 
 taskCmd.hook("preSubcommand", (command, subcommand) => {
-	if (command.opts().json && !["list", "view"].includes(subcommand.name())) {
+	if (command.opts().json && !["list", "view", "review"].includes(subcommand.name())) {
 		// Reported by the subcommand, like any other option it does not accept.
 		subcommand.error("error: unknown option '--json'", { code: "commander.unknownOption", exitCode: 1 });
 	}
@@ -6154,6 +6157,7 @@ registerMcpCommand(program);
 registerServerCommand(program);
 
 installConnectedCommands(program);
+installAuthCommands(program);
 
 program
 	.parseAsync(process.argv)

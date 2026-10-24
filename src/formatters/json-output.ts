@@ -63,6 +63,8 @@ type DependencyGraphJson = {
 };
 
 type TaskDetailsJson = TaskSummaryJson & {
+	review?: Task["review"];
+	reviewView?: Task["reviewView"];
 	path: string | null;
 	description: string | null;
 	dependencies: string[];
@@ -195,6 +197,8 @@ function toTaskDetailsJson(task: TaskDetail, projectRoot: string): TaskDetailsJs
 				author: nullable(comment.author),
 			})),
 		finalSummary: nullable(task.finalSummary),
+		...(task.review !== undefined && { review: task.review }),
+		...(task.reviewView !== undefined && { reviewView: task.reviewView }),
 	};
 }
 

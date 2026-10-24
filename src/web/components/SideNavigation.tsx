@@ -974,6 +974,7 @@ const SideNavigation = memo(function SideNavigation({
 			
 			<div className="border-t border-gray-200 dark:border-gray-700 px-4 py-2 space-y-2">
                 <NavLink to="/archive" className="block text-sm hover:underline">Archive</NavLink>
+				{central && <NavLink to="/history" className="block text-sm hover:underline">History</NavLink>}
                 {central && session?.user.role === "admin" && <NavLink to="/members" className="block text-sm hover:underline">Project access</NavLink>}
             </div>
 			{/* Settings Button - Bottom Left */}

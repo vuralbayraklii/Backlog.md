@@ -1,6 +1,12 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import { isIP } from "node:net";
+import { isDeepStrictEqual } from "node:util";
 import type { Server, ServerWebSocket } from "bun";
+import { taskReviewContentHash } from "../core/task-review.ts";
+import { recordFileSnapshot } from "../file-system/prepared-change.ts";
+import { parseTask } from "../markdown/parser.ts";
+import type { Task } from "../types/index.ts";
+import type { ReviewPerson, TaskReviewEntry, TaskReviewView } from "../types/task-review.ts";
 import { launchBrowser } from "../utils/browser-launch.ts";
 import { getVersion } from "../utils/version.ts";
 import { AgentStore, AgentStoreError } from "./agent-store.ts";
@@ -9,7 +15,15 @@ import { AuthStore, AuthStoreError } from "./auth-store.ts";
 import type { AuthSession, ProjectAuthorization, ProjectPermissions } from "./auth-types.ts";
 import { BacklogServer, spaIndexHtml } from "./index.ts";
 import { MutationStoreError } from "./mutation-store.ts";
-import type { MutationActor, MutationScope, OperationView, RecordKind } from "./mutation-types.ts";
+import type {
+	HistoryEvent,
+	HistoryFilters,
+	HistoryKind,
+	HistoryRecordChange,
+	MutationActor,
+	MutationScope,
+	OperationView,
+} from "./mutation-types.ts";
 import {
 	CentralMutations,
 	type ManagementMutationContext,
@@ -37,6 +51,7 @@ const PROJECT_PAGES = new Set([
 	"settings",
 	"archive",
 	"members",
+	"history",
 ]);
 interface SocketData {
 	projectId: string;
@@ -483,7 +498,7 @@ export class CentralServer {
 				operationId,
 				scope: { kind: "admin" },
 				actor: { kind: "user", userId: session.user.id },
-				source: "browser",
+				source: req.headers.get("X-Backlog-Client") === "cli" ? "server-cli" : "browser",
 				requestHash: createHash("sha256").update(`user.change_password\0${operationId}`).digest("hex"),
 				action: "user.change_password",
 				forceEvent: true,
@@ -543,18 +558,7 @@ export class CentralServer {
 			const url = new URL(req.url);
 			const scope: MutationScope =
 				url.searchParams.get("scope") === "registration" ? { kind: "registration" } : { kind: "admin" };
-			const kind = url.searchParams.get("kind") ?? undefined;
-			if (kind && !["user", "membership", "folder-area", "project", "agent-key"].includes(kind))
-				return errorResponse("Invalid history kind.", 400);
-			return Response.json(
-				this.mutations.store.listHistory({
-					scope,
-					...(url.searchParams.get("recordKey") && { recordKey: url.searchParams.get("recordKey") ?? undefined }),
-					...(kind && { kind: kind as "user" | "membership" | "folder-area" | "project" }),
-					...(url.searchParams.get("cursor") && { cursor: url.searchParams.get("cursor") ?? undefined }),
-					...(url.searchParams.get("limit") && { limit: Number(url.searchParams.get("limit")) }),
-				}),
-			);
+			return this.historyResponse(req, scope);
 		}
 		if (path === "/api/admin/folder-areas") {
 			if (req.method === "GET")
@@ -815,6 +819,47 @@ export class CentralServer {
 					.map(({ id, name }) => ({ id, name, observation: this.mutations.observationState(id) })),
 			);
 		}
+		if (path === "/api/me/reviews" && req.method === "GET") {
+			const projects = [];
+			for (const project of this.store.list()) {
+				if (!project.tracking || !this.auth.permissions(session.user, project.id)) continue;
+				const authorization = this.authorization(token, project.id);
+				try {
+					const denied = authorization.check("read");
+					if (denied) throw new Error("Unavailable");
+					await this.observeProject(project);
+					const response = await this.mutations.runRead(
+						project.id,
+						() => authorization.check("read"),
+						async () =>
+							Response.json(
+								await this.handler(project).taskReviewSummary(session.user.id, this.summaryReviewView(project.id)),
+							),
+					);
+					if (!response.ok) throw new Error("Unavailable");
+					if (authorization.check("read")) continue;
+					projects.push({
+						id: project.id,
+						name: project.name,
+						observation: this.mutations.observationState(project.id),
+						...(await response.json()),
+					});
+				} catch {
+					if (this.auth.permissions(session.user, project.id))
+						projects.push({
+							id: project.id,
+							name: project.name,
+							observation: this.mutations.observationState(project.id),
+							openTasks: null,
+							nextDueDate: null,
+							requests: [],
+							error: "Project records are unavailable.",
+						});
+				}
+			}
+			this.requireCurrentSession(token);
+			return Response.json({ projects: projects.filter((project) => this.auth.permissions(session.user, project.id)) });
+		}
 		const api = path.match(/^\/api\/projects\/([^/]+)(?:\/(.+))?$/);
 		if (api)
 			return this.projectRequest(
@@ -842,6 +887,174 @@ export class CentralServer {
 		}
 		return errorResponse("Not Found", 404);
 	}
+	private *reviewHistory(projectId: string, recordKey?: string) {
+		let cursor: string | undefined;
+		do {
+			const page = this.mutations.store.listHistory({
+				scope: { kind: "project", projectId },
+				recordKey,
+				limit: 100,
+				...(cursor && { cursor }),
+			});
+			for (const event of page.items) {
+				for (const change of event.changes) {
+					if (change.kind === "task" && (!recordKey || change.recordKey === recordKey)) yield { event, change };
+				}
+			}
+			cursor = page.nextCursor ?? undefined;
+		} while (cursor);
+	}
+
+	private summaryReviewView(projectId: string) {
+		let paths: Map<string, string> | undefined;
+		const history = new Map<string, { event: HistoryEvent; change: HistoryRecordChange }[]>();
+		return (task: Task) => {
+			// Lazily read once per summary; projects with no assigned requests need no history.
+			if (!paths) {
+				paths = new Map();
+				for (const record of this.mutations.store.listRecords(projectId)) {
+					if (record.lifecycle === "deleted" || !record.path) continue;
+					if (paths.has(record.path))
+						throw new MutationStoreError("More than one record uses this path.", "AMBIGUOUS_ID");
+					paths.set(record.path, record.recordKey);
+				}
+				for (const item of this.reviewHistory(projectId)) {
+					const entries = history.get(item.change.recordKey) ?? [];
+					entries.push(item);
+					history.set(item.change.recordKey, entries);
+				}
+			}
+			const path = recordFileSnapshot(task)?.recordPath ?? task.filePath;
+			const key = path ? paths.get(path) : undefined;
+			return this.reviewView(projectId, task, key ? (history.get(key) ?? []) : []);
+		};
+	}
+
+	private reviewView(
+		projectId: string,
+		task: Task,
+		history?: Iterable<{ event: HistoryEvent; change: HistoryRecordChange }>,
+	): TaskReviewView {
+		const view: TaskReviewView = { contentHash: taskReviewContentHash(task), trustedEntryIds: [], staleEntryIds: [] };
+		if (!task.review?.length) return view;
+		let changes = history;
+		if (!changes) {
+			const path = recordFileSnapshot(task)?.recordPath ?? task.filePath;
+			const record = path ? this.mutations.store.findRecordByPath(projectId, path) : null;
+			if (!record) return view;
+			changes = this.reviewHistory(projectId, record.recordKey);
+		}
+		const entries = new Map(task.review.map((entry) => [entry.id, entry]));
+		const remaining = new Map(entries);
+		const suffixes = {
+			request: "/reviews/request",
+			verification: "/reviews/verify",
+			response: "/reviews/respond",
+			cancellation: "/reviews/cancel",
+		};
+		let contentChangedSince = false;
+		for (const { event, change } of changes) {
+			if (typeof change.after !== "string") continue;
+			let after: TaskReviewEntry[];
+			let before: TaskReviewEntry[];
+			let contentChanged = false;
+			try {
+				const afterTask = parseTask(change.after);
+				const beforeTask = typeof change.before === "string" ? parseTask(change.before) : null;
+				after = afterTask.review ?? [];
+				before = beforeTask?.review ?? [];
+				contentChanged = beforeTask !== null && taskReviewContentHash(beforeTask) !== taskReviewContentHash(afterTask);
+			} catch {
+				continue;
+			}
+			const prior = new Map(before.map((entry) => [entry.id, entry]));
+			for (const entry of after) {
+				const current = remaining.get(entry.id);
+				if (!current || prior.has(entry.id) || !isDeepStrictEqual(entry, current)) continue;
+				if (contentChangedSince && !view.staleEntryIds.includes(entry.id)) view.staleEntryIds.push(entry.id);
+				if (
+					event.actor.kind === "unknown" ||
+					!["browser", "agent", "server-cli"].includes(event.source) ||
+					!event.action.startsWith("POST ") ||
+					!event.action.endsWith(suffixes[entry.kind])
+				)
+					continue;
+				if (
+					entry.author.kind !== event.actor.kind ||
+					entry.author.userId !== event.actor.userId ||
+					(event.actor.kind === "agent" && entry.author.agentKeyId !== event.actor.agentKeyId)
+				)
+					continue;
+				// A reused number must not attach an authenticated closure to a different request.
+				if (
+					(entry.kind === "response" || entry.kind === "cancellation") &&
+					!isDeepStrictEqual(prior.get(entry.requestId), entries.get(entry.requestId))
+				)
+					continue;
+				view.trustedEntryIds.push(entry.id);
+				remaining.delete(entry.id);
+			}
+			contentChangedSince ||= contentChanged;
+			if (!remaining.size) break;
+		}
+		return view;
+	}
+
+	private reviewAccess(projectId: string, actor: MutationActor, permissions: () => ProjectPermissions | null) {
+		const views = new WeakMap<Task, TaskReviewView>();
+		const view = (task: Task) => {
+			let result = views.get(task);
+			if (!result) {
+				result = this.reviewView(projectId, task);
+				views.set(task, result);
+			}
+			return result;
+		};
+		return {
+			view,
+			reviewer: (person: ReviewPerson): ReviewPerson | null => {
+				if (!person || typeof person.userId !== "string") return null;
+				const user = this.auth.loadUser(person.userId);
+				return user?.active && this.auth.permissions(user, projectId) ? { userId: user.id, name: user.username } : null;
+			},
+			context: (task: Task) => {
+				if (actor.kind === "unknown") throw new Error("Authenticated review identity is required.");
+				const user = this.auth.loadUser(actor.userId);
+				return {
+					author: { ...actor, name: user?.username ?? actor.userId },
+					canWrite: permissions()?.tasksWrite ?? false,
+					admin: actor.kind === "user" && user?.role === "admin",
+					trustedEntryIds: new Set(view(task).trustedEntryIds),
+					staleEntryIds: new Set(view(task).staleEntryIds),
+				};
+			},
+		};
+	}
+
+	private historyResponse(req: Request, scope: MutationScope): Response {
+		const query = new URL(req.url).searchParams;
+		const kind = query.get("kind") ?? undefined;
+		const kinds =
+			scope.kind === "project"
+				? ["task", "document", "decision", "milestone", "config"]
+				: ["user", "membership", "folder-area", "project", "agent-key"];
+		if (kind && !kinds.includes(kind)) return errorResponse("Invalid history kind.", 400);
+		const filters: HistoryFilters = {};
+		for (const field of ["recordKey", "cursor", "from", "until", "actor", "action"] as const) {
+			const value = query.get(field);
+			if (value !== null) filters[field] = value;
+		}
+		if (kind) filters.kind = kind as HistoryKind;
+		if (query.has("source")) filters.source = query.get("source") as HistoryFilters["source"];
+		if (query.has("limit")) filters.limit = Number(query.get("limit"));
+		const page = this.mutations.store.listHistory({ scope, ...filters });
+		const actors: Record<string, string> = {};
+		for (const event of page.items)
+			if (event.actor.kind !== "unknown")
+				actors[event.actor.userId] = this.auth.loadUser(event.actor.userId)?.username ?? event.actor.userId;
+		return Response.json({ ...page, actors });
+	}
+
 	private async projectRequest(
 		req: Request,
 		server: Server<SocketData>,
@@ -875,19 +1088,25 @@ export class CentralServer {
 					})
 				: errorResponse("Not Found", 404);
 		if (tail === "history" && req.method === "GET") {
-			const url = new URL(req.url);
-			const kind = url.searchParams.get("kind") ?? undefined;
-			if (kind && !(["task", "document", "decision", "milestone", "config"] as string[]).includes(kind))
-				return errorResponse("Invalid history kind.", 400);
+			return this.historyResponse(req, { kind: "project", projectId: project.id });
+		}
+		if (tail === "reviewers" && req.method === "GET")
 			return Response.json(
-				this.mutations.store.listHistory({
-					scope: { kind: "project", projectId: project.id },
-					...(url.searchParams.get("recordKey") && { recordKey: url.searchParams.get("recordKey") ?? undefined }),
-					...(kind && { kind: kind as RecordKind }),
-					...(url.searchParams.get("cursor") && { cursor: url.searchParams.get("cursor") ?? undefined }),
-					...(url.searchParams.get("limit") && { limit: Number(url.searchParams.get("limit")) }),
-				}),
+				this.auth
+					.listUsers()
+					.filter((user) => user.active && this.auth.permissions(user, project.id))
+					.map((user) => ({ userId: user.id, name: user.username })),
 			);
+		if (tail === "reviews" && req.method === "GET" && actor.kind !== "unknown") {
+			const summary = await this.mutations.runRead(
+				project.id,
+				() => authorization.check("read"),
+				async () =>
+					Response.json(
+						await this.handler(project).taskReviewSummary(actor.userId, this.summaryReviewView(project.id)),
+					),
+			);
+			return authorization.check("read") ?? summary;
 		}
 		this.mutations.writeState(project.id);
 		if (this.mutations.consumeResolved(project.id)) await this.retireProject(project.id);
@@ -903,6 +1122,7 @@ export class CentralServer {
 				: errorResponse("WebSocket upgrade failed", 400);
 		}
 		const localPath = tail.startsWith("assets/") ? `/${tail}` : `/api/${tail}`;
+		const reviews = this.reviewAccess(project.id, actor, permissions);
 		const permissionRequest = req.clone();
 		const response = ["GET", "HEAD", "OPTIONS"].includes(req.method)
 			? await this.mutations.runRead(
@@ -911,6 +1131,7 @@ export class CentralServer {
 					() =>
 						handler.dispatchApi(req, localPath, authorization, {
 							recordKeyFor: this.mutations.recordKeysFor(project.id),
+							reviews,
 						}),
 				)
 			: await this.mutations.runProject(
@@ -918,7 +1139,7 @@ export class CentralServer {
 					project,
 					actor,
 					() => handler.authorizeApi(permissionRequest.clone(), localPath, authorization),
-					(context) => handler.dispatchApi(req, localPath, authorization, context),
+					(context) => handler.dispatchApi(req, localPath, authorization, { ...context, reviews }),
 					() => handler.listCentralRecordSnapshots(),
 					() => this.retireProject(project.id),
 				);

@@ -91,6 +91,7 @@ import {
 	stringArraysEqual,
 	validateDependencies,
 } from "../utils/task-builders.ts";
+import { taskContentForComparison } from "../utils/task-content.ts";
 import {
 	documentationEntryNamesFile,
 	formatDocumentationReferencesMessage,
@@ -137,6 +138,7 @@ import {
 	getBranchHistoryCutoff,
 	getTaskLoadingMessage,
 } from "./task-loader.ts";
+import { appendTaskReview } from "./task-review.ts";
 
 interface BlessedScreen {
 	program: {
@@ -303,35 +305,7 @@ interface TaskEditResult {
 }
 
 function buildUpdatedDateComparableTask(task: Task): Record<string, unknown> {
-	return {
-		id: task.id,
-		title: task.title,
-		status: task.status,
-		assignee: task.assignee ?? [],
-		reporter: task.reporter,
-		createdDate: task.createdDate,
-		dueDate: task.dueDate,
-		labels: task.labels ?? [],
-		milestone: task.milestone,
-		dependencies: task.dependencies ?? [],
-		references: task.references ?? [],
-		documentation: task.documentation ?? [],
-		modifiedFiles: task.modifiedFiles ?? [],
-		rawContent: task.rawContent ?? "",
-		description: task.description,
-		implementationPlan: task.implementationPlan,
-		implementationNotes: task.implementationNotes,
-		comments: task.comments ?? [],
-		finalSummary: task.finalSummary,
-		acceptanceCriteriaItems: task.acceptanceCriteriaItems ?? [],
-		definitionOfDoneItems: task.definitionOfDoneItems ?? [],
-		parentTaskId: task.parentTaskId,
-		subtasks: task.subtasks ?? [],
-		priority: task.priority,
-		type: task.type,
-		project: task.project,
-		onStatusChange: task.onStatusChange,
-	};
+	return { ...taskContentForComparison(task), review: task.review };
 }
 
 function hasUpdatedDateRelevantChanges(originalTask: Task | null, nextTask: Task): boolean {
@@ -3062,6 +3036,24 @@ export class Core {
 		return { task, mutated };
 	}
 
+	async updateTaskReview(
+		taskId: string,
+		action: import("../types/task-review.ts").ReviewAction,
+		context: import("../types/task-review.ts").ReviewContext,
+	): Promise<Task> {
+		const initial = await this.loadTaskForMutation(taskId, { includeCrossBranch: false });
+		if (!initial) throw new Error(`Task not found: ${taskId}`);
+		return this.fs.withTaskLock(initial, async () => {
+			const current = await this.loadTaskForMutation(taskId, { includeCrossBranch: false });
+			if (!current) throw new Error(`Task not found: ${taskId}`);
+			const next = { ...current };
+			if (next.reviewRevision === undefined && !next.review?.length) next.reviewRevision = 1;
+			next.review = appendTaskReview(next, action, context);
+			await this.updateTask(next);
+			return next;
+		});
+	}
+
 	async updateTaskFromInput(
 		taskId: string,
 		input: TaskUpdateInput,
@@ -3236,7 +3228,7 @@ export class Core {
 				};
 
 				normalizeAssignee(promotedTask);
-				const savedPath = await this.fs.saveTask(promotedTask);
+				const savedPath = await this.fs.saveTask(promotedTask, draft);
 				await this.fs.stageIdentityTransition(savedPath, draftPath);
 
 				if (draftPath) {
@@ -3318,7 +3310,7 @@ export class Core {
 			};
 
 			normalizeAssignee(demotedDraft);
-			const savedPath = await this.fs.saveDraft(demotedDraft);
+			const savedPath = await this.fs.saveDraft(demotedDraft, current);
 			if (taskPath) await this.fs.stageIdentityTransition(savedPath, taskPath);
 
 			if (taskPath) {
@@ -4199,7 +4191,7 @@ export class Core {
 				};
 
 				normalizeAssignee(promotedTask);
-				const savedPath = await this.fs.saveTask(promotedTask);
+				const savedPath = await this.fs.saveTask(promotedTask, draft);
 				await this.fs.stageIdentityTransition(savedPath, sourcePath);
 				await this.removeRecordFile(sourcePath, {
 					kind: "task",

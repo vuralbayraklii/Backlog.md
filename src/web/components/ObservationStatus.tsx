@@ -1,11 +1,11 @@
 import type { ObservationState } from "../../server/observation-types";
+import { serverTime } from "../lib/server-time";
 
 export type ProjectObservation = ObservationState;
 
 function scanTime(value: string | null): string {
 	if (!value) return "None yet";
-	const date = new Date(value);
-	return Number.isNaN(date.valueOf()) ? value : date.toLocaleString(undefined, { timeZone: "Europe/Istanbul" });
+	return serverTime(value);
 }
 
 export function ObservationStatus({

@@ -1,6 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { isCancel, password as promptPassword } from "@clack/prompts";
 import type { Command } from "commander";
 import { printJson } from "../formatters/json-output.ts";
 import { AgentStore } from "../server/agent-store.ts";
@@ -19,6 +18,7 @@ import { type ManagementAuditHook, managementAudit } from "../server/mutations.t
 import { ProjectStore, type ServerProject } from "../server/project-store.ts";
 import { listRecovery, type RecoveryReport, resolveRecovery, viewRecovery } from "../server/recovery.ts";
 import type { FolderArea, ProjectPreview } from "../server/registration-types.ts";
+import { readPassword } from "../utils/password-input.ts";
 import { addHelpSchema } from "./help-schema.ts";
 
 const humanTime = new Intl.DateTimeFormat("sv-SE", {
@@ -373,18 +373,6 @@ function booleanOption(value: string): boolean {
 	return value === "true";
 }
 
-async function readPassword(options: { passwordStdin?: boolean }): Promise<string> {
-	if (options.passwordStdin) {
-		// Remove only the terminal line ending; spaces are part of the password.
-		return (await Bun.stdin.text()).replace(/\r?\n$/, "");
-	}
-	if (!process.stdin.isTTY)
-		throw new Error("A terminal is required for the hidden password prompt. Use --password-stdin.");
-	const result = await promptPassword({ message: "Password", output: process.stderr });
-	if (isCancel(result)) throw new Error("Password entry canceled.");
-	return result;
-}
-
 function printUser(user: ServerUser, json?: boolean): void {
 	if (json) printJson({ schemaVersion: 1, kind: "server-user", user });
 	else
@@ -640,6 +628,11 @@ function registerHistoryCommands(server: Command): void {
 		.option("--scope <scope>", "management scope: admin or registration")
 		.option("--record-key <key>", "only one record key")
 		.option("--kind <kind>", "only one record kind")
+		.option("--from <timestamp>", "inclusive ISO timestamp")
+		.option("--until <timestamp>", "exclusive ISO timestamp")
+		.option("--actor <userId>", "user ID (includes their agents), or unknown")
+		.option("--action <action>", "exact history action")
+		.option("--source <source>", "browser, server-cli, agent, external, recovery or baseline")
 		.option("--cursor <cursor>", "cursor from a previous page")
 		.option("--limit <count>", "page size, 1–100", "50")
 		.option("--json", "print versioned JSON output")
@@ -652,6 +645,11 @@ function registerHistoryCommands(server: Command): void {
 				cursor?: string;
 				limit: string;
 				json?: boolean;
+				from?: string;
+				until?: string;
+				actor?: string;
+				action?: string;
+				source?: import("../server/mutation-types.ts").MutationSource;
 			}) => {
 				if (options.project && options.scope) throw new Error("Use either --project or --scope.");
 				if (options.project && !projectStore().load(options.project))
@@ -678,6 +676,11 @@ function registerHistoryCommands(server: Command): void {
 				if (options.kind && !kinds.includes(options.kind as HistoryKind)) throw new Error("Unknown history kind.");
 				const page = store().listHistory({
 					scope,
+					...(options.from && { from: options.from }),
+					...(options.until && { until: options.until }),
+					...(options.actor && { actor: options.actor }),
+					...(options.action && { action: options.action }),
+					...(options.source && { source: options.source }),
 					...(options.recordKey && { recordKey: options.recordKey }),
 					...(options.kind && { kind: options.kind as HistoryKind }),
 					...(options.cursor && { cursor: options.cursor }),

@@ -1,3 +1,5 @@
+import type { TaskReviewEntry, TaskReviewView } from "./task-review.ts";
+
 export type TaskStatus = string;
 
 /**
@@ -50,6 +52,9 @@ export interface ServerRecordVersion {
 }
 
 export interface Task extends ServerRecordVersion {
+	review?: TaskReviewEntry[];
+	reviewRevision?: number;
+	reviewView?: TaskReviewView;
 	id: string;
 	title: string;
 	status: TaskStatus;

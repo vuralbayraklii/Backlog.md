@@ -932,7 +932,7 @@ export class CentralMutations {
 		if (path === "tasks/duplicates") return;
 		const bulk = path === "tasks/move" || path === "tasks/reorder";
 		const target = path.match(
-			/^(tasks|task|drafts|docs|decisions|milestones)\/([^/]+)(?:\/(archive|restore|demote|promote))?$/,
+			/^(tasks|task|drafts|docs|decisions|milestones)\/([^/]+)(?:\/(archive|restore|demote|promote|reviews\/(?:request|verify|respond|cancel)))?$/,
 		);
 		if (!bulk && !target && path !== "config") return;
 		const snapshots = await snapshot();
@@ -1185,7 +1185,12 @@ export class CentralMutations {
 								eventId: operationId,
 								operationId,
 								scope,
-								source: actor.kind === "agent" ? "agent" : "browser",
+								source:
+									actor.kind === "agent"
+										? "agent"
+										: request.headers.get("X-Backlog-Client") === "cli"
+											? "server-cli"
+											: "browser",
 								actor,
 								action: mutation.action,
 								occurredAt: new Date().toISOString(),
@@ -1196,7 +1201,12 @@ export class CentralMutations {
 						operationId,
 						scope,
 						actor,
-						source: actor.kind === "agent" ? "agent" : "browser",
+						source:
+							actor.kind === "agent"
+								? "agent"
+								: request.headers.get("X-Backlog-Client") === "cli"
+									? "server-cli"
+									: "browser",
 						requestHash: hash,
 						action: mutation.action,
 						files,

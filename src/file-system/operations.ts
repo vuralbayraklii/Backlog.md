@@ -59,6 +59,7 @@ import {
 } from "../utils/prefix-config.ts";
 import { matchesProjectFilter } from "../utils/project-config.ts";
 import { normalizeStatusSet, statusMatchesSet } from "../utils/status-filter.ts";
+import { taskContentForComparison } from "../utils/task-content.ts";
 import { withoutVacatedTaskLinks } from "../utils/task-links.ts";
 import {
 	AmbiguousTaskIdError,
@@ -1094,7 +1095,18 @@ export class FileSystem {
 		return (await this.resolveTaskWriteTarget(task, isDraft)).filePath;
 	}
 
-	async saveTask(task: Task): Promise<string> {
+	private advanceTaskReviewRevision(task: Task, previousTask: Task | null | undefined): void {
+		if (
+			previousTask?.review?.length &&
+			JSON.stringify(taskContentForComparison(normalizeTaskIdentity(previousTask))) !==
+				JSON.stringify(taskContentForComparison(normalizeTaskIdentity(task)))
+		) {
+			task.reviewRevision = (previousTask.reviewRevision ?? 0) + 1;
+		}
+	}
+
+	// Identity transitions write a new file, so their source record must be supplied explicitly.
+	async saveTask(task: Task, previousTask?: Task): Promise<string> {
 		const { id: taskId, filePath: filepath, loadedFromPath } = await this.resolveTaskWriteTarget(task);
 		const prefix = extractAnyPrefix(taskId) ?? "task";
 		let existingTask: Task | null = null;
@@ -1107,6 +1119,8 @@ export class FileSystem {
 				existingTask = null;
 			}
 		}
+
+		this.advanceTaskReviewRevision(task, previousTask ?? existingTask);
 
 		const persistedTaskId = existingTask?.id && taskIdsEqual(existingTask.id, task.id) ? existingTask.id : taskId;
 		const normalizedParentTaskId = task.parentTaskId
@@ -1488,7 +1502,7 @@ export class FileSystem {
 					filePath: undefined,
 				};
 
-				await this.saveTask(promotedTask);
+				await this.saveTask(promotedTask, draft);
 				await this.stageIdentityTransition(await this.getTaskWritePath(promotedTask), sourcePath);
 
 				// Delete old draft file
@@ -1535,7 +1549,7 @@ export class FileSystem {
 			filePath: undefined,
 		};
 
-		const savedPath = await this.saveDraft(demotedDraft);
+		const savedPath = await this.saveDraft(demotedDraft, task);
 		await this.stageIdentityTransition(savedPath, task.filePath);
 
 		// Delete old task file. If that fails, remove the newly written draft so a retry cannot
@@ -1567,8 +1581,11 @@ export class FileSystem {
 	}
 
 	// Draft operations
-	async saveDraft(task: Task): Promise<string> {
+	async saveDraft(task: Task, previousTask?: Task): Promise<string> {
 		const { id: draftId, filePath: filepath, loadedFromPath } = await this.resolveTaskWriteTarget(task, true);
+		const originalTask =
+			previousTask ?? (task.review?.length && loadedFromPath ? parseTask(await this.readText(loadedFromPath)) : null);
+		this.advanceTaskReviewRevision(task, originalTask);
 		// Normalize the draft ID to uppercase before serialization
 		const content = serializeTask({ ...task, id: draftId });
 

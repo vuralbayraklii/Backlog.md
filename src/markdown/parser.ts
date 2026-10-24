@@ -1,3 +1,4 @@
+import { parseTaskReview } from "../core/task-review.ts";
 import type { AcceptanceCriterion, Decision, Document, Milestone, ParsedMarkdown, Task } from "../types/index.ts";
 import { normalizeDueDate } from "../utils/due-date.ts";
 import { normalizePriorityValue } from "../utils/priority-config.ts";
@@ -178,6 +179,11 @@ function isStructuredDependency(value: unknown): boolean {
 
 export function parseTask(content: string): Task {
 	const { frontmatter, content: rawContent } = parseMarkdown(content);
+	if (
+		frontmatter.review_revision !== undefined &&
+		(!Number.isSafeInteger(frontmatter.review_revision) || Number(frontmatter.review_revision) < 1)
+	)
+		throw new Error("Invalid task review content revision.");
 	const id = String(frontmatter.id || "");
 	const dependencies = frontmatter.dependencies;
 	if (Array.isArray(dependencies)) {
@@ -202,6 +208,8 @@ export function parseTask(content: string): Task {
 
 	return {
 		id,
+		...(frontmatter.review !== undefined && { review: parseTaskReview(frontmatter.review) }),
+		...(frontmatter.review_revision !== undefined && { reviewRevision: Number(frontmatter.review_revision) }),
 		title: String(frontmatter.title || ""),
 		status: String(frontmatter.status || ""),
 		assignee: Array.isArray(frontmatter.assignee)

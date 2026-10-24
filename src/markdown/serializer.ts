@@ -53,6 +53,8 @@ export function serializeTask(task: Task): string {
 		title: task.title,
 		status: task.status,
 		assignee: task.assignee,
+		...(task.review !== undefined && { review: task.review }),
+		...(task.reviewRevision !== undefined && { review_revision: task.reviewRevision }),
 		...(task.reporter && { reporter: task.reporter }),
 		created_date: task.createdDate,
 		...(task.updatedDate && { updated_date: task.updatedDate }),

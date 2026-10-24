@@ -14,12 +14,14 @@ import { formatTaskPlainText } from "../formatters/task-plain-text.ts";
 import { ServerClient, type ServerConnectionOptions } from "../server/client.ts";
 import type { BacklogConfig, Decision, Document, Milestone, SearchResult, Task } from "../types/index.ts";
 import type { TaskEditArgs } from "../types/task-edit-args.ts";
+import type { ReviewPerson } from "../types/task-review.ts";
 import { parseListWindow, printListWindow, selectListWindow } from "../utils/list-window.ts";
 import { createMilestoneFilterValueResolver } from "../utils/milestone-filter.ts";
 import { createReadinessGraph, getTaskReadiness } from "../utils/readiness.ts";
 import { parseDelimitedStringList, parsePositiveIndexList } from "../utils/task-builders.ts";
 import { applyTaskFilters } from "../utils/task-search.ts";
 import { sortTasks } from "../utils/task-sorting.ts";
+import { reviewActionFromOptions } from "./task-review.ts";
 import { watchJson } from "./watch-json.ts";
 
 type Options = Record<string, unknown>;
@@ -131,6 +133,7 @@ export function installConnectedCommands(program: Command): void {
 		.option("--server-url <origin>", "connect to the Backlog.md application on this machine or an HTTPS origin")
 		.option("--server-project <id>", "registered server project ID (separate from task --project)")
 		.option("--agent-key-file <path>", "read the access key from a file")
+		.option("--session-file <path>", "use a human session file outside the project (exclusive with --agent-key-file)")
 		.option("--allow-http-loopback", "allow an HTTP loopback connection")
 		.option(
 			"--if-match <revision>",
@@ -144,11 +147,24 @@ export function installConnectedCommands(program: Command): void {
 		.command("list")
 		.option("--record-key <key>")
 		.option("--kind <kind>")
+		.option("--from <timestamp>", "inclusive ISO timestamp")
+		.option("--until <timestamp>", "exclusive ISO timestamp")
+		.option("--actor <userId>", "user ID (includes their agents), or unknown")
+		.option("--action <action>", "exact history action")
+		.option("--source <source>", "browser, server-cli, agent, external, recovery or baseline")
 		.option("--cursor <cursor>")
 		.option("--limit <count>", "page size, 1–100", "50")
 		.option("--json")
 		.action(() => {
 			throw new Error("history list requires an explicit server connection.");
+		});
+	program
+		.command("reviews")
+		.description("read requests assigned to the connected account in this project")
+		.command("list")
+		.option("--json")
+		.action(() => {
+			throw new Error("reviews list requires an explicit server connection.");
 		});
 	program
 		.command("operation")
@@ -160,13 +176,15 @@ export function installConnectedCommands(program: Command): void {
 		});
 	program.hook("preAction", (_root, command) => {
 		const connection = program.opts<ServerConnectionOptions>();
-		if (!connection.serverUrl && !connection.serverProject && !connection.agentKeyFile) {
+		if (!connection.serverUrl && !connection.serverProject && !connection.agentKeyFile && !connection.sessionFile) {
 			if (program.opts().ifMatch || program.opts().operationId)
 				throw new Error("--if-match and --operation-id require a server connection.");
 			return;
 		}
 		const path = commandPath(command);
-		if (path[0] === "mcp" || path[0] === "instructions") return;
+		if (path[0] === "mcp" && connection.sessionFile)
+			throw new Error("MCP uses agent keys; human sessions are for CLI commands.");
+		if (path[0] === "auth" || path[0] === "mcp" || path[0] === "instructions") return;
 		return ServerClient.connect(connection).then(async (client) => {
 			await runConnectedCommand(client, command, program.opts<Options>());
 			// Commander calls the action after its hooks; use the public setter to skip the local handler.
@@ -188,7 +206,7 @@ function requireRevision(options: Options, id: string, count = 1): string {
 
 async function runConnectedCommand(client: ServerClient, command: Command, rootOptions: Options): Promise<void> {
 	const [group, verb] = commandPath(command);
-	const options: Options = { ...command.parent?.opts(), ...command.opts(), ...rootOptions };
+	const options: Options = { ...command.optsWithGlobals(), ...rootOptions };
 	const args = command.processedArgs as unknown[];
 	const arg = (index: number): string => {
 		const value = args[index];
@@ -238,9 +256,44 @@ async function runConnectedCommand(client: ServerClient, command: Command, rootO
 				kind: text(options.kind),
 				cursor: text(options.cursor),
 				limit: text(options.limit),
+				from: text(options.from),
+				until: text(options.until),
+				actor: text(options.actor),
+				action: text(options.action),
+				source: text(options.source),
 			}),
 			"project-history",
 		);
+		return;
+	}
+	if (group === "reviews" && verb === "list") {
+		print(await client.read("reviews"), "assigned-reviews");
+		return;
+	}
+	if (group === "task" && verb === "review") {
+		const action = commandPath(command)[2];
+		const id = arg(0);
+		if (action === "list") print(await client.read(`tasks/${encodeURIComponent(id)}/reviews`), "task-review");
+		else {
+			const payload = reviewActionFromOptions(action ?? "", options);
+			if (payload.kind === "request") {
+				const people = await client.read<ReviewPerson[]>("reviewers");
+				const input = payload.reviewer.userId;
+				const matches = people.filter(
+					(person) =>
+						(input.startsWith("@") ? false : person.userId === input) ||
+						person.name.toLowerCase() === input.replace(/^@/, "").toLowerCase(),
+				);
+				if (matches.length !== 1 || !matches[0])
+					throw new Error(
+						matches.length
+							? "Reviewer is ambiguous. Use @username to choose explicitly."
+							: "Reviewer must have current access to this project.",
+					);
+				payload.reviewer = matches[0];
+			}
+			print(await mutate(`tasks/${encodeURIComponent(id)}/reviews/${action}`, "POST", payload, id), "task-review");
+		}
 		return;
 	}
 	if (group === "operation" && verb === "view") {

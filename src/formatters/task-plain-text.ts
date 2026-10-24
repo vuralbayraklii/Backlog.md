@@ -228,6 +228,29 @@ export function formatTaskPlainText(task: TaskDetail, options: TaskPlainTextOpti
 	}
 
 	const finalSummary = task.finalSummary?.trim();
+	if (task.review?.length) {
+		lines.push("Reviews:", "-".repeat(50));
+		for (const entry of task.review) {
+			const detail =
+				entry.kind === "request"
+					? `${entry.type}: ${entry.reason} → ${entry.reviewer.name}`
+					: entry.kind === "verification"
+						? `${entry.result}: ${entry.notes}`
+						: entry.kind === "response"
+							? `request #${entry.requestId} ${entry.outcome}: ${entry.notes}`
+							: `request #${entry.requestId}: ${entry.reason}`;
+			const view = task.reviewView;
+			const author = view?.trustedEntryIds.includes(entry.id)
+				? `${entry.author.kind === "agent" ? "Agent for " : ""}${entry.author.name}`
+				: `Declared identity: ${entry.author.name}`;
+			const stale = view && (entry.contentHash !== view.contentHash || view.staleEntryIds.includes(entry.id));
+			lines.push(
+				`#${entry.id} ${entry.kind} — ${author} — ${entry.createdAt}${stale ? " — Previous task content" : ""}`,
+				detail,
+			);
+		}
+		lines.push("");
+	}
 	if (finalSummary) {
 		lines.push("Final Summary:");
 		lines.push("-".repeat(50));

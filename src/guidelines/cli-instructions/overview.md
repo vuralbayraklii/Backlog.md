@@ -35,6 +35,21 @@ Explicit retries use identical input, the original revision and `--operation-id 
 Connected `history list --json` reads project events. Interactive editors, TUI, initialization, Git, local maintenance,
 and config writes are unavailable; use noninteractive record commands. Connected `task list --json --watch` emits changed replacement snapshots.
 
+### Reviews and evidence
+
+Use `task review --help` to choose `request`, `verify`, `list`, `respond` or `cancel` for explicit review, decision and acceptance requests on a task.
+`reviews list --json` lists requests assigned to the connected account in that project. Do not infer a reviewer from task
+assignees. An agent may request review and record verification evidence, but only the assigned human may respond or accept.
+Acceptance requires a successful authenticated verification of the same task content; Done status alone is not evidence.
+Content changes require a new review, including edits later reverted. Optional commit references do not monitor code.
+
+For a human CLI session, use `--server-url <origin> --session-file <owner-only-path-outside-project>` with `auth login`,
+`auth password`, and `auth logout`; project commands additionally require `--server-project`. Use agent keys for agents
+and MCP. Never combine the two credential files or put passwords in arguments. Local review identities and direct-file
+outcomes are declarations and cannot replace authenticated server acceptance. Human sessions are not agent credentials.
+Server task detail and review reads expose `trustedEntryIds`, `contentHash` and `staleEntryIds` in `reviewView` or the review
+response. A frontmatter author name alone does not prove an authenticated action; preserve that distinction when reporting results.
+
 ### Required Guides
 
 Read the matching guide before taking these actions; this overview does not replace it:

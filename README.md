@@ -446,7 +446,11 @@ Mutation errors add a machine-readable `code` to `{error}`:
 | 409 | `OPERATION_RESOLVED` | An interrupted operation was resolved separately; review current data before another action |
 | 503 | `RECOVERY_REQUIRED` | The project is temporarily read-only pending inspection |
 
-Project history is available at `GET /api/projects/:id/history?recordKey=&kind=&cursor=&limit=`. Administrators read management
+Project history is available at `GET /api/projects/:id/history?recordKey=&kind=&cursor=&limit=`. Optional `from` (inclusive)
+and `until` (exclusive) are ISO timestamps; `actor` selects a user and their agents, or `unknown`. `source` selects the
+existing event source. `action` accepts an exact action or a logical kind: `review-request`, `verification`,
+`review-response`, `review-cancel`, `create`, `update`, `archive`, `restore`, `delete`, `external`, `baseline`, `recovery`.
+Administrators read management
 history at `GET /api/admin/history` (`scope=registration` selects registration audit). Pages contain `{items,nextCursor}`;
 limits are 1–100. One logical write produces one event containing all record changes; a no-op can store its result without
 adding a change event. Project history excludes private management paths and permissions. CLI management changes record an
@@ -468,7 +472,73 @@ There is no automatic partial replay or rollback. The project response exposes `
 the browser shows the read-only state.
 
 The application supports one Linux instance on this machine. Shared locks and revision checks protect cooperating
-writers; a writer that ignores those locks can race a physical write. Full history and user acceptance screens follow separately.
+writers; a writer that ignores those locks can race a physical write.
+
+### Reviews, verification and human acceptance
+
+The project **History** view and each task's history read the existing durable events. Dates display in Istanbul time;
+external changes keep unknown occurrence time separate from detection time. Historical record links check the stable
+record identity before opening a task, document or decision whose visible ID may have been reused.
+
+Tasks carry an optional `review` list in Markdown frontmatter. It contains numbered review, decision and acceptance
+requests, verification evidence, responses and cancellations. `review_revision` advances when an ordinary task edit changes
+reviewed content, including when an edit is reverted. Workflow entries, automatic update time and board ordering do not
+invalidate themselves. Source files remain portable; there is no second SQLite workflow store.
+
+Requests name an explicit account, independently of task assignees. Task writers and agents with `tasksWrite` can request
+reviews and record verification. Only the assigned human can respond, including a member who cannot edit tasks. An admin
+can cancel and issue a new request to reassign it, but cannot accept for someone else. Acceptance requires the latest
+authenticated verification of the same task content to be `passed` or a justified `not-applicable`. General review and
+decision responses do not require verification. A decision reference does not change the referenced decision's status.
+Completion status, verification and acceptance are separate; no operation here automatically sets a task to Done.
+
+The Projects page shows **Awaiting your response**, open-task counts and the next due date from readable project data.
+Degraded projects retain their warning and last reliable content. Failed reads are not reported as an empty, current inbox.
+
+Human CLI connections use the existing account/session system:
+
+```bash
+backlog --server-url https://backlog.example --session-file /private/backlog-session.json auth login --username reader
+backlog --server-url https://backlog.example --session-file /private/backlog-session.json auth password
+backlog --server-url https://backlog.example --session-file /private/backlog-session.json --server-project 1 reviews list --json
+backlog --server-url https://backlog.example --session-file /private/backlog-session.json auth logout
+```
+
+The session file is created atomically with owner-only permissions outside Backlog projects and is bound to one origin.
+It holds the session and CSRF token, never the password. `--session-file` and `--agent-key-file` are mutually exclusive.
+Session expiry, password-change requirements and revocation apply to both browser and CLI. Each explicit human CLI
+command records activity; background watch polling does not. For pipes, login accepts `--password-stdin`; password changes
+accept `--passwords-stdin` with JSON containing `currentPassword` and `newPassword`. MCP continues to use agent keys.
+
+The same task review commands work locally and through an explicit connection:
+
+```bash
+backlog task review request TASK-1 --type acceptance --to reader --reason 'Review this delivery'
+backlog task review verify TASK-1 --result passed --notes 'Behavior checked' --evidence '[Test report](https://example.com/report)'
+backlog task review list TASK-1 --json
+backlog task review respond TASK-1 --request 1 --outcome approved --notes 'Accepted' --by reader
+backlog task review cancel TASK-1 --request 1 --reason 'Reassign review'
+```
+
+Connected mutations also require the task's previously read revision as `--if-match` and use the existing operation/retry
+contract. Connected `--to` accepts an eligible account ID or username; ambiguous references are rejected and `@username`
+selects the username explicitly. HTTP reviewer objects use an exact account `userId`; names are filled by the server.
+Request types are `review`, `decision`, `acceptance`;
+verification results are `passed`, `failed`, `not-applicable`; responses are `approved`, `changes-requested`, or `answered`
+for a decision. Evidence is repeatable, commit identity is optional, and code changes are not monitored automatically.
+
+Local `--by` identities and direct-file outcomes are declarations. They remain visible and portable, but cannot become
+authenticated server verification or acceptance, or close an authenticated request. Imported account IDs are not silently
+rebound to another account. Use connected commands for authenticated actions. Older CLI versions may drop unfamiliar
+frontmatter: update local writers before using this workflow.
+
+Project HTTP additions are `GET /api/projects/:id/reviewers`, `GET /api/projects/:id/reviews` (assigned requests),
+`GET /api/projects/:id/tasks/:taskId/reviews`, and POST on that last path with `/request`, `/verify`, `/respond`, `/cancel`.
+Each POST accepts its action fields (`type/reviewer/reason`, `result/notes/evidence/commit`,
+`requestId/outcome/notes/decision`, or `requestId/reason`); identity and timestamps come from the server.
+`GET /api/me/reviews` returns readable-project summaries and the current human's requests. Task review reads also expose
+`contentHash`, `trustedEntryIds`, `staleEntryIds` and the record revision so clients can distinguish old content and file
+declarations. Existing revision, operation ownership and permission checks apply.
 
 ### Agent access on this machine
 

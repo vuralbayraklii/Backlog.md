@@ -2,10 +2,11 @@ import type { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import { isAbsolute } from "node:path";
 import type { FileEntry, PreparedFileChange } from "../file-system/prepared-change.ts";
+import { HISTORY_ACTIONS } from "../types/history.ts";
 import { ServerDatabase } from "./database.ts";
 import type {
 	HistoryEvent,
-	HistoryKind,
+	HistoryFilters,
 	HistoryPage,
 	MutationActor,
 	MutationScope,
@@ -687,13 +688,7 @@ export class MutationStore {
 		);
 	}
 
-	listHistory(options: {
-		scope: MutationScope;
-		recordKey?: string;
-		kind?: HistoryKind;
-		cursor?: string;
-		limit?: number;
-	}): HistoryPage {
+	listHistory(options: HistoryFilters & { scope: MutationScope }): HistoryPage {
 		const limit = options.limit ?? 50;
 		if (!Number.isInteger(limit) || limit < 1 || limit > 100) {
 			throw new MutationStoreError("History limit must be 1–100.", "INVALID_OPERATION", 400);
@@ -702,47 +697,76 @@ export class MutationStore {
 		if (cursor !== null && (!Number.isSafeInteger(cursor) || cursor < 1)) {
 			throw new MutationStoreError("Invalid history cursor.", "INVALID_OPERATION", 400);
 		}
+		for (const value of [options.from, options.until]) {
+			if (value !== undefined && (!/^\d{4}-\d\d-\d\dT/.test(value) || !Number.isFinite(Date.parse(value))))
+				throw new MutationStoreError("History dates must be ISO timestamps.", "INVALID_OPERATION", 400);
+		}
+		if (options.from && options.until && Date.parse(options.from) >= Date.parse(options.until))
+			throw new MutationStoreError("History from must precede until (exclusive).", "INVALID_OPERATION", 400);
+		if (
+			options.source &&
+			!["browser", "server-cli", "agent", "external", "recovery", "baseline"].includes(options.source)
+		)
+			throw new MutationStoreError("Invalid history source.", "INVALID_OPERATION", 400);
 		const projectId = scopeProjectId(options.scope);
 		return this.database.read({ items: [], nextCursor: null }, (database, version) => {
 			if (version < 4) return { items: [], nextCursor: null };
+			const clauses = ["scope_kind=?", "project_id IS ?"];
+			const parameters: (string | number | null)[] = [options.scope.kind, projectId];
+			if (cursor !== null) {
+				clauses.push("sequence < ?");
+				parameters.push(cursor);
+			}
+			if (options.recordKey || options.kind) {
+				const changes: string[] = [];
+				if (options.recordKey) {
+					changes.push("json_extract(c.value,'$.recordKey')=?");
+					parameters.push(options.recordKey);
+				}
+				if (options.kind) {
+					changes.push("json_extract(c.value,'$.kind')=?");
+					parameters.push(options.kind);
+				}
+				clauses.push(`EXISTS (SELECT 1 FROM json_each(h.event_json,'$.changes') c WHERE ${changes.join(" AND ")})`);
+			}
+			const timeColumn = version >= 5 ? "COALESCE(occurred_at,detected_at)" : "occurred_at";
+			for (const [value, operator] of [
+				[options.from, ">="],
+				[options.until, "<"],
+			] as const) {
+				if (value) {
+					clauses.push(`${timeColumn} ${operator} ?`);
+					parameters.push(new Date(value).toISOString());
+				}
+			}
+			if (options.actor === "unknown") clauses.push("json_extract(event_json,'$.actor.kind')='unknown'");
+			else if (options.actor) {
+				clauses.push("json_extract(event_json,'$.actor.userId')=?");
+				parameters.push(options.actor);
+			}
+			if (options.action) {
+				const action = HISTORY_ACTIONS.find((item) => item.kind === options.action);
+				if (action && "source" in action) {
+					clauses.push("json_extract(event_json,'$.source')=?");
+					parameters.push(action.source);
+				} else if (action && "patterns" in action) {
+					clauses.push(`(${action.patterns.map(() => "json_extract(event_json,'$.action') LIKE ?").join(" OR ")})`);
+					parameters.push(...action.patterns);
+				} else {
+					clauses.push("json_extract(event_json,'$.action')=?");
+					parameters.push(options.action);
+				}
+			}
+			if (options.source) {
+				clauses.push("json_extract(event_json,'$.source')=?");
+				parameters.push(options.source);
+			}
+			parameters.push(limit + 1);
 			const rows = database
-				.query<
-					{ sequence: number; event_json: string },
-					[
-						string,
-						number | null,
-						number | null,
-						number | null,
-						string | null,
-						HistoryKind | null,
-						string | null,
-						string | null,
-						HistoryKind | null,
-						HistoryKind | null,
-						number,
-					]
-				>(
-					`SELECT sequence,event_json FROM history_events h
-					 WHERE scope_kind=? AND project_id IS ? AND (? IS NULL OR sequence < ?)
-					 AND ((? IS NULL AND ? IS NULL) OR EXISTS (
-					   SELECT 1 FROM json_each(h.event_json,'$.changes') c
-					   WHERE (? IS NULL OR json_extract(c.value,'$.recordKey')=?)
-					     AND (? IS NULL OR json_extract(c.value,'$.kind')=?)))
-					 ORDER BY sequence DESC LIMIT ?`,
+				.query<{ sequence: number; event_json: string }, (string | number | null)[]>(
+					`SELECT sequence,event_json FROM history_events h WHERE ${clauses.join(" AND ")} ORDER BY sequence DESC LIMIT ?`,
 				)
-				.all(
-					options.scope.kind,
-					projectId,
-					cursor,
-					cursor,
-					options.recordKey ?? null,
-					options.kind ?? null,
-					options.recordKey ?? null,
-					options.recordKey ?? null,
-					options.kind ?? null,
-					options.kind ?? null,
-					limit + 1,
-				);
+				.all(...parameters);
 			const page = rows.slice(0, limit);
 			return {
 				items: page.map((row) => JSON.parse(row.event_json) as HistoryEvent),

@@ -10,6 +10,7 @@ import Settings from './components/Settings';
 import Statistics from './components/Statistics';
 import MilestonesPage from './components/MilestonesPage';
 import TaskDetailsModal from './components/TaskDetailsModal';
+import { ProjectHistory } from './components/HistoryPanel';
 import InitializationScreen from './components/InitializationScreen';
 import LoadingSpinner from './components/LoadingSpinner';
 import ProjectSelector from './components/ProjectSelector';
@@ -1067,6 +1068,7 @@ function AppContent() {
             <Route path="decisions/:id" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} dateFormat={config?.dateFormat} />} />
             <Route path="decisions/:id/:title" element={<DecisionDetail decisions={decisions} onRefreshData={refreshData} dateFormat={config?.dateFormat} />} />
             <Route path="statistics" element={<Statistics tasks={tasks} isLoading={isLoading} onEditTask={handleEditTask} projectName={projectName} dateFormat={config?.dateFormat} />} />
+			{central && <Route path="history" element={<ProjectHistory />} />}
             <Route path="settings" element={!central || session?.user.role === "admin" ? <Settings /> : <p role="alert" className="p-8">Admin access required.</p>} />
             <Route path="archive" element={<ArchivePage onRefreshData={refreshData} />} />
             <Route path="members" element={<ProjectMembers />} />

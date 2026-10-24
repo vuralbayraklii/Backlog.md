@@ -1,0 +1,180 @@
+{
+	"task_id": "BACK-822",
+	"result": "passed_focused_validation",
+	"recorded_at_utc": "2026-10-23T20:47:25.074068+00:00",
+	"branch": "tasks/server-a06-review-history",
+	"scope": "Verify and minimally fix the three review findings about authenticated request binding, persisted content hashes, and YAML key order.",
+	"findings": [
+		{
+			"priority": "P1",
+			"result": "confirmed_and_fixed",
+			"problem": "Restoring an old authenticated response or cancellation after reusing its request number closed a new authenticated acceptance request.",
+			"fix": "Authenticate the closure only when the referenced current request matches the original request in the authenticating event snapshot.",
+			"evidence": "Three old-source API regressions fail (altered request plus reused response and cancellation). New request stays pending until its assigned human responds."
+		},
+		{
+			"priority": "P2",
+			"result": "confirmed_and_fixed",
+			"problem": "Removing an empty marked AC or DoD block during serialization made a saved request immediately stale and the response returned HTTP 409.",
+			"fix": "Hash the shared serializer/parser roundtrip so review entries use the content that the review write persists. Preserve the existing serializer and revision writer.",
+			"evidence": "Two local Core and two real HTTP regressions fail on the old source. Saved entry hashes now match the task and the assigned read-only human can accept."
+		},
+		{
+			"priority": "P2",
+			"result": "confirmed_and_fixed",
+			"problem": "Reordering YAML object keys, including nested author/reviewer keys, removed trust from an unchanged completed acceptance.",
+			"fix": "Use node:util isDeepStrictEqual for order-independent object comparison; array order and values remain significant.",
+			"evidence": "Old-source API regression produces trustedEntryIds: []; after the fix all three entries stay trusted and the request stays closed."
+		}
+	],
+	"changes": {
+		"production_files": ["src/server/central.ts", "src/core/task-review.ts"],
+		"test_files": ["src/test/server-task-review.test.ts", "src/test/task-review.test.ts"],
+		"new_tests": 7,
+		"strengthened_existing_tests": 1,
+		"simplification": "Two existing production modules and the shared serializer/parser are reused. No service, store, exported helper, schema, or UI changes were added."
+	},
+	"checks": {
+		"old_source_regressions": {
+			"failed": 8,
+			"passed": 0,
+			"logs": ["before-api.log", "before-local.log"],
+			"note": "Each failure reproduced the reported behavior; the key-order assertion was narrowed to semantic review fields because the file revision correctly changes on a reformat."
+		},
+		"focused": {
+			"command": "BACKLOG_TEST_CLI_BUNDLE=/tmp/backlog-review-three-lsr_rl80/test-cli/cli.js bun test --timeout=10000 src/test/task-review.test.ts src/test/server-task-review.test.ts src/test/markdown.test.ts src/test/acceptance-criteria-manager.test.ts src/test/acceptance-criteria-structured.test.ts src/test/malformed-checklist-marks.test.ts src/test/structured-sections-code-fences.test.ts src/test/definition-of-done.test.ts src/test/prepared-core-write.test.ts src/test/prepared-change.test.ts src/test/central-prepared-write.test.ts src/test/server-mutations.test.ts src/test/server-mutation-sigkill.test.ts",
+			"passed": 198,
+			"failed": 0,
+			"skipped": 0,
+			"files": 13,
+			"expectations": 1003,
+			"log": "focused.log"
+		},
+		"dom": {
+			"command": "bun test --timeout=10000 src/test/web-task-review.test.tsx src/test/web-task-details-modal-unsaved-navigation.test.tsx",
+			"passed": 20,
+			"failed": 0,
+			"skipped": 0,
+			"files": 2,
+			"expectations": 74,
+			"log": "dom.log"
+		},
+		"total_unique_tests": {
+			"passed": 218,
+			"failed": 0,
+			"skipped": 0,
+			"note": "Earlier focused attempts are not added to this total."
+		},
+		"types": {
+			"command": "bun run check:types",
+			"result": "passed",
+			"files": 637,
+			"log": "types.log"
+		},
+		"biome": {
+			"command": "bun run check",
+			"result": "passed",
+			"files": 551,
+			"writes": false,
+			"log": "biome-final.log"
+		},
+		"test_bundle": {
+			"command": "BACKLOG_BUILD_OUTDIR=/tmp/backlog-review-three-lsr_rl80/test-cli bun scripts/build.ts",
+			"result": "passed",
+			"log": "build-bundle.log"
+		},
+		"native_build": {
+			"command": "BACKLOG_BUILD_OUTFILE=/tmp/backlog-review-three-lsr_rl80/backlog bun scripts/build.ts",
+			"result": "passed",
+			"log": "build-native.log"
+		},
+		"compiled_smoke": {
+			"command": "bun scripts/smoke-compiled-build.ts /tmp/backlog-review-three-lsr_rl80/backlog 1.53.0",
+			"result": "passed",
+			"coverage": ["CLI/version", "browser HTTP assets", "MCP tools/resources"],
+			"log": "smoke.log"
+		},
+		"diff_check": {
+			"command": "git diff --check",
+			"result": "passed"
+		}
+	},
+	"source_sha256": {
+		"src/server/central.ts": "3f07d401f9142bfbe840412d65e2a9651771c436b52ab3a49a98030820ae04cb",
+		"src/core/task-review.ts": "7af63155fd7ae254c53123ae2fc69014a82e1c58d1c849d62caa38468ad0c596",
+		"src/test/server-task-review.test.ts": "1da9cd1c0395fb5ef58423f6468315414dafb7c331f4bfe649240a3da10666a8",
+		"src/test/task-review.test.ts": "1b1ef4e8f11e2513ad82a19086ff9561acdd6a6e1795b2989241fd8309409c78"
+	},
+	"binary": {
+		"path": "/tmp/backlog-review-three-lsr_rl80/backlog",
+		"sha256": "f0e08b481af56d0be1b34a9d5307a474e5ea5c8939b99ea97a2a778097df1ce3",
+		"dist_updated": false
+	},
+	"raw_evidence_directory": "/tmp/backlog-review-three-lsr_rl80",
+	"evidence_manifest": [
+		{
+			"path": "before-local.log",
+			"bytes": 1660,
+			"sha256": "a5e5535b77a65e1ffbba2bbcd76d785ff5e6a002b4e997a12b0500074efb0670"
+		},
+		{
+			"path": "before-api.log",
+			"bytes": 6785,
+			"sha256": "9b39350369b2fc284f9122b713b05331e5f8b25cf583dc78222641f64c54c9c8"
+		},
+		{
+			"path": "focused.log",
+			"bytes": 26461,
+			"sha256": "4c536306ebfc564270aba2a5aaf485b3fc4390fa9a8034daf91059beecad8fb4"
+		},
+		{
+			"path": "dom.log",
+			"bytes": 2760,
+			"sha256": "c544866dec81a2a2b00dec981c412391ceae6538d7c1601742d593cd18efea1f"
+		},
+		{
+			"path": "types.log",
+			"bytes": 57,
+			"sha256": "770862bc55b75ff4f24d0b21115ce6fe7224211e4b70713a3b9c75e47a39fca7"
+		},
+		{
+			"path": "biome.log",
+			"bytes": 62,
+			"sha256": "15ab712de8e61b1f62c0cf61a5c7069f8500937a30b89a1c4f120b4eb61670e5"
+		},
+		{
+			"path": "build-bundle.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "build-native.log",
+			"bytes": 0,
+			"sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+		},
+		{
+			"path": "smoke.log",
+			"bytes": 83,
+			"sha256": "7c42271674dbe91d22e4bfa646c6b183c267591c1dead357b296e450b116077d"
+		},
+		{
+			"path": "biome-final.log",
+			"bytes": 62,
+			"sha256": "ed20fbc2df39a83b5bb6fc169ea89522fb9612aa18ddfe2fd560e855457720b2"
+		}
+	],
+	"preservation": {
+		"initial_patch": "before.patch",
+		"initial_index": "index.patch",
+		"initial_untracked_archive": "untracked.tar.gz",
+		"private_server_data_read": false,
+		"preexisting_source_changes_preserved": true,
+		"commit_push_merge": false
+	},
+	"limits": [
+		"Scoped tests, type/Biome checks and compiled smoke passed; full CI and native Chromium were not rerun.",
+		"Real HTTP, subprocess and SIGKILL tests ran with sandbox escalation against temporary projects. The sandbox-only local CLI attempt failed in blessed; the final bundled CLI tests passed.",
+		"Groma is not installed. No manifesto or Groma-managed files were changed.",
+		"The temporary evidence directory is not a permanent backup. The personal application process and dist/backlog were not changed."
+	]
+}
