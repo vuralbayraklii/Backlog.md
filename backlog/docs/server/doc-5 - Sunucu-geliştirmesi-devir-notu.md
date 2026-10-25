@@ -3,13 +3,25 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-25 09:16'
+updated_date: '2026-10-25 09:38'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-07 tamamlandı; Finbee FIN-21 kabul edilen içeriği korunur ve A-08 kullanıcı talebiyle başlatılmadı. BACK-823 eski dosya adı düzeltmesi ve BACK-824 arşiv kimliği onarımı tamamlandı. Güncel dal tasks/server-duplicate-task-ids, taban 5b087c6c; A-07/BACK-823 ve BACK-824 yerel değişiklikleri korunuyor. Bu çalışmalar için commit/push/merge yapılmadı. Güncel onarım kanıtı verification/server/back-824-verification.json; aşağıdaki önceki durumlar tarihseldir.
+Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-07 tamamlandı; Finbee FIN-21 kabul edilen içeriği korunur ve A-08 kullanıcı talebiyle başlatılmadı. BACK-823 eski dosya adı düzeltmesi ve BACK-824 arşiv kimliği onarımı tamamlandı. Güncel dal tasks/server-duplicate-task-ids; c7cb6989 ve b70f859d yerel commitleri 5b087c6c tabanındadır. Push otomatik onay denetimi tarafından hedef/içerik için ek açık kullanıcı onayı gerektiği gerekçesiyle reddedildi; uzak dal henüz oluşturulmadı. Bu teslim durumu ayrı takip commit’iyle korunur. Güncel onarım kanıtı verification/server/back-824-verification.json; aşağıdaki önceki durumlar tarihseldir.
+
+## A-07/BACK-823/BACK-824 Git teslim kontrolü — 25 Ekim 2026
+
+Kullanıcı son değişiklikler uygunsa commit ve push yapılmasını istedi. BACK-823 düzeltmesi, görev/kabul kayıtları ve önceki A-07/BACK-824 devir metni c7cb6989659d4f74c06cb25bc77ca8c83aa77484 commit’inde; arşiv kimliği onarımı, A-07 kabul raporu ve özel server-data dışlama kuralı b70f859d7178146d896490d9381004d3342ed8dd commit’inde yerel olarak korundu. İki normal Husky/lint-staged Biome kancası geçti; sonrasında 703 kaynak/derleme/kanıt SHA-256 değeri değişmedi ve çalışma ağacı temizdi. Bu teslim kaydı ayrı BACK-824 takip commit’idir.
+
+Salt okunur karşılaştırma taban commit’teki 864 önceki Backlog kaydını doğruladı: 585 completed dosyası ve 10 arşiv kimliği değişikliği dışında beklenmeyen içerik/metadata farkı yok; tek mevcut belge güncellemesi doc-5, yeni görevler yalnız BACK-823/BACK-824. Yerel görev kimliği çakışması yok. Teslim başlangıcında yedeklenen 906 kayıt/kaynak/kanıt dosyası da ilk iki commit sonrasında birebir aynı kaldı. BACK-823/BACK-824 kaynak ve ham kanıtlarında 43, A-07 ham kanıtlarında 5 SHA-256 karşılaştırması geçti; mevcut dist/backlog özeti BACK-823 doğrulanmış binary’siyle eşleşti.
+
+Güncel 6 ilgili test dosyasında 88 başarılı, 0 başarısız ve 1319 beklenti var. İlk sandbox denemesi yerel sunucu açılışında listen EPERM ile durdu; aynı grup izinli ortamda 33,26 saniyede exit0 ile tamamlandı. Tip kontrolü 640 dosyada ve yazmasız Biome 554 dosyada geçti. Tam CI/build/Chromium yeniden çalıştırılmadı; kaynaklar önceki doğrulamayla aynı, bu dar düzeltmenin önceki native build/smoke ve iki tarayıcı kanıtı korunur. Git diff --check yalnız byte-byte korunan eski BACK-41 içeriğindeki üç mevcut sondaki boşluğu bildirir; yeni kaynak/kanıt yollarında yeni whitespace sorunu yok.
+
+Uzak salt okunur git ls-remote kontrolü origin/server için 5b087c6c0d2e0e3436e67da9e747de56bef1382e döndürdü; tasks/server-duplicate-task-ids henüz yoktu. Origin: git@github-backlogmd:vuralbayraklii/Backlog.md.git; gerçek hedef vuralbayraklii/Backlog.md fork’udur. Normal push denemesi SSH/Git çalışmadan otomatik onay denetimiyle reddedildi: denetim, bu commit içeriğinin bu belirli hedefe gönderilmesi için ayrıca açık kullanıcı onayı istedi. Push için alternatif yol denenmedi ve hiçbir uzak dal değiştirilmedi. Sıradaki adım, kullanıcı hedefi/içeriği açıkça onaylarsa mevcut dalı aynı origin/tasks/server-duplicate-task-ids hedefine normal push ile göndermek ve git ls-remote ile son HEAD eşitliğini doğrulamaktır. Merge yapılmadı.
+
+Teslim başlangıç durumu, diff/indeks/refler ve kayıt/kaynak/kanıt arşivi /tmp/backlog-git-delivery-d354sji0 içinde korundu; /tmp kalıcı yedek değildir. Kişisel server-data okunmadı ve hiçbir commit’e alınmadı; önceki özel onarım yedeği yerinde kaldı. FIN-21, Finbee kaynağı, kişisel süreç ve A-08 kapsamı değişmedi. Groma komutu bulunamadı; manifesto ve yönetilen mimari değişmedi.
 
 ## BACK-824 — Arşiv görev kimliği onarımı (25 Ekim 2026)
 
@@ -475,7 +487,7 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00–A-07 tamamlandı; Finbee FIN-21 kullanıcı kabulü korunur. A-08 kullanıcı talebiyle başlatılmayacak. Güncel yerel dal tasks/server-duplicate-task-ids üzerinde A-07/BACK-823 ve BACK-824 onarım kayıtları var. BACK-824 sonrası yerel görev kimliği çakışması yok, eski completed dosyaları kanonik arşiv klasöründe. Önceki aşamaların Git teslimi 5b087c6c tabanındadır; son yerel çalışmalar için commit/push/merge yapılmadı. Sıradaki kullanıcı adımı panoyu yenilemektir. Yeni iş veya diğer dalları onarma kendiliğinden başlatılmaz.
+A-00–A-07 tamamlandı; Finbee FIN-21 kullanıcı kabulü korunur. A-08 kullanıcı talebiyle başlatılmayacak. Güncel yerel dal tasks/server-duplicate-task-ids üzerinde c7cb6989 ve b70f859d uygulama/kayıt commitleri ile ayrı teslim takip commit’i var; başlangıç tabanı 5b087c6c. BACK-824 sonrası yerel görev kimliği çakışması yok, eski completed dosyaları kanonik arşiv klasöründe. Push otomatik onay denetimince reddedildi; hedef ve içerik için açık kullanıcı onayı bekleniyor. Merge yapılmadı. Yeni iş veya diğer dalları onarma kendiliğinden başlatılmaz.
 
 ## Sonraki aşamalarda karar gerektiren konular
 
@@ -487,7 +499,7 @@ A-00–A-07 tamamlandı; Finbee FIN-21 kullanıcı kabulü korunur. A-08 kullan�
 
 ```text
 Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5, a07-finbee-pilot.json, back-823-verification.json ve back-824-verification.json oku. BACK-823/BACK-824 görevlerini CLI ile doğrula. A-00–A-07 tamamlandı; A-08 kullanıcı talebiyle başlatılmayacak.
-Güncel dal tasks/server-duplicate-task-ids, taban 5b087c6c. A-07/BACK-823 ve BACK-824 değişiklikleri yerel; commit/push/merge yapılmadı. Git durumunu doğrula ve yerel kayıtları koru. BACK-824 kanonik doctor onarımı 10 arşiv kaydını BACK-825–834 olarak yeniden numaraladı, 585 completed kaydını arşive taşıdı; içerik doğrulaması ve native browser9/9 geçti. Yerel kimlik çakışması yok; diğer dalların tarihsel snapshot uyarıları ayrı kalır.
+Güncel dal tasks/server-duplicate-task-ids, başlangıç tabanı 5b087c6c. A-07/BACK-823 ve BACK-824 değişiklikleri c7cb6989/b70f859d yerel commitlerinde ve ayrı teslim takip commit’inde. Push otomatik onay denetimince reddedildi; bu içeriğin vuralbayraklii/Backlog.md fork’unun tasks/server-duplicate-task-ids dalına gönderilmesi için açık kullanıcı onayı bekleniyor. Push/merge yapılmadı. Git durumunu doğrula ve yerel kayıtları koru. BACK-824 kanonik doctor onarımı 10 arşiv kaydını BACK-825–834 olarak yeniden numaraladı, 585 completed kaydını arşive taşıdı; içerik doğrulaması ve native browser9/9 geçti. Yerel kimlik çakışması yok; diğer dalların tarihsel snapshot uyarıları ayrı kalır.
 Özel kalıcı yedek server-data/repair-backups/20261025T090420Z-duplicate-ids-bwggsfme altında; kişisel DB ve yedekleri Git teslimine alma. dist/backlog doğrulanmış BACK-823 binary'si; ürün kodu/binary bu onarımda değişmedi, kişisel süreç yeniden başlatılmadı. Kullanıcı panoyu yenileyebilir.
 Finbee /home/vuralbayrakli/projects/finbee kökünden proje 2 olarak kayıtlı. FIN-21 @codex / İnceleme, AC4/4; doğrulama #1, talep #2 ve admin insan yanıtı #3 kabul anında aynı içerikte güvenilir/günceldi. Kabul edilen görev/statusu bu onarımda değiştirilmedi. Sonraki bir Finbee çalışmasında güncel sonucu önce bağlı task review list FIN-21 --json ile oku; yeni içerik değişikliği kabulü eskitebilir.
 Bağlantı: --server-url http://127.0.0.1:6420 --server-project 2 --agent-key-file /home/vuralbayrakli/.config/backlog/finbee-codex.key --allow-http-loopback. Sırrı yazdırma; anahtar yalnız Finbee görev yazımı ve proje okuma yetkilidir. A-08 veya başka proje işi başlatma.
