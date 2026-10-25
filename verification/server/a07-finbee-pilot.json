@@ -1,0 +1,257 @@
+{
+	"stage": "A-07",
+	"taskId": "FIN-21",
+	"result": "pilot_verified_and_human_accepted",
+	"recordedAtUtc": "2026-10-24T09:31:16.769115+00:00",
+	"origin": "http://127.0.0.1:6420",
+	"source": {
+		"backlogHead": "5b087c6c0d2e0e3436e67da9e747de56bef1382e",
+		"backlogBranch": "tasks/server-a07-finbee-pilot",
+		"finbeeHead": "f759877659bbff94e5b92215d995ea485c778316",
+		"finbeeRoot": "/home/vuralbayrakli/projects/finbee",
+		"binarySha256": "f0e08b481af56d0be1b34a9d5307a474e5ea5c8939b99ea97a2a778097df1ce3"
+	},
+	"registeredProject": {
+		"id": "2",
+		"name": "Finbee",
+		"rootPath": "/home/vuralbayrakli/projects/finbee",
+		"tracking": true
+	},
+	"agent": {
+		"keyId": "1913610f-d678-4276-a4ef-5cd311df5ab2",
+		"userId": "78713b32-c3f6-450a-b251-2a84b0e3febf",
+		"credentialFile": "/home/vuralbayrakli/.config/backlog/finbee-codex.key",
+		"credentialMode": "0o600",
+		"grants": [
+			{
+				"projectId": "2",
+				"permissions": {
+					"tasksWrite": true,
+					"docsWrite": false,
+					"decisionsWrite": false,
+					"decisionsManage": false,
+					"archive": false,
+					"delete": false
+				}
+			}
+		]
+	},
+	"records": {
+		"recordCounts": {
+			"tasks": 29,
+			"documents": 65,
+			"decisions": 17
+		},
+		"taskListsMatch": true,
+		"taskStatusCounts": {
+			"Tamamlandı": 10,
+			"Planlandı": 4,
+			"İnceleme": 2,
+			"Bekliyor": 12,
+			"Çalışıyor": 1
+		},
+		"documentAndDecisionBodiesMatched": 82,
+		"internalLinkOccurrences": 807,
+		"uniqueLinkTargets": 110,
+		"missingLinkTargets": [],
+		"linksWithFragments": 198,
+		"browserNavigation": "reported_working_by_user",
+		"fragmentRendering": "not_retested"
+	},
+	"sourceBodyComparison": "Frontmatter excluded; leading and trailing body whitespace ignored.",
+	"taskContentComparison": {
+		"matched": 29,
+		"fields": [
+			"id",
+			"title",
+			"status",
+			"assignees",
+			"labels",
+			"description",
+			"dependencies",
+			"documentation",
+			"references",
+			"acceptanceCriteria",
+			"definitionOfDone",
+			"implementationPlan",
+			"implementationNotes",
+			"finalSummary",
+			"comments"
+		],
+		"ids": [
+			"FIN-1",
+			"FIN-3",
+			"FIN-4",
+			"FIN-5",
+			"FIN-6",
+			"FIN-7",
+			"FIN-8",
+			"FIN-9",
+			"FIN-10",
+			"FIN-11",
+			"FIN-12",
+			"FIN-13",
+			"FIN-14",
+			"FIN-15",
+			"FIN-16",
+			"FIN-17",
+			"FIN-18",
+			"FIN-19",
+			"FIN-20",
+			"FIN-21",
+			"FIN-2",
+			"FIN-22",
+			"FIN-23",
+			"FIN-24",
+			"FIN-25",
+			"FIN-26",
+			"FIN-27",
+			"FIN-28",
+			"FIN-29"
+		]
+	},
+	"mutationChecks": {
+		"replayPreservedRevision": true,
+		"replayAddedEvents": 0,
+		"staleWriteRejected": true,
+		"staleWriteChangedFiles": false,
+		"events": [
+			{
+				"eventId": "febe66ef-f702-4812-901b-ec4b415be1fe",
+				"operationId": "febe66ef-f702-4812-901b-ec4b415be1fe",
+				"source": "agent",
+				"actor": {
+					"kind": "agent",
+					"agentKeyId": "1913610f-d678-4276-a4ef-5cd311df5ab2",
+					"userId": "78713b32-c3f6-450a-b251-2a84b0e3febf"
+				},
+				"action": "PUT /api/tasks/FIN-21",
+				"changes": [
+					{
+						"recordKey": "eaac41fa-0c49-4d34-ac5a-c103dcd760ac",
+						"kind": "task",
+						"visibleId": "FIN-21"
+					}
+				]
+			}
+		],
+		"operationEnvelope": [
+			"schemaVersion",
+			"kind",
+			"operationId",
+			"requestHash",
+			"scope",
+			"state",
+			"source",
+			"actor",
+			"createdAt",
+			"updatedAt",
+			"result"
+		],
+		"operationId": "febe66ef-f702-4812-901b-ec4b415be1fe"
+	},
+	"permissionChecks": {
+		"otherProjectReadRejected": {
+			"error": "Not Found"
+		},
+		"adminEndpointRejected": {
+			"error": "Permission denied."
+		},
+		"documentWriteRejected": {
+			"error": "Permission denied."
+		},
+		"agentHumanResponseRejected": {
+			"error": "Only the assigned person can respond to this request."
+		}
+	},
+	"projectObservation": {
+		"state": "ready",
+		"lastSuccessfulScanAt": "2026-10-24T09:24:41.119Z",
+		"checkedAt": "2026-10-24T09:24:41.119Z",
+		"error": null
+	},
+	"projectWriteState": "ready",
+	"unrelatedSourceChanges": {
+		"backlog": [],
+		"finbee": []
+	},
+	"acceptanceCriteria": {
+		"1": "verified_source_and_registered_project_match",
+		"2": "previous_user_confirmation_preserved",
+		"3": "verified_authenticated_agent_history_replay_conflict_and_permissions",
+		"4": "verified_api_targets_and_user_reported_browser_navigation"
+	},
+	"humanAcceptance": {
+		"state": "accepted",
+		"reviewer": "admin",
+		"operationId": "6c9d7edd-5358-4387-98a0-ee5102cc9d35",
+		"taskContentHash": "1e8f4a520a1a3a08ebedd67ec4109f1c3afc30743cda9e01ba78e0738fa1f11e",
+		"trustedEntryIds": [3, 2, 1],
+		"staleEntryIds": [],
+		"requestId": 2,
+		"checkedAtUtc": "2026-10-24T12:00:14.422788+00:00",
+		"responses": [
+			{
+				"id": 3,
+				"outcome": "approved",
+				"author": {
+					"kind": "user",
+					"userId": "78713b32-c3f6-450a-b251-2a84b0e3febf",
+					"name": "admin"
+				},
+				"trusted": true,
+				"stale": false
+			}
+		],
+		"acceptedAtUtc": "2026-10-24T11:59:20.528Z",
+		"responseId": 3
+	},
+	"preservation": {
+		"privateStartSnapshot": "/tmp/backlog-finbee-a07-d5073e5e",
+		"sqlite": "server-before.sqlite",
+		"recordArchives": ["backlog/records-before.tar.gz", "finbee/records-before.tar.gz"],
+		"temporaryStorage": true,
+		"coordinatedRestoreDrill": false
+	},
+	"limits": [
+		"Browser navigation was reported by the user; History actor display is included in final human acceptance.",
+		"198 heading fragment occurrences were inventoried; rendered headings were not retested.",
+		"No Finbee financial service or financial database was accessed.",
+		"No application source changed; full Backlog CI and build were not rerun for this pilot.",
+		"No commit, push or merge was performed."
+	],
+	"evidenceDirectory": "/tmp/backlog-finbee-a07-d5073e5e",
+	"evidenceSha256": {
+		"task-content-checks.json": "9b4fb0d43cea4163e06290509b1727dc5b86cc2f4b833a3b699186269b5c478b",
+		"internal-links.json": "b6e36ebbadc664ca6e7af6bb8acd2194c6c06c2163065070cbbea5ba73652c8b",
+		"record-checks.json": "736d851ef82d3933de7e294ce2df8f6d838eb89f5c541582c45645acd4b3427c",
+		"mutation-checks.json": "2aea7dd9a9306c4570f3edc72259128c7c7677e2614c280cd48e59b7cbf47a25",
+		"key-metadata.json": "84cc9175a489741969b390ee078eacf353e04ce1aa6f2e62b88427f23c763dab"
+	},
+	"taskState": {
+		"status": "İnceleme",
+		"revision": "\"r1-70127c0bf41bf51db57b8d232f9910a9d5f5e22ef89c3ca42e5282e3af25e6a0\"",
+		"acceptanceCriteriaCompleted": 4,
+		"acceptanceCriteriaCount": 4
+	},
+	"humanBrowserFeedback": {
+		"quote": "hepsi çalışıyor gibi de bu sondaki fin 21 geçmişinde agent değişikliği görünmesi kısmını anlmadım.",
+		"interpretation": "Task/document/decision navigation reported working; History identity label explained; final human acceptance pending.",
+		"automatedPersonalBrowserSessionUsed": false
+	},
+	"recordChecks": {
+		"biome": "passed (552 files; only the new JSON report formatted)",
+		"gitDiffCheck": "passed in both repositories",
+		"changedExistingFiles": {
+			"backlog": ["backlog/docs/server/doc-5 - Sunucu-geliştirmesi-devir-notu.md"],
+			"finbee": ["backlog/tasks/fin-21 - Hazır-Finbee-kökünü-özelleştirilmiş-Backlog-dashboarduna-kaydet.md"]
+		}
+	},
+	"userSteering": {
+		"recordedAtUtc": "2026-10-24T11:51:09.510713+00:00",
+		"finbee": "User reports the pilot passed.",
+		"a08": "Do not start; explicit user instruction.",
+		"authenticatedAcceptance": "Verified: response 3 by authenticated admin user approves request 2; trusted and current."
+	},
+	"stageState": "A-07 complete; A-08 explicitly not started at user request."
+}

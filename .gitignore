@@ -62,6 +62,9 @@ tmp/
 # Local files
 *.local.*
 
+# Local central server database and repair backups
+/server-data/
+
 # Performance benchmark artifacts
 test-benchmark-report.json
 

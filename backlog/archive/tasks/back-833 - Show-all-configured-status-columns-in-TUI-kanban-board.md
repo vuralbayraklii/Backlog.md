@@ -1,5 +1,5 @@
 ---
-id: BACK-275
+id: BACK-833
 title: Show all configured status columns in TUI kanban board
 status: To Do
 assignee: []

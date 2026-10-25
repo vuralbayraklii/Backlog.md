@@ -1,5 +1,5 @@
 ---
-id: BACK-76
+id: BACK-826
 title: Migrate from blessed to neo-neo-blessed for ESM support and tree shaking
 status: Won't Do
 assignee:

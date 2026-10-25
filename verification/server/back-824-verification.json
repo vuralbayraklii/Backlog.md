@@ -1,0 +1,513 @@
+{
+	"taskId": "BACK-824",
+	"result": "repaired_and_verified",
+	"recordedAtUtc": "2026-10-25T09:13:14.701987+00:00",
+	"source": {
+		"baseCommit": "5b087c6c0d2e0e3436e67da9e747de56bef1382e",
+		"branch": "tasks/server-duplicate-task-ids",
+		"binary": "dist/backlog",
+		"binarySha256": "beafaf0e719b983e01e3d295613167f7077af2ff3a321951fe363c680fc02596",
+		"additionalProductCodeChanges": [],
+		"repositoryHygieneChanges": [
+			{
+				"path": ".gitignore",
+				"change": "Ignore /server-data/ to keep the private central database and original repair evidence out of Git and source formatting checks."
+			}
+		]
+	},
+	"authorization": "User requested repair of the duplicate-task-ID warning on 2026-10-25 after review explained the inherited ten groups.",
+	"repair": {
+		"result": "passed",
+		"cliExitCode": 1,
+		"crossBranchDiagnosticsRemain": true,
+		"repairChanges": [
+			{
+				"sourcePath": "backlog/archive/tasks/back-41 - cli-migrate-terminal-ui-to-bblessed.md",
+				"targetPath": "backlog/archive/tasks/back-825 - cli-migrate-terminal-ui-to-bblessed.md",
+				"oldId": "BACK-41",
+				"newId": "BACK-825"
+			},
+			{
+				"sourcePath": "backlog/archive/tasks/back-76 - migrate-from-blessed-to-neo-neo-blessed-for-esm-support-and-tree-shaking.md",
+				"targetPath": "backlog/archive/tasks/back-826 - migrate-from-blessed-to-neo-neo-blessed-for-esm-support-and-tree-shaking.md",
+				"oldId": "BACK-76",
+				"newId": "BACK-826"
+			},
+			{
+				"sourcePath": "backlog/archive/tasks/back-81 - test-mixed-case-filename.md",
+				"targetPath": "backlog/archive/tasks/back-827 - test-mixed-case-filename.md",
+				"oldId": "BACK-81",
+				"newId": "BACK-827"
+			},
+			{
+				"sourcePath": "backlog/archive/tasks/back-82 - UPDATED-Title-With-CAPS.md",
+				"targetPath": "backlog/archive/tasks/back-828 - UPDATED-Title-With-CAPS.md",
+				"oldId": "BACK-82",
+				"newId": "BACK-828"
+			},
+			{
+				"sourcePath": "backlog/archive/tasks/back-88 - Test-AC-Feature.md",
+				"targetPath": "backlog/archive/tasks/back-829 - Test-AC-Feature.md",
+				"oldId": "BACK-88",
+				"newId": "BACK-829"
+			},
+			{
+				"sourcePath": "backlog/archive/tasks/back-89 - Test-AC-Feature-2.md",
+				"targetPath": "backlog/archive/tasks/back-830 - Test-AC-Feature-2.md",
+				"oldId": "BACK-89",
+				"newId": "BACK-830"
+			},
+			{
+				"sourcePath": "backlog/archive/tasks/back-90 - Test-Full-Flag.md",
+				"targetPath": "backlog/archive/tasks/back-831 - Test-Full-Flag.md",
+				"oldId": "BACK-90",
+				"newId": "BACK-831"
+			},
+			{
+				"sourcePath": "backlog/archive/tasks/back-168 - Test-notes-functionality.md",
+				"targetPath": "backlog/archive/tasks/back-832 - Test-notes-functionality.md",
+				"oldId": "BACK-168",
+				"newId": "BACK-832"
+			},
+			{
+				"sourcePath": "backlog/archive/tasks/back-275 - Show-all-configured-status-columns-in-TUI-kanban-board.md",
+				"targetPath": "backlog/archive/tasks/back-833 - Show-all-configured-status-columns-in-TUI-kanban-board.md",
+				"oldId": "BACK-275",
+				"newId": "BACK-833"
+			},
+			{
+				"sourcePath": "backlog/archive/tasks/back-569 - Make-browser-task-loading-asynchronous-and-idle-stable.md",
+				"targetPath": "backlog/archive/tasks/back-834 - Make-browser-task-loading-asynchronous-and-idle-stable.md",
+				"oldId": "BACK-569",
+				"newId": "BACK-834"
+			}
+		],
+		"movedArchiveFiles": 585,
+		"verifiedPriorFiles": 867,
+		"unexpectedFiles": [],
+		"contentChangesOtherThanTenIds": []
+	},
+	"checks": {
+		"rehearsal": {
+			"result": "passed",
+			"repairChanges": [
+				{
+					"sourcePath": "backlog/archive/tasks/back-41 - cli-migrate-terminal-ui-to-bblessed.md",
+					"targetPath": "backlog/archive/tasks/back-825 - cli-migrate-terminal-ui-to-bblessed.md",
+					"oldId": "BACK-41",
+					"newId": "BACK-825"
+				},
+				{
+					"sourcePath": "backlog/archive/tasks/back-76 - migrate-from-blessed-to-neo-neo-blessed-for-esm-support-and-tree-shaking.md",
+					"targetPath": "backlog/archive/tasks/back-826 - migrate-from-blessed-to-neo-neo-blessed-for-esm-support-and-tree-shaking.md",
+					"oldId": "BACK-76",
+					"newId": "BACK-826"
+				},
+				{
+					"sourcePath": "backlog/archive/tasks/back-81 - test-mixed-case-filename.md",
+					"targetPath": "backlog/archive/tasks/back-827 - test-mixed-case-filename.md",
+					"oldId": "BACK-81",
+					"newId": "BACK-827"
+				},
+				{
+					"sourcePath": "backlog/archive/tasks/back-82 - UPDATED-Title-With-CAPS.md",
+					"targetPath": "backlog/archive/tasks/back-828 - UPDATED-Title-With-CAPS.md",
+					"oldId": "BACK-82",
+					"newId": "BACK-828"
+				},
+				{
+					"sourcePath": "backlog/archive/tasks/back-88 - Test-AC-Feature.md",
+					"targetPath": "backlog/archive/tasks/back-829 - Test-AC-Feature.md",
+					"oldId": "BACK-88",
+					"newId": "BACK-829"
+				},
+				{
+					"sourcePath": "backlog/archive/tasks/back-89 - Test-AC-Feature-2.md",
+					"targetPath": "backlog/archive/tasks/back-830 - Test-AC-Feature-2.md",
+					"oldId": "BACK-89",
+					"newId": "BACK-830"
+				},
+				{
+					"sourcePath": "backlog/archive/tasks/back-90 - Test-Full-Flag.md",
+					"targetPath": "backlog/archive/tasks/back-831 - Test-Full-Flag.md",
+					"oldId": "BACK-90",
+					"newId": "BACK-831"
+				},
+				{
+					"sourcePath": "backlog/archive/tasks/back-168 - Test-notes-functionality.md",
+					"targetPath": "backlog/archive/tasks/back-832 - Test-notes-functionality.md",
+					"oldId": "BACK-168",
+					"newId": "BACK-832"
+				},
+				{
+					"sourcePath": "backlog/archive/tasks/back-275 - Show-all-configured-status-columns-in-TUI-kanban-board.md",
+					"targetPath": "backlog/archive/tasks/back-833 - Show-all-configured-status-columns-in-TUI-kanban-board.md",
+					"oldId": "BACK-275",
+					"newId": "BACK-833"
+				},
+				{
+					"sourcePath": "backlog/archive/tasks/back-569 - Make-browser-task-loading-asynchronous-and-idle-stable.md",
+					"targetPath": "backlog/archive/tasks/back-834 - Make-browser-task-loading-asynchronous-and-idle-stable.md",
+					"oldId": "BACK-569",
+					"newId": "BACK-834"
+				}
+			],
+			"movedArchiveFiles": 585,
+			"verifiedPriorFiles": 867,
+			"beforeFileCount": 867,
+			"afterFileCount": 867,
+			"doctorAfter": "No duplicate IDs, self-referential dependencies, or dependency cycles found.",
+			"unexpectedFiles": [],
+			"contentChangesOtherThanTenIds": []
+		},
+		"sourceInventory": {
+			"entries": 857,
+			"problems": [],
+			"duplicateGroups": 0,
+			"counts": {
+				"task/archived": 631,
+				"milestone/archived": 6,
+				"config/active": 1,
+				"decision/active": 1,
+				"document/active": 8,
+				"task/draft": 15,
+				"milestone/active": 3,
+				"task/active": 192
+			}
+		},
+		"cliIdentityReads": [
+			{
+				"id": "BACK-41",
+				"title": "CLI: Migrate terminal UI to bblessed",
+				"status": "Done",
+				"archived": true
+			},
+			{
+				"id": "BACK-76",
+				"title": "Add Implementation Plan section",
+				"status": "Done",
+				"archived": true
+			},
+			{
+				"id": "BACK-81",
+				"title": "Fix task list navigation skipping issue",
+				"status": "Done",
+				"archived": true
+			},
+			{
+				"id": "BACK-82",
+				"title": "Add --plain flag to task view command for AI agents",
+				"status": "Done",
+				"archived": true
+			},
+			{
+				"id": "BACK-88",
+				"title": "Fix missing metadata and implementation plan in task view command",
+				"status": "Done",
+				"archived": true
+			},
+			{
+				"id": "BACK-89",
+				"title": "Add dependency parameter for task create and edit commands",
+				"status": "Done",
+				"archived": true
+			},
+			{
+				"id": "BACK-90",
+				"title": "Fix task list scrolling behavior - selector should move before scrolling",
+				"status": "Done",
+				"archived": true
+			},
+			{
+				"id": "BACK-168",
+				"title": "Fix editor integration issues with vim/nano",
+				"status": "Done",
+				"archived": true
+			},
+			{
+				"id": "BACK-275",
+				"title": "Extract task reordering logic to core module",
+				"status": "Done",
+				"archived": true
+			},
+			{
+				"id": "BACK-569",
+				"title": "Bring Windows CI tests below three minutes",
+				"status": "Done",
+				"archived": true
+			},
+			{
+				"id": "BACK-825",
+				"title": "CLI: Migrate terminal UI to bblessed",
+				"status": "To Do",
+				"archived": true
+			},
+			{
+				"id": "BACK-826",
+				"title": "Migrate from blessed to neo-neo-blessed for ESM support and tree shaking",
+				"status": "Won't Do",
+				"archived": true
+			},
+			{
+				"id": "BACK-827",
+				"title": "Test Mixed Case Filename",
+				"status": "To Do",
+				"archived": true
+			},
+			{
+				"id": "BACK-828",
+				"title": "UPDATED Title With CAPS",
+				"status": "To Do",
+				"archived": true
+			},
+			{
+				"id": "BACK-829",
+				"title": "Test AC Feature",
+				"status": "To Do",
+				"archived": true
+			},
+			{
+				"id": "BACK-830",
+				"title": "Test AC Feature 2",
+				"status": "To Do",
+				"archived": true
+			},
+			{
+				"id": "BACK-831",
+				"title": "Test Full Flag",
+				"status": "To Do",
+				"archived": true
+			},
+			{
+				"id": "BACK-832",
+				"title": "Test notes functionality",
+				"status": "To Do",
+				"archived": true
+			},
+			{
+				"id": "BACK-833",
+				"title": "Show all configured status columns in TUI kanban board",
+				"status": "To Do",
+				"archived": true
+			},
+			{
+				"id": "BACK-834",
+				"title": "Make browser task loading asynchronous and idle-stable",
+				"status": "In Progress",
+				"archived": true
+			}
+		],
+		"nativeBrowser": {
+			"passed": 9,
+			"assertions": [
+				"reproduces ten duplicate groups before repair",
+				"ambiguous old ID is blocked before repair",
+				"canonical repair succeeds while native server is observing",
+				"native duplicate API has no groups or proposed repairs",
+				"native observation recovers to ready after all file moves",
+				"all twenty old and repaired IDs are readable over authenticated HTTP",
+				"reloaded board has no duplicate warning or repair button",
+				"board and document navigation remain available",
+				"browser has no runtime exceptions"
+			],
+			"runtimeExceptions": [],
+			"beforeGroupCount": 10,
+			"afterGroupCount": 0,
+			"observation": {
+				"state": "ready",
+				"lastSuccessfulScanAt": "2026-10-25T09:11:24.307Z",
+				"checkedAt": "2026-10-25T09:11:24.307Z",
+				"error": null
+			},
+			"writeState": "ready",
+			"authenticatedIdentityReadCount": 20,
+			"fixture": "Full pre-repair Backlog copy with temporary accounts and database; native observer runs during CLI repair.",
+			"screenshot": "verification/server/back-824-board-repaired.png",
+			"screenshotSha256": "03e0cdf87d052d7203d476c385797ba17ef9a9330088feda373ea1bfefba6a15"
+		},
+		"biome": {
+			"command": "bun run check .",
+			"result": "passed",
+			"files": 554,
+			"writes": false,
+			"initialRun": "Failed only because newly created private raw backup JSON files were included; adding /server-data/ to .gitignore resolved it without changing backup bytes."
+		},
+		"diffWhitespace": {
+			"fullTrackedDiffExitCode": 2,
+			"preservedArchivedRecord": "backlog/archive/tasks/back-41 - cli-migrate-terminal-ui-to-bblessed.md",
+			"existingTrailingWhitespaceLines": [31, 61, 65],
+			"explanation": "The original completed/BACK-41 file moved to this pathname retains its exact bytes, including these three pre-existing trailing spaces. No Markdown content was rewritten for formatting.",
+			"otherChangedPaths": "passed"
+		},
+		"finalPreservation": {
+			"verifiedPreservedRecords": 865,
+			"expectedWorkflowUpdates": [
+				"backlog/tasks/back-824 - Arşiv-görev-kimliği-çakışmalarını-kayıt-kaybı-olmadan-onar.md",
+				"backlog/docs/server/doc-5 - Sunucu-geliştirmesi-devir-notu.md"
+			],
+			"unexpectedContentChanges": []
+		},
+		"registeredPersonalProject": {
+			"id": "1",
+			"rootPath": "/home/vuralbayrakli/Backlog.md",
+			"tracking": true,
+			"readWith": "server --data-dir ./server-data project view 1 --json"
+		}
+	},
+	"referenceReview": [
+		{
+			"path": "backlog/completed/back-570 - Make-browser-task-loading-asynchronous-and-idle-stable.md",
+			"line": 51,
+			"text": "Replaces the branch-local BACK-569 coordination task after a concurrently published active branch claimed the same ID. The prior task was archived through the CLI; this task is the authoritative implementation record.",
+			"ids": ["BACK-569"],
+			"classification": "historical_original_id",
+			"currentRecordId": "BACK-834",
+			"reason": "BACK-570 explicitly records replacing the branch-local archived BACK-569; preserve the historical wording and record the new mapping."
+		},
+		{
+			"path": "backlog/completed/back-585 - Diagnose-and-fix-the-ubuntu-latest-CI-test-runner-flake.md",
+			"line": 83,
+			"text": "6. Why it started 2026-08-03/04: BACK-569 (670c5bd7) added --parallel to the ubuntu run. Workers' stdio are Bun socketpairs (probes: fd 2 flags 04002 = O_RDWR|O_NONBLOCK inside workers) with FileSink pollers; the previous single-process sha",
+			"ids": ["BACK-569"],
+			"classification": "retained_id",
+			"currentRecordId": "BACK-569",
+			"reason": "The referenced commit 670c5bd7 is BACK-569 - Bring Windows CI tests below three minutes, which retains BACK-569."
+		},
+		{
+			"path": "backlog/completed/back-585 - Diagnose-and-fix-the-ubuntu-latest-CI-test-runner-flake.md",
+			"line": 100,
+			"text": "- Local Linux-container reproduction of the EEXIST itself did NOT succeed: 6/6 full-suite runs of the pre-fix tree with the exact CI command (ubuntu container, Bun 1.3.14, --cpus=2) were clean, and an x86_64-emulation attempt crashed the lo",
+			"ids": ["BACK-569"],
+			"classification": "retained_id",
+			"currentRecordId": "BACK-569",
+			"reason": "The referenced commit 670c5bd7 is BACK-569 - Bring Windows CI tests below three minutes, which retains BACK-569."
+		},
+		{
+			"path": "backlog/docs/server/doc-5 - Sunucu-geliştirmesi-devir-notu.md",
+			"line": 26,
+			"text": "Bağımsız upstream arşiv kimliği sorunu aynı 10 grup/20 dosyadır; pano sarı Duplicate task IDs uyarısını gösterir ve örnek BACK-41 doğrudan okuması 409 AMBIGUOUS_ID kalır. Doctor yalnız önizlemede çalıştırıldı; onarım 10 kimliği yeniden numa",
+			"ids": ["BACK-41"],
+			"classification": "historical_baseline",
+			"reason": "Earlier handoff records describe the original collision; the new BACK-824 section records its resolution."
+		},
+		{
+			"path": "backlog/docs/server/doc-5 - Sunucu-geliştirmesi-devir-notu.md",
+			"line": 370,
+			"text": "Upstream’den gelen `backlog/archive/tasks` ve `backlog/completed` içeriğinde 10 görev kimliği çakışması, toplam 20 dosya var: BACK-41, BACK-76, BACK-81, BACK-82, BACK-88, BACK-89, BACK-90, BACK-168, BACK-275, BACK-569. `doctor` yalnız önizl",
+			"ids": [
+				"BACK-41",
+				"BACK-76",
+				"BACK-81",
+				"BACK-82",
+				"BACK-88",
+				"BACK-89",
+				"BACK-90",
+				"BACK-168",
+				"BACK-275",
+				"BACK-569"
+			],
+			"classification": "historical_baseline",
+			"reason": "Earlier handoff records describe the original collision; the new BACK-824 section records its resolution."
+		}
+	],
+	"backup": {
+		"directory": "server-data/repair-backups/20261025T090420Z-duplicate-ids-bwggsfme",
+		"access": "directory0700_files0600",
+		"recordsArchive": "records-immediately-before-repair.tar.gz",
+		"recordsArchiveSha256": "ae5060f21f49055194430ee74a1c1f5295cb918a76f0820d987ed7a4d1309379",
+		"database": "server-before.sqlite",
+		"databaseBackupMethod": "SQLite online backup through read-only source connection; PRAGMA quick_check=ok",
+		"gitStateAndPreviousChangesPreserved": true,
+		"storage": "Persistent local private server-data; excluded from delivery. This is not an A-08 coordinated restore drill.",
+		"initialManifestSha256": "a8deadb6246b9129719f0a97cb23052621c51d31261b73a02982166dcc8b9fcc",
+		"initialManifestFileCount": 902,
+		"repairManifest": "manifest-immediately-before-repair.json"
+	},
+	"preservation": {
+		"priorVerificationAndBack823FilesMatched": [
+			"backlog/tasks/back-823 - Eski-görev-dosya-adlarının-sunucu-panosunu-engellemesini-düzelt.md",
+			"verification/server/a00-baseline.json",
+			"verification/server/a01-1-project-contexts.json",
+			"verification/server/a01-2-project-records.json",
+			"verification/server/a01-3a-central-api.json",
+			"verification/server/a01-3b-board.png",
+			"verification/server/a01-3b-browser-probe.txt",
+			"verification/server/a01-3b-browser.log",
+			"verification/server/a01-3b-selector.png",
+			"verification/server/a01-3b-settings.png",
+			"verification/server/a01-3b-verification.json",
+			"verification/server/a02-review-fixes.json",
+			"verification/server/a02-verification.json",
+			"verification/server/a03-contract.json",
+			"verification/server/a03-verification.json",
+			"verification/server/a04-verification.json",
+			"verification/server/a05-agent-keys-mobile-light.png",
+			"verification/server/a05-board-degraded-dark.png",
+			"verification/server/a05-projects-degraded-dark.png",
+			"verification/server/a05-verification.json",
+			"verification/server/a06-project-history-dark.png",
+			"verification/server/a06-projects-mobile-light.png",
+			"verification/server/a06-task-review-dark.png",
+			"verification/server/a06-verification.json",
+			"verification/server/a07-finbee-pilot.json",
+			"verification/server/back-806-project-milestones-dark.png",
+			"verification/server/back-806-projects-dark.png",
+			"verification/server/back-806-projects-light.png",
+			"verification/server/back-806-ui.json",
+			"verification/server/back-813-verification.json",
+			"verification/server/back-820-verification.json",
+			"verification/server/back-821-verification.json",
+			"verification/server/back-822-verification.json",
+			"verification/server/back-823-board-fixed-light.png",
+			"verification/server/back-823-verification.json",
+			"src/server/observation.ts",
+			"src/test/server-observation.test.ts"
+		],
+		"personalAccountsChanged": false,
+		"personalDatabaseDirectWrites": false,
+		"finbeeSourceWritten": false,
+		"a08Started": false,
+		"personalServerRestarted": false,
+		"commitPushMerge": false,
+		"privateServerDataIgnoredByGit": true
+	},
+	"rawEvidenceDirectory": "/tmp/backlog-id-repair-prcg0efu",
+	"rawEvidenceSha256": {
+		"browser-results.json": "aa1e4104dfa2a3c08751d19fc22211d7e19ea9c58d3b338fe1012ff7c453d4fa",
+		"back-824-board-repaired.png": "03e0cdf87d052d7203d476c385797ba17ef9a9330088feda373ea1bfefba6a15",
+		"browser-live-fix-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"browser-live-fix.log": "32ba84d333df362f1aa013c87c860d693362efa1a5fe940e337a52b0069373a7",
+		"browser-plan-before.json": "e0f72673ee38986ac402de8940033f74da332abe453b1bde66d5918733b692da",
+		"source-scan.json": "6a64778ab3e1f30531b220b20a539f85d75ec24698c567a3cc170ac60fa05df4",
+		"scan-source.ts": "8649768e25ab638cd00f01700d0c5405021070666b78610867125333b7ce3fd4",
+		"chromium-error.log": "c232e61d0b433c19ed86c08cad17e93fcbc15ee4237e38508d1e10d277a7e5ea",
+		"chromium.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"browser-server-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"browser-server.log": "c92deca44e08b427519adb693d1fcc2bada4d409c483163827fcb782cf09182c",
+		"browser.mjs": "15eb086993e4f022615a480ae9de26d4a848d9fc619b1fed0fa4ce7c069dc593",
+		"browser-setup.json": "2fe404c8a96c21816083da4b771ef763afbb0be7a854bc8713c64abd43cbc873",
+		"setup-browser.ts": "fd21f712302f91c7c712b34ad2c1371175466286cb3b9fdd2c6b146e1c602464",
+		"identity-reads.json": "992e02ab8ceeaa645ba09ac2432e488854077eefb2959557f22881d2f110f9fe",
+		"actual-result.json": "0e1607c58952e477e2f626c069ee7364a0bf8e6010853ab5572175936cd66de3",
+		"actual-fix-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"actual-fix.log": "593b28ea984708dbbad2f3dcb27e0814368ad2b284fca67ea9b7035b3815d6ea",
+		"apply-repair.py": "ce4acde2c39cbff9734f6b3b117821652b7fe91c563627a4ccd317afd191dd1d",
+		"back-585-before.json": "437f4d8dcd26fd386d139e1d0671a87cdba652829a79049e38735c45c33102d6",
+		"back-570-before.json": "5e0fac114195f391aabe17c79fa63fb573560e14c06f8842432a3135e2850d36",
+		"rehearsal-result.json": "5191298da439c0424b2937479d1c5a1efdce814bfcd93369bfb69f4ae524a592",
+		"rehearsal-after-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"rehearsal-after.log": "d367f84adfaf58324dd67df5e4e97069393d7a56330cf6eabaf60cfbcdb6b790",
+		"rehearsal-fix-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"rehearsal-fix.log": "32ba84d333df362f1aa013c87c860d693362efa1a5fe940e337a52b0069373a7",
+		"preview-error.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"preview.log": "702ca712a0abcdd8b9f29be2bb2f392062317a4d84ca0db32404979d3007564c",
+		"manifest-before.json": "83afe375a7a5ce02502f5a1d37c2f50a4efc24a623c36e1a5afb69c0dd7f5a62"
+	},
+	"limits": [
+		"Native browser uses a full copy and temporary accounts; the personal authenticated browser session was not used.",
+		"Other Git branch snapshots still contain historical collisions; doctor may exit 1 for diagnostic-only cross-branch findings. The repaired working copy and central duplicate API have zero groups.",
+		"No product code changed in this task; full CI, type checks and rebuild were not rerun. Prior BACK-823 source and installed binary hashes match.",
+		"Historical reference wording was preserved; old and new record mappings are explicit above.",
+		"Temporary raw evidence is copied to the private persistent repair backup; private database and archives must stay out of Git."
+	]
+}
