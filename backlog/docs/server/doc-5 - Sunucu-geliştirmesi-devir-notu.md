@@ -3,13 +3,69 @@ id: doc-5
 title: Sunucu geliştirmesi devir notu
 type: guide
 created_date: '2026-10-20 12:17'
-updated_date: '2026-10-24 07:56'
+updated_date: '2026-10-25 09:16'
 tags:
   - server
   - handoff
   - status
 ---
-Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-06 ve BACK-820/BACK-821/BACK-822 inceleme düzeltmeleri tamamlandı; BACK-814–822 Done. Kullanıcının 24 Ekim 2026 onayıyla tasks/server-a06-review-history dalının 15 commit’i server dalına fast-forward ile alındı ve origin/server dalına gönderildi; uzak d95577704859b6a1600f9e3f41d69bf211ea7c1f başı doğrulandı. Bu devir güncellemesi server üzerinde ayrı takip commit’idir; son HEAD’i Git’ten doğrula. Güncel düzeltme kabulü verification/server/back-822-verification.json; önceki raporlar tarihsel kanıttır, onaylı plan doc-8. Bütün bileşenler mevcut makinede tek uygulama örneğidir. A-07 başlamadı.
+Bu not Backlog.md çoklu proje uygulamasına yeni sohbetten devam etmek içindir. A-00–A-07 tamamlandı; Finbee FIN-21 kabul edilen içeriği korunur ve A-08 kullanıcı talebiyle başlatılmadı. BACK-823 eski dosya adı düzeltmesi ve BACK-824 arşiv kimliği onarımı tamamlandı. Güncel dal tasks/server-duplicate-task-ids, taban 5b087c6c; A-07/BACK-823 ve BACK-824 yerel değişiklikleri korunuyor. Bu çalışmalar için commit/push/merge yapılmadı. Güncel onarım kanıtı verification/server/back-824-verification.json; aşağıdaki önceki durumlar tarihseldir.
+
+## BACK-824 — Arşiv görev kimliği onarımı (25 Ekim 2026)
+
+Kullanıcı review sonrasında panodaki Duplicate task IDs: 10 groups across 20 files uyarısının düzeltilmesini istedi. BACK-824 standart CLI allocator ile açılıp @codex üzerine alındı; görev/doküman yazımları CLI ile yapıldı. Başlangıç Git farkları, 902 kaynak/kayıt/kanıt özeti, Backlog kayıtları ve SQLite online yedeği özel erişimli server-data/repair-backups/20261025T090420Z-duplicate-ids-bwggsfme altında korundu. Dizine 0700, dosyalara 0600 erişim verildi; buradaki kişisel veritabanı/yedekler Git teslimine alınmaz. SQLite quick_check ok. Bu yerel onarım yedeği A-08 işletim/geri yükleme provası değildir. Önceki dal tasks/server-legacy-task-filenames üzerinden tasks/server-duplicate-task-ids açıldı; yerel A-07/BACK-823 kayıtları korundu.
+
+Kanonik doctor önizlemesi tam geçici kopyada denendi; sonra aynı doctor --fix --yes gerçek kökte uygulandı. Completed içindeki asıl kayıtlar eski kimliklerini korudu; çakışan archive/tasks kayıtları aşağıdaki yeni kimlikleri aldı. Hiçbir görev silinmedi. CLI aynı işlemde 585 eski completed arşiv kaydını backlog/archive/tasks altına taşıdı. 867 dosyanın tamamı beklenen hedeflerine eşlendi: yalnız 10 frontmatter id alanı değişti, diğer içerik/metadata birebir kaldı. Kapanışta yalnız BACK-824 görev kaydı ve bu devir belgesi ayrıca güncellenir.
+
+| Eski kimlik | Yeniden numaralanan arşiv kaydı |
+|---|---|
+| BACK-41 | BACK-825 |
+| BACK-76 | BACK-826 |
+| BACK-81 | BACK-827 |
+| BACK-82 | BACK-828 |
+| BACK-88 | BACK-829 |
+| BACK-89 | BACK-830 |
+| BACK-90 | BACK-831 |
+| BACK-168 | BACK-832 |
+| BACK-275 | BACK-833 |
+| BACK-569 | BACK-834 |
+
+Gerçek kökteki salt okunur kaynak taraması 857 geçerli girdi, 0 sorun ve 0 çakışma buldu; 192 aktif, 631 arşiv ve 15 taslak görev var. Eski/yeni 20 kimlik CLI JSON ile arşivlenmiş kayıt olarak okundu. Native sunucu ve Chromium tam onarım öncesi kopyada açıkken aynı CLI onarımı tekrarlandı: önce 10 grup ve BACK-41 için 409 doğrulandı; sonra API grupları/değişiklikleri boş, observation/writeState ready, 20 kimlikli HTTP okuması 200 ve yenilenen panoda uyarı/Review repair düğmesi yok. Doküman menüsü çalışıyor; 9/9 kontrol, runtime exception 0. verification/server/back-824-board-repaired.png gözle incelendi. Kişisel tarayıcı oturumu kullanılmadı ve kişisel sunucu yeniden başlatılmadı; kullanıcı mevcut panoyu yenileyebilir.
+
+Önizlemenin 5 referans satırı incelendi. BACK-570, eski branch-local BACK-569 kaydının yerine geçtiğini tarihsel olarak açıkça söyler; bu eski arşiv kaydı artık BACK-834 ve özgün anlatım korundu. BACK-585 içindeki iki BACK-569 atfının dayandığı 670c5bd7 commit'i Bring Windows CI tests below three minutes kaydıdır; asıl BACK-569 doğru hedef olarak kaldı. Diğer iki satır bu devirdeki eski başlangıç/hata anlatımlarıdır. Çakışan kimlikleri kullanan bağımlılık alanı bulunmadı; tahmini referans değişikliği yapılmadı. Diğer Git dallarındaki eski anlık görüntüler yeniden yazılmadığı için gerçek doctor komutu yalnız cross-branch diagnostic bulgularıyla 1 döndü; onarım ve taşıma tamamlandı, yerel kayıtlarda ve pano API'sinde grup kalmadı. İzole kopyada onarım sonrası doctor 0 döndü.
+
+Kalıcı rapor verification/server/back-824-verification.json; ham kanıtlar /tmp/backlog-id-repair-prcg0efu içinde ve özel kalıcı yedek dizinine kopyalandı. Önceki A-07/BACK-823 dahil 37 kaynak/kanıt dosyasının özetleri başlangıçla aynı. Bu onarım ürün kodu veya binary değiştirmedi; dist/backlog önceki doğrulanmış BACK-823 binary'si (beafaf0e719b983e01e3d295613167f7077af2ff3a321951fe363c680fc02596). Tam CI, tip ve build yeniden çalıştırılmadı; yazmasız Biome 554 dosyada geçti. Özel server-data dizini .gitignore kapsamına alındı; böylece kişisel DB/yedekler Git ve kaynak biçim kontrolünün dışında korunur. Tam git diff --check yalnız taşınan eski BACK-41 içeriğinin 31/61/65 satırındaki özgün sondaki boşlukları bildirir; bu dosya completed kaynağıyla byte-byte aynı, diğer değişen yolların diff kontrolü geçti. Finbee kaynağı, kabul içeriği, hesaplar ve A-08 kapsamı değişmedi. Groma bulunamadı; manifesto ve yönetilen mimari değişmedi. Commit/push/merge yapılmadı.
+
+## BACK-823 — Backlog.md panosunda eski dosya adı uyumsuzluğu (24 Ekim 2026)
+
+Kullanıcı A-07 sonrasında projeyi kullanırken Backlog.md/proje 1 panosunda kırmızı görev/menü hatalarını ve invalid: backlog/completed/back-196-add-nixos-packaging-support.md uyarısını bildirdi; önce bunun incelenmesini istedi. A-08 başlatılmadı. Mevcut A-07 devir/kanıt dosyaları ve server-data korundu. Git başlangıcı tasks/server-a07-finbee-pilot / 5b087c6c; izlenen tek fark doc-5, izlenmeyenler server-data ve a07-finbee-pilot.json idi. Kayıt/diff/ref yedeği /tmp/backlog-dashboard-diagnosis-0onfs9yi içinde alındı; sonra tasks/server-legacy-task-filenames açıldı. BACK-823 standart CLI ile oluşturulup @codex üzerine alındı.
+
+Salt okunur tarama 854 geçerli girdi ve tek geçersiz dosya buldu. BACK-196 CLI ile okunuyor; sunucu gözlemi eski sayısal kimlik-tire-başlık adının tamamını kimlikle karşılaştırıp reddediyordu. Küçük düzeltme yalnız mevcut modern/kısa kimlik denetimi başarısızsa eski sayısal biçimi tanır. Tam/dotted ve baştaki sıfırlar mevcut kanonik karşılaştırmayı kullanır; modern alfasayısal kimlikler, gerçek uyuşmazlık ve bozuk içerik korumaları sürer. Tek üretim dosyasında dört ek satır; yeni helper/store/servis veya arayüz değişikliği yok. Sadelik incelemesi bu dar sınırı korudu.
+
+Tam depo kopyasında eski sürüm beş paralel pano açılış isteğini 9,64–10,01 saniyede; yeni sürüm özgün dosya adıyla 3,13–3,73 saniyede tamamladı. Eski koşuda bu HTTP istekleri de 200 döndü; kişisel tarayıcıdaki Failed to fetch taşıma hatasının birebir sebebi kanıtlanmadı. Tekrarlı başarısız kararlılık taramalarının gecikmesi ve ekran uyarısının kaynağı kanıtlıdır. Yeni ilk tarama ready; 191 görev, 8 belge ve arama/menü APIleri çalışır. Gerçek native Chromium tam kopyada pano/görev/belge menüsü/ready/kimlik reddi/çalışma zamanı olmak üzere 6/6 kontrolü geçti, exception 0. Açık tema ekran görüntüsü verification/server/back-823-board-fixed-light.png gözle incelendi.
+
+Eski kaynakta 3 yeni olumlu regresyon başarısız, tam alfasayısal kimlik kontrolü başarılıydı. Son odaklı grup 79/79, HTTP/ilk envanter/çakışma grubu 9/9; toplam 88 başarılı, 0 hata. Tip 637 dosyada, yazmasız Biome 552 dosyada, native build ve CLI/web/MCP smoke geçti. Tam CI ve platform matrisi bu dar düzeltmede yeniden çalıştırılmadı. Kalıcı kanıt verification/server/back-823-verification.json; ham günlük/harness/yedekler /tmp/backlog-dashboard-diagnosis-0onfs9yi içinde; /tmp kalıcı yedek değildir. Groma bulunamadı; manifesto ve yönetilen mimari değişmedi.
+
+Doğrulanan binary dist/backlog konumuna atomik alındı, SHA-256 beafaf0e719b983e01e3d295613167f7077af2ff3a321951fe363c680fc02596. Önceki binary aynı geçici dizinde previous-backlog olarak korunur. Kişisel sunucu sandbox içinden erişilemiyor; sandbox dışı kimliksiz GET isteğinde HTTP 401 doğrulandı. Kişisel oturum kullanılmadı ve süreç yeniden başlatılmadı. Kullanıcı açık sunucuyu Ctrl+C ile kapatıp aynı veri klasörüyle yeniden açmalı; bu depodaki kayıtlı iki proje ./server-data içindedir. Komut: ./dist/backlog server --data-dir ./server-data start --public-url http://127.0.0.1:6420 --allow-http-loopback. Hesap/proje tekrar oluşturulmaz.
+
+Bağımsız upstream arşiv kimliği sorunu aynı 10 grup/20 dosyadır; pano sarı Duplicate task IDs uyarısını gösterir ve örnek BACK-41 doğrudan okuması 409 AMBIGUOUS_ID kalır. Doctor yalnız önizlemede çalıştırıldı; onarım 10 kimliği yeniden numaralandırıp yüzlerce eski completed kaydını arşiv klasörüne taşıyacağı için uygulanmadı. Eski görev kimlikleri/yolları/içerikleri değiştirilmedi; Finbee ve kişisel hesap/oturum verileri yazılmadı. Kişisel DB'de yalnız kanonik project list okundu. Commit/push/merge yapılmadı; A-07 kabul içeriği korunur. Sıradaki kullanıcı adımı güncellenen binary ile yeniden başlatıp gerçek oturumda panoyu yenilemektir; arşiv onarımı ayrı inceleme konusudur.
+
+## Tamamlanan A-07 — Finbee pilotu ve doğrulanmış insan kabulü (24 Ekim 2026)
+
+Son kabul: Kullanıcı Reviews and verification ekranında Accepted · admin görüntüsünü paylaştı. Aynı anda bağlı CLI ile response #3 / requestId 2 / outcome approved / author.kind user / admin hesabı doğrulandı; kabul zamanı 2026-10-24T11:59:20.528Z. Talep, doğrulama ve yanıt aynı güncel içerikte güvenilir; staleEntryIds boş. A-07 pilot kabulü tamamlandı. FIN-21 durum/not/AC içeriği bu yanıttan sonra değiştirilmedi; insan kabulünü eskitecek bir yazı yapılmadı. A-08 kullanıcı talebiyle başlatılmayacak.
+
+24 Ekim sonraki kullanıcı yönlendirmesi: Kullanıcı Finbee pilotunun geçtiğini bildirdi ve A-08’e geçilmemesini açıkça istedi. Kabulden önceki salt okunur sunucu kontrolünde acceptance talebi #2 için yanıt henüz yoktu; doğrulama #1 ve talep #2 güvenilir/güncel, staleEntryIds boş. Sohbet bildirimi doğrulanmış uygulama kabulü yerine yazılmadı. FIN-21 içeriği değiştirilmedi; A-08 görevi veya çalışması başlatılmadı.
+
+Kullanıcı Finbee’nin /home/vuralbayrakli/projects/finbee kökünde önceden Backlog biçimine dönüştürüldüğünü ve merkezi uygulamaya kaydedildiğini açıkladı; kalan pilot planını onaylayıp başlamamızı istedi. Yeniden dönüşüm veya kayıt yapılmadı. Mevcut proje 2 / Finbee / tracking=true doğrulandı. Finbee FIN-1 tamamlanmış; FIN-21 kalan kaynak, belge/karar ve kimlikli agent kabulünü kapsıyor. FIN-21 @codex üzerine alındı, plan/not/özet kimlikli sunucu CLI’sıyla kaydedildi.
+
+- 29 görevin 15 içerik/plan/not/AC/bağımlılık alanı yerel CLI ile bağlı CLI arasında eşleşti; 65 belge ve 17 karar gövdesi kaynakla aynı (frontmatter hariç, dış boşluklar normalize).
+- 807 panel bağlantısının 110 tekil hedefi doğru proje API kaydını açtı; bozuk hedef yok. 198 başlık fragmanı envantere alındı; render kontrolü yeniden koşulmadı. Kullanıcı görev → doc-60 → decision-17 gezinmesini çalışıyor olarak bildirdi; History’deki agent gösteriminin ne olduğunu sordu. Updated · Agent for admin açıklaması verildi; son insan kabulüne görünür tarihçe de dahil edildi. Kişisel tarayıcı oturumu agent tarafından kullanılmadı.
+- FIN-21 değişikliği tek source=agent olayı üretti; aktör admin hesabına bağlı anahtar. Aynı özgün revision/UUID ile tekrar ikinci olay veya değişiklik üretmedi; eski revision reddedildi ve kaydı değiştirmedi. Başka proje okuma 404; yönetim erişimi, belge yazma ve agent ile insan yanıtı denemesi 403. Son ret changes-requested kullanır; insan onayı verilmedi ve review kaydı eklenmedi.
+- admin hesabına bağlı Finbee Codex pilot anahtarı yalnız proje 2 ve tasksWrite=true taşır; diğer beş yazma izni false. Sır proje dışında /home/vuralbayrakli/.config/backlog/finbee-codex.key dosyasında 0600; rapor/sohbet/Git’e sırrın kendisi yazılmadı. Anahtar kimliği 1913610f-d678-4276-a4ef-5cd311df5ab2; hesap kimliği 78713b32-c3f6-450a-b251-2a84b0e3febf. Hesap/üyelik/parola değiştirilmedi.
+
+FIN-21 İnceleme durumunda, dört AC işaretli. passed doğrulama #1, @admin kabul talebi #2 ve admin insan yanıtı #3 aynı contentHash 1e8f4a520a1a3a08ebedd67ec4109f1c3afc30743cda9e01ba78e0738fa1f11e üzerinde; trustedEntryIds [3,2,1], staleEntryIds boş. Acceptance artık Accepted · admin; açık talep yok. Kullanıcı kabulü doğrulanmış uygulama oturumundan geldi; sohbet veya dosya beyanı yerine kullanılmadı. Kabul, görev durumundan ayrı kayıttır; FIN-21 içeriği/statusu değiştirilirse önceki doğrulama ve kabul eskime koşulları geçerlidir. Sonraki agent bağlı task review list FIN-21 --json ile güncel sonucu okuyabilir.
+
+Kalıcı rapor [a07-finbee-pilot.json](../../../verification/server/a07-finbee-pilot.json). Başlangıç Git farkları/referansları, iki Backlog kayıt arşivi, 1653 Backlog.md + 575 Finbee dosyasının özetleri ve SQLite online yedeği /tmp/backlog-finbee-a07-d5073e5e içinde; /tmp kalıcı yedek ve eşgüdümlü A-08 geri yükleme provası değildir. Önceki Finbee yerel değişiklikleri korundu; başlangıca göre yalnız FIN-21 değişti. Backlog.md’de yalnız devir belgesi ve kabul raporu eklenir. Finans uygulama kaynağı/servisleri/finans DB’ye dokunulmadı; tam CI/build/tarayıcı otomasyonu yeniden çalıştırılmadı. Kaynak kod değişmediği için doğrulama gerçek CLI/API pilotu ve kullanıcı bildirimiyle sınırlı. Groma kurulu değil; manifesto ve yönetilen mimari değişmedi. Commit/push/merge yapılmadı.
 
 ## server dalına fast-forward birleştirme — 24 Ekim 2026
 
@@ -419,24 +475,20 @@ En güncel devir arşivi `/tmp/backlog-back787-handoff.tar.gz`, SHA-256 dosyası
 
 ## Geliştirmenin yönü
 
-A-00–A-06 ve BACK-820/BACK-821/BACK-822 inceleme düzeltmeleri tamamlandı; BACK-814–822 Done. Güncel düzeltme kabulü verification/server/back-822-verification.json; önceki back-821-verification.json, back-820-verification.json ve a06-verification.json tarihsel kanıttır, onaylı plan doc-8. A-06 dalının d95577704859b6a1600f9e3f41d69bf211ea7c1f başı 24 Ekim 2026’da server dalına fast-forward ile alındı ve origin/server eşitliği doğrulandı. Bu devir güncellemesi server üzerinde ayrı takip commit’idir; son HEAD ve yerel durumu Git’ten doğrula. A-07 güncel server üzerinden yeni özellik dalıyla başlayacak. dist/backlog son BACK-821/BACK-822 düzeltmelerini içermez; kişisel süreç bu teslimde yenilenmedi.
-
-Sıradaki aşama A-07 Finbee pilotudur: kullanıcı kapsamı belirledikten sonra güncel gerçek kaynaklar okunur, bağlama/geçiş önizlemesi hazırlanır ve kaynaklar korunarak insan-agent aynı kayıt akışı kabul edilir. A-07 görevi açılmadı ve gerçek Finbee’ye bağlanılmadı. A-08 diğer projeler ve işletim/yedekleme ayrı aşamadır.
+A-00–A-07 tamamlandı; Finbee FIN-21 kullanıcı kabulü korunur. A-08 kullanıcı talebiyle başlatılmayacak. Güncel yerel dal tasks/server-duplicate-task-ids üzerinde A-07/BACK-823 ve BACK-824 onarım kayıtları var. BACK-824 sonrası yerel görev kimliği çakışması yok, eski completed dosyaları kanonik arşiv klasöründe. Önceki aşamaların Git teslimi 5b087c6c tabanındadır; son yerel çalışmalar için commit/push/merge yapılmadı. Sıradaki kullanıcı adımı panoyu yenilemektir. Yeni iş veya diğer dalları onarma kendiliğinden başlatılmaz.
 
 ## Sonraki aşamalarda karar gerektiren konular
 
 - A-06 kaynak dağılımı, atama, agent yetkisi, RO yanıtı, kabul koşulu, sürüm geçerliliği ve insan CLI oturumu doc-8 ile karara bağlandı; yeniden açık soru sayılmaz.
-- A-07 için kullanılacak güncel Finbee klasörü/kayıtları, önizleme ve ilk gerçek kullanımın kabul kapsamı mevcut kullanıcı vuralbayraklii ile belirlenir.
+- A-07 Finbee/proje 2 pilotu kabul edildi; mevcut kaynak /home/vuralbayrakli/projects/finbee ve FIN-21 kaydı korunur. A-08 kullanıcı talebiyle başlatılmayacak.
 - Yedek/geri yükleme provası ve işletim kapsamı A-08'de ele alınır. A-04 kesinti/ortak kilit ve A-05 gözlem/anahtar kararları tamamlanmış ürün kararlarıdır.
 
 ## Yeni sohbete verilecek başlangıç mesajı
 
 ```text
-Backlog.md uygulamasında A-00–A-06 ve BACK-820/BACK-821/BACK-822 inceleme düzeltmeleri tamamlandı; mevcut makinede tek uygulama örneği varsayımı korunuyor.
-Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5/doc-8, a00-baseline.json, a06-verification.json ve back-820/back-821/back-822-verification.json oku; BACK-814–822 görevlerini CLI ile doğrula.
-Güncel geliştirme tabanı server. A-06 dalının d95577704859b6a1600f9e3f41d69bf211ea7c1f başı 15 commit’lik fast-forward ile server dalına alındı ve origin/server eşitliği doğrulandı. Bu devir kaydı server üzerinde ayrı takip commit’idir; son HEAD ve uzak/yerel durumu Git’ten doğrula. A-07 çalışması güncel server üzerinden yeni özellik dalında yürütülecek.
-Güncel düzeltme kabulü verification/server/back-822-verification.json. Önceki raporlar tarihsel kanıttır; son iki düzeltmede tam CI/Chromium yeniden çalıştırılmadı. Git teslimi öncesi ve hook sonrası 662 kaynak/derleme girdisi kayıtlı doğrulamayla birebir eşleşti.
-dist/backlog BACK-820 binary; BACK-822 doğrulanan binary /tmp/backlog-review-three-lsr_rl80/backlog içinde, kurulmadı. /tmp kalıcı yedek değildir; güncel kaynak için build/kurulum gerekir. Kişisel süreç yeniden başlatılmadı; admin yeniden oluşturulmaz. server-data kişiseldir, Git dışında korunur. Gerçek Finbee ajan tarafından açılmadı/değiştirilmedi.
-A-06 Markdown workflow, açık hesap ataması, agent doğrulaması/insan kabulü, RO yanıtı, sürüm ve insan CLI kararları doc-8’de onaylı ve uygulanmış; yeniden sorma.
-Sıradaki A-07 Finbee pilotunun güncel kaynak ve kapsamını mevcut kullanıcı vuralbayraklii belirler. Henüz A-07 görevi açılmadı.
+Önce MANIFESTO.md, backlog instructions overview, doc-4/doc-5, a07-finbee-pilot.json, back-823-verification.json ve back-824-verification.json oku. BACK-823/BACK-824 görevlerini CLI ile doğrula. A-00–A-07 tamamlandı; A-08 kullanıcı talebiyle başlatılmayacak.
+Güncel dal tasks/server-duplicate-task-ids, taban 5b087c6c. A-07/BACK-823 ve BACK-824 değişiklikleri yerel; commit/push/merge yapılmadı. Git durumunu doğrula ve yerel kayıtları koru. BACK-824 kanonik doctor onarımı 10 arşiv kaydını BACK-825–834 olarak yeniden numaraladı, 585 completed kaydını arşive taşıdı; içerik doğrulaması ve native browser9/9 geçti. Yerel kimlik çakışması yok; diğer dalların tarihsel snapshot uyarıları ayrı kalır.
+Özel kalıcı yedek server-data/repair-backups/20261025T090420Z-duplicate-ids-bwggsfme altında; kişisel DB ve yedekleri Git teslimine alma. dist/backlog doğrulanmış BACK-823 binary'si; ürün kodu/binary bu onarımda değişmedi, kişisel süreç yeniden başlatılmadı. Kullanıcı panoyu yenileyebilir.
+Finbee /home/vuralbayrakli/projects/finbee kökünden proje 2 olarak kayıtlı. FIN-21 @codex / İnceleme, AC4/4; doğrulama #1, talep #2 ve admin insan yanıtı #3 kabul anında aynı içerikte güvenilir/günceldi. Kabul edilen görev/statusu bu onarımda değiştirilmedi. Sonraki bir Finbee çalışmasında güncel sonucu önce bağlı task review list FIN-21 --json ile oku; yeni içerik değişikliği kabulü eskitebilir.
+Bağlantı: --server-url http://127.0.0.1:6420 --server-project 2 --agent-key-file /home/vuralbayrakli/.config/backlog/finbee-codex.key --allow-http-loopback. Sırrı yazdırma; anahtar yalnız Finbee görev yazımı ve proje okuma yetkilidir. A-08 veya başka proje işi başlatma.
 ```

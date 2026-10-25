@@ -134,6 +134,43 @@ describe("central external file observation", () => {
 		expect(inventory.entries.filter((entry) => entry.kind !== "config")).toHaveLength(4);
 	});
 
+	it.each([
+		["tasks", "task-1-old-title.md", "TASK-1"],
+		["completed", "task-001-old-title.md", "TASK-1"],
+		["archive/tasks", "task-1.02-old-title.md", "TASK-1.2"],
+		["tasks", "task-1-old-title.md", "TASK-1-OLD-TITLE"],
+	])("observes existing task filename %s/%s as %s", async (directory, filename, id) => {
+		await unlink(taskPath);
+		const parent = join(projectRoot, "backlog", directory);
+		await mkdir(parent, { recursive: true });
+		const path = join(parent, filename);
+		await writeFile(path, CONTENT.replace("TASK-1", id));
+		const state = await mutations.ensureObserved(project, scan(), hooks);
+		expect(state.state).toBe("ready");
+		expect(mutations.observations.load(project.id).entries).toContainEqual(
+			expect.objectContaining({ path, visibleId: id }),
+		);
+	});
+
+	it.each([
+		"task-2-old-title.md",
+		"task-10-old-title.md",
+		"task-1.2-old-title.md",
+		"task-1x-old-title.md",
+		"task-1-other - Title.md",
+	])("rejects filename %s when frontmatter claims TASK-1", async (filename) => {
+		await unlink(taskPath);
+		const path = join(projectRoot, "backlog", "tasks", filename);
+		await writeFile(path, CONTENT);
+		const inventory = await handler.scanObservedFiles();
+		expect(inventory.problems).toContainEqual({
+			path,
+			state: "invalid",
+			error: "Error: Task ID does not match its filename.",
+		});
+		expect(inventory.entries.some((entry) => entry.path === path)).toBe(false);
+	});
+
 	it("does not duplicate documents through links into their own or archive folders", async () => {
 		const docs = join(projectRoot, "backlog", "docs");
 		const archive = join(projectRoot, "backlog", "archive", "docs");

@@ -116,7 +116,11 @@ function candidateIdentity(
 				throw new Error("Draft ID does not match its filename.");
 		} else {
 			const fileId = extractTaskIdFromFilename(file) ?? basename(file, ".md");
-			if (!fileId || !taskIdsEqual(fileId, task.id)) throw new Error("Task ID does not match its filename.");
+			if (!taskIdsEqual(fileId, task.id)) {
+				// Older task files use a hyphen between the numeric ID and title.
+				const legacyId = !file.includes(" - ") ? file.match(/^([a-zA-Z]+-\d+(?:\.\d+)*)-/)?.[1] : null;
+				if (!legacyId || !taskIdsEqual(legacyId, task.id)) throw new Error("Task ID does not match its filename.");
+			}
 		}
 		return task.id;
 	}
